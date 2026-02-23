@@ -1,6 +1,36 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Cell, TeletextPage } from '../../types/teletext';
 import { COLS, ROWS, sixelBit } from '../../types/teletext';
+
+const VALID_PAGE_NUMBERS = new Set([100, 200, 300, 400, 500, 600, 700, 800, 900]);
+
+/** Find all runs of 3 digits (100–999) in the page; return Map of cell index -> target page (100,200,...,900). */
+function getPageLinkMap(page: TeletextPage): Map<number, number> {
+  const map = new Map<number, number>();
+  for (let row = 0; row < ROWS; row++) {
+    let col = 0;
+    while (col <= COLS - 3) {
+      const c0 = page[row * COLS + col].char;
+      const c1 = page[row * COLS + col + 1].char;
+      const c2 = page[row * COLS + col + 2].char;
+      if (/\d/.test(c0) && /\d/.test(c1) && /\d/.test(c2)) {
+        const n = parseInt(c0 + c1 + c2, 10);
+        if (n >= 100 && n <= 999) {
+          const target = Math.round(n / 100) * 100;
+          if (VALID_PAGE_NUMBERS.has(target)) {
+            map.set(row * COLS + col, target);
+            map.set(row * COLS + col + 1, target);
+            map.set(row * COLS + col + 2, target);
+            col += 3;
+            continue;
+          }
+        }
+      }
+      col += 1;
+    }
+  }
+  return map;
+}
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -98,6 +128,7 @@ export function TeletextGrid({
   const showIndexLine = readOnly;
   const indexClickable = showIndexLine && onIndexPageSelect != null;
   const pageNumberClickable = readOnly && onPageNumberClick != null;
+  const pageLinkMap = useMemo(() => (readOnly && onIndexPageSelect ? getPageLinkMap(page) : new Map<number, number>()), [page, readOnly, onIndexPageSelect]);
 
   return (
     <div className={`teletext-screen${compact ? ' teletext-screen-compact' : ''}${showIndexLine ? ' teletext-screen-with-index' : ''}`}>
@@ -121,19 +152,23 @@ export function TeletextGrid({
           const showGraphics = !isHeaderOverlay && typeof displayCell.graphics === 'number' && displayCell.graphics >= 0 && displayCell.graphics <= 63;
           const displayChar: string = isHeaderOverlay ? (headerChar === ' ' || headerChar === null ? '\u00a0' : headerChar) : (displayCell.char === ' ' ? '\u00a0' : displayCell.char);
           const cellFg = displayCell.fg;
+          const pageLinkTarget = !isHeaderOverlay ? pageLinkMap.get(index) : undefined;
           const handleClick = pageNumberClickable && isPageCell
             ? (e: React.MouseEvent) => { e.preventDefault(); onPageNumberClick?.(); }
-            : () => onCellClick?.(index);
+            : pageLinkTarget != null
+              ? (e: React.MouseEvent) => { e.preventDefault(); onIndexPageSelect?.(pageLinkTarget); }
+              : () => onCellClick?.(index);
+          const isPageLink = pageLinkTarget != null;
           return (
             <div
               key={index}
               className={`teletext-cell teletext-fg-${cellFg} teletext-bg-${displayCell.bg} ${
                 !readOnly && cursorIndex === index ? 'cursor' : ''
-              } ${pageNumberClickable && isPageCell ? 'teletext-page-number-clickable' : ''}`}
+              } ${pageNumberClickable && isPageCell ? 'teletext-page-number-clickable' : ''} ${isPageLink ? 'teletext-index-link' : ''}`}
               onClick={handleClick}
-              onMouseDown={isPageCell && pageNumberClickable ? undefined : () => onCellMouseDown?.(index)}
-              onMouseEnter={isPageCell && pageNumberClickable ? undefined : () => onCellMouseEnter?.(index)}
-              role={readOnly ? (pageNumberClickable && isPageCell ? 'button' : undefined) : 'button'}
+              onMouseDown={isPageCell && pageNumberClickable ? undefined : isPageLink ? undefined : () => onCellMouseDown?.(index)}
+              onMouseEnter={isPageCell && pageNumberClickable ? undefined : isPageLink ? undefined : () => onCellMouseEnter?.(index)}
+              role={readOnly ? (pageNumberClickable && isPageCell || isPageLink ? 'button' : undefined) : 'button'}
               tabIndex={-1}
             >
               {showGraphics ? (
