@@ -50,6 +50,10 @@
   grid-template-rows: repeat(24, 1.35em);
 }
 
+.teletext-screen-compact .teletext-grid-with-index {
+  grid-template-rows: repeat(25, 1.35em);
+}
+
 .teletext-screen-wrapper {
   position: relative;
   display: inline-block;
@@ -96,6 +100,11 @@
   grid-template-rows: repeat(24, 1.35em);
   gap: 0;
   width: fit-content;
+}
+
+/* View mode: extra row for index line so row 23 stays drawable */
+.teletext-grid-with-index {
+  grid-template-rows: repeat(25, 1.35em);
 }
 
 /* Squished look for accented/wider characters (real teletext fitted them in same cell) */
@@ -231,6 +240,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: visible;
+  min-height: 0;
 }
 
 .page-grid-card-preview .teletext-screen {

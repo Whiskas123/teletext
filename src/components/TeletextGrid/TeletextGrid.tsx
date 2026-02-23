@@ -100,8 +100,9 @@ export function TeletextGrid({
   const pageNumberClickable = readOnly && onPageNumberClick != null;
 
   return (
-    <div className={`teletext-screen${compact ? ' teletext-screen-compact' : ''}`}>
-      <div className="teletext-grid">
+    <div className={`teletext-screen${compact ? ' teletext-screen-compact' : ''}${showIndexLine ? ' teletext-screen-with-index' : ''}`}>
+      <div className={`teletext-grid${showIndexLine ? ' teletext-grid-with-index' : ''}`}>
+        {/* All 24 rows of page content — no overlay on row 23 when we have a separate index row */}
         {page.map((cell, index) => {
           const row = Math.floor(index / COLS);
           const col = index % COLS;
@@ -109,8 +110,6 @@ export function TeletextGrid({
           const isPageCell = isHeaderRow && col < 3;
           const isDateTimeCell = isHeaderRow && col >= 20;
           const isHeaderOverlay = isPageCell || isDateTimeCell;
-          const isLastRow = row === ROWS - 1;
-          const isIndexOverlay = showIndexLine && isLastRow;
           const headerChar = isPageCell
             ? pageStr[col]
             : isDateTimeCell
@@ -119,35 +118,22 @@ export function TeletextGrid({
           const headerFg = isPageCell ? 'white' : isDateTimeCell ? 'yellow' : null;
 
           const displayCell = headerChar !== null ? { ...cell, char: headerChar, fg: headerFg as typeof cell.fg } : cell;
-          const showGraphics = !isHeaderOverlay && !isIndexOverlay && typeof displayCell.graphics === 'number' && displayCell.graphics >= 0 && displayCell.graphics <= 63;
-          let displayChar: string = isHeaderOverlay ? (headerChar === ' ' || headerChar === null ? '\u00a0' : headerChar) : (displayCell.char === ' ' ? '\u00a0' : displayCell.char);
-          let indexLink: { label: string; fg: 'red' | 'green' | 'yellow' | 'cyan'; page: number } | null = null;
-          if (isIndexOverlay) {
-            for (const { start, end, item } of INDEX_LINE_RANGES) {
-              if (col >= start && col < end) {
-                displayChar = item.label[col - start];
-                indexLink = item;
-                break;
-              }
-            }
-            if (col < 40 && indexLink === null) displayChar = '\u00a0';
-          }
-          const cellFg = indexLink ? indexLink.fg : displayCell.fg;
-          const handleClick = indexClickable && indexLink
-            ? (e: React.MouseEvent) => { e.preventDefault(); onIndexPageSelect?.(indexLink!.page); }
-            : pageNumberClickable && isPageCell
-              ? (e: React.MouseEvent) => { e.preventDefault(); onPageNumberClick?.(); }
-              : () => onCellClick?.(index);
+          const showGraphics = !isHeaderOverlay && typeof displayCell.graphics === 'number' && displayCell.graphics >= 0 && displayCell.graphics <= 63;
+          const displayChar: string = isHeaderOverlay ? (headerChar === ' ' || headerChar === null ? '\u00a0' : headerChar) : (displayCell.char === ' ' ? '\u00a0' : displayCell.char);
+          const cellFg = displayCell.fg;
+          const handleClick = pageNumberClickable && isPageCell
+            ? (e: React.MouseEvent) => { e.preventDefault(); onPageNumberClick?.(); }
+            : () => onCellClick?.(index);
           return (
             <div
               key={index}
               className={`teletext-cell teletext-fg-${cellFg} teletext-bg-${displayCell.bg} ${
                 !readOnly && cursorIndex === index ? 'cursor' : ''
-              } ${indexClickable && indexLink ? 'teletext-index-link' : ''} ${pageNumberClickable && isPageCell ? 'teletext-page-number-clickable' : ''}`}
+              } ${pageNumberClickable && isPageCell ? 'teletext-page-number-clickable' : ''}`}
               onClick={handleClick}
-              onMouseDown={indexLink || (pageNumberClickable && isPageCell) ? undefined : () => onCellMouseDown?.(index)}
-              onMouseEnter={indexLink || (pageNumberClickable && isPageCell) ? undefined : () => onCellMouseEnter?.(index)}
-              role={readOnly ? (indexLink || (pageNumberClickable && isPageCell) ? 'button' : undefined) : 'button'}
+              onMouseDown={isPageCell && pageNumberClickable ? undefined : () => onCellMouseDown?.(index)}
+              onMouseEnter={isPageCell && pageNumberClickable ? undefined : () => onCellMouseEnter?.(index)}
+              role={readOnly ? (pageNumberClickable && isPageCell ? 'button' : undefined) : 'button'}
               tabIndex={-1}
             >
               {showGraphics ? (
@@ -158,6 +144,31 @@ export function TeletextGrid({
             </div>
           );
         })}
+        {/* Extra row 25: index line (INDEX / TV GUIDE / WORLD / FINANCE) when in view mode */}
+        {showIndexLine &&
+          Array.from({ length: COLS }, (_, col) => {
+            let displayChar = '\u00a0';
+            let indexLink: (typeof INDEX_LINE)[number] | null = null;
+            for (const { start, end, item } of INDEX_LINE_RANGES) {
+              if (col >= start && col < end) {
+                displayChar = item.label[col - start];
+                indexLink = item;
+                break;
+              }
+            }
+            const cellFg = indexLink ? indexLink.fg : 'black';
+            return (
+              <div
+                key={`index-${col}`}
+                className={`teletext-cell teletext-fg-${cellFg} teletext-bg-black ${indexClickable && indexLink ? 'teletext-index-link' : ''}`}
+                onClick={indexClickable && indexLink ? (e: React.MouseEvent) => { e.preventDefault(); onIndexPageSelect?.(indexLink!.page); } : undefined}
+                role={indexClickable && indexLink ? 'button' : undefined}
+                tabIndex={-1}
+              >
+                {displayChar}
+              </div>
+            );
+          })}
       </div>
     </div>
   );
