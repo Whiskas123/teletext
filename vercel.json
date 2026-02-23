@@ -1,0 +1,12 @@
+{
+  "bunVersion": "1.x",
+  "buildCommand": "bun run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "rewrites": [
+    { "source": "/view", "destination": "/index.html" },
+    { "source": "/view/:pageNumber", "destination": "/index.html" },
+    { "source": "/edit/:pageNumber", "destination": "/index.html" },
+    { "source": "/", "destination": "/index.html" }
+  ]
+}

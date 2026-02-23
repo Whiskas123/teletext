@@ -1,0 +1,623 @@
+/* Teletext color palette (broadcast-style) */
+.teletext-fg-black { color: #000000; }
+.teletext-fg-red { color: #ff0000; }
+.teletext-fg-green { color: #00ff00; }
+.teletext-fg-yellow { color: #ffff00; }
+.teletext-fg-blue { color: #0000ff; }
+.teletext-fg-magenta { color: #ff00ff; }
+.teletext-fg-cyan { color: #00ffff; }
+.teletext-fg-white { color: #ffffff; }
+
+.teletext-bg-black { background-color: #000000; }
+.teletext-bg-red { background-color: #ff0000; }
+.teletext-bg-green { background-color: #00ff00; }
+.teletext-bg-yellow { background-color: #ffff00; }
+.teletext-bg-blue { background-color: #0000ff; }
+.teletext-bg-magenta { background-color: #ff00ff; }
+.teletext-bg-cyan { background-color: #00ffff; }
+.teletext-bg-white { background-color: #ffffff; }
+
+/* Pixelated teletext font (SAA5050-style); accentuated chars appear squished in same cell */
+.teletext-screen {
+  position: relative;
+  font-family: 'Press Start 2P', 'Courier New', Courier, monospace;
+  font-size: 14px;
+  line-height: 1.35;
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  display: inline-block;
+  padding: 12px;
+  background: #000;
+  color: #fff;
+  border: 2px solid #333;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+.teletext-screen-compact {
+  font-size: 6px;
+  line-height: 1.35;
+  padding: 4px;
+}
+
+.teletext-screen-compact .teletext-grid {
+  grid-template-columns: repeat(40, 1em);
+  grid-template-rows: repeat(24, 1.35em);
+}
+
+.teletext-screen-wrapper {
+  position: relative;
+  display: inline-block;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+/* Inline page number input (replaces prompt when clicking the 3 digits) */
+.teletext-page-number-input {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  width: 3em;
+  height: 1.35em;
+  padding: 0;
+  margin: 0;
+  font-family: 'Press Start 2P', 'Courier New', Courier, monospace;
+  font-size: 14px;
+  line-height: 1.35;
+  letter-spacing: -0.03em;
+  background: #000;
+  color: #fff;
+  border: none;
+  outline: 2px solid #ffff00;
+  outline-offset: -2px;
+  box-sizing: border-box;
+  caret-color: #fff;
+  z-index: 2;
+}
+
+.teletext-page-number-input::placeholder {
+  color: #666;
+}
+
+.teletext-page-number-input::selection {
+  background: #333;
+}
+
+.teletext-grid {
+  display: grid;
+  grid-template-columns: repeat(40, 1em);
+  grid-template-rows: repeat(24, 1.35em);
+  gap: 0;
+  width: fit-content;
+}
+
+/* Squished look for accented/wider characters (real teletext fitted them in same cell) */
+.teletext-cell {
+  width: 1em;
+  height: 1.35em;
+  min-width: 1em;
+  max-width: 1em;
+  overflow: hidden;
+  text-overflow: clip;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  white-space: pre;
+  box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.teletext-cell.cursor {
+  outline: 2px solid #ffff00;
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+.teletext-index-link,
+.teletext-page-number-clickable {
+  cursor: pointer;
+}
+
+.teletext-index-link:hover,
+.teletext-page-number-clickable:hover {
+  filter: brightness(1.2);
+}
+
+/* Block graphics (sixels): 2×3 grid inside cell, contiguous blocks */
+.teletext-sixel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr 1fr;
+  gap: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+}
+
+.teletext-sixel-dot {
+  min-width: 2px;
+  min-height: 2px;
+  /* Background comes from .teletext-bg-* class per part */
+}
+
+/* Retro brush cursor when brush mode is on (pixel block tip) */
+.teletext-screen-wrapper.brush-cursor {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Crect x='0' y='0' width='6' height='6' fill='%23fff' stroke='%23000' stroke-width='1'/%3E%3C/svg%3E") 2 2, crosshair;
+}
+
+/* Home grid of teletext pages */
+.page-grid-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1.5rem;
+  min-height: 100vh;
+}
+
+.page-grid-title {
+  font-family: 'Press Start 2P', 'Courier New', Courier, monospace;
+  color: #e0e0e0;
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
+}
+
+.page-grid-loading,
+.page-grid-error {
+  color: #999;
+  margin: 1rem 0;
+}
+
+.page-grid-error {
+  color: #c44;
+}
+
+.editor-save-error {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  padding: 0.5rem 1rem;
+  background: #4a1a1a;
+  color: #f88;
+  border: 1px solid #c44;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+}
+
+.page-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  max-width: 90vw;
+}
+
+.page-grid-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.page-grid-card:hover {
+  border-color: #555;
+  background: #222;
+}
+
+.page-grid-card-number {
+  font-family: 'Press Start 2P', 'Courier New', Courier, monospace;
+  font-size: 0.75rem;
+  color: #aaa;
+}
+
+.page-grid-card-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.page-grid-card-preview .teletext-screen {
+  border-width: 1px;
+}
+
+.viewer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1rem;
+  min-height: 100vh;
+}
+
+.editor-layout {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  height: 100vh;
+  max-height: 100vh;
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Sidebar fixed on the left; scrolls internally when content exceeds viewport */
+.editor-sidebar {
+  width: 20rem;
+  min-width: 20rem;
+  max-width: 20rem;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 1.25rem 1.25rem;
+  background: #1a1a1a;
+  border-right: 1px solid #333;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  order: -1;
+}
+
+.sidebar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.sidebar-section:last-child {
+  border-bottom: none;
+}
+
+.sidebar-section.sidebar-actions {
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid #333;
+  border-bottom: none;
+  gap: 0.5rem;
+}
+
+.sidebar-heading {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #ccc;
+  margin: 0 0 0.25rem 0;
+  letter-spacing: 0.02em;
+}
+
+.sidebar-field-label {
+  display: block;
+  font-size: 0.75rem;
+  color: #999;
+  margin-bottom: 0.4rem;
+}
+
+.color-block {
+  margin-bottom: 0.5rem;
+}
+
+.color-block:last-child {
+  margin-bottom: 0;
+}
+
+.color-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.brush-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Brush sixel preview: same 2×3 proportions as teletext screen, with dividing lines */
+.brush-sixel-preview {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr 1fr;
+  gap: 1px;
+  aspect-ratio: 1 / 1.35;
+  width: 100%;
+  max-width: 6.5em;
+  margin-bottom: 0.5rem;
+  background: #444;
+  border: 1px solid #333;
+  padding: 0;
+}
+
+.brush-sixel-part {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  min-width: 2px;
+  min-height: 2px;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease, outline 0.15s ease;
+  background-clip: padding-box;
+}
+
+.brush-sixel-part:hover {
+  filter: brightness(1.1);
+}
+
+.brush-sixel-part:focus-visible {
+  outline: 2px solid #888;
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+.brush-sixel-part-active {
+  box-shadow: inset 0 0 0 2px #fff;
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+  z-index: 1;
+}
+
+/* Tooltip: ease-out on open, ease-in when closing (e.g. after selecting a color) */
+.sixel-color-tooltip {
+  padding: 0.5rem;
+  background: #252525;
+  border: 1px solid #404040;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease-in, visibility 0s linear 0.2s;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.sixel-color-tooltip.sixel-color-tooltip-open {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.2s ease-out, visibility 0s;
+  pointer-events: auto;
+}
+
+.sixel-color-tooltip-label {
+  font-size: 0.7rem;
+  color: #aaa;
+  margin-bottom: 0.35rem;
+  font-family: 'Press Start 2P', 'Courier New', Courier, monospace;
+}
+
+.sixel-color-tooltip-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.sixel-color-tooltip-swatches .color-swatch {
+  width: 1.6rem;
+  height: 1.6rem;
+}
+
+/* Parent of sixel grid + tooltip needs position for tooltip placement */
+.color-block.sixel-color-tooltip-ref {
+  position: relative;
+}
+
+.brush-pattern-row {
+  display: flex;
+  align-items: center;
+}
+
+/* Main area: flex to fill, center the teletext screen */
+.editor-main {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 0;
+  min-height: 0;
+  padding: 1rem;
+  overflow: auto;
+}
+
+.viewer-title,
+.editor-title {
+  font-family: 'Press Start 2P', 'Courier New', Courier, monospace;
+  color: #e0e0e0;
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.editor-sidebar .editor-title {
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #333;
+}
+
+.viewer-actions,
+.editor-toolbar {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.color-swatch {
+  width: 1.6rem;
+  height: 1.6rem;
+  border: 2px solid #404040;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+}
+
+.color-swatch:hover {
+  border-color: #606060;
+  transform: scale(1.05);
+}
+
+.color-swatch.active {
+  border-color: #aaa;
+  box-shadow: 0 0 0 2px #555;
+}
+
+.color-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.toolbar-label {
+  font-size: 0.75rem;
+  color: #999;
+}
+
+.sidebar-toggle {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid #404040;
+  background: #252525;
+  color: #ddd;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.sidebar-toggle:hover {
+  background: #2d2d2d;
+  border-color: #555;
+}
+
+.sidebar-toggle.active {
+  background: #2d3d2d;
+  border-color: #4a6b4a;
+  color: #b8d4b8;
+}
+
+.sidebar-action-btn {
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid #404040;
+  background: #252525;
+  color: #ddd;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.sidebar-action-btn:hover {
+  background: #2d2d2d;
+  border-color: #555;
+}
+
+.sidebar-action-btn-clear {
+  outline: 2px solid #c00;
+  outline-offset: 0;
+  border-color: #c00;
+}
+
+.sidebar-action-btn-clear:hover {
+  border-color: #f44;
+  outline-color: #f44;
+}
+
+.clear-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.clear-confirm-label {
+  font-size: 0.8rem;
+  color: #aaa;
+}
+
+.clear-confirm-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.preset-btn {
+  padding: 0.4rem 0.5rem;
+  font-size: 0.72rem;
+  border-radius: 4px;
+  border: 1px solid #404040;
+  background: #252525;
+  color: #bbb;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+  min-width: 0;
+}
+
+.preset-btn:hover {
+  background: #2d2d2d;
+  border-color: #555;
+  color: #ddd;
+}
+
+/* Brush: sixel pattern picker (2×3 grid) */
+.sixel-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sixel-picker-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr 1fr;
+  gap: 3px;
+  width: 2.75rem;
+  height: 2.1rem;
+}
+
+.sixel-picker-dot {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 1px solid #555;
+  border-radius: 2px;
+  background: transparent;
+  cursor: pointer;
+  min-width: 10px;
+  min-height: 8px;
+}
+
+.sixel-picker-dot.on {
+  background: currentColor;
+}
+
+.sixel-picker-dot:hover {
+  opacity: 0.9;
+}
+
+.brush-presets {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.35rem;
+  min-width: 0;
+}
