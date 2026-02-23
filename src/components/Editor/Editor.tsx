@@ -209,7 +209,17 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
       switch (e.key) {
         case "Backspace":
           e.preventDefault();
-          setCellChar(cursorIndex, " ");
+          setPage((prev) => {
+            const next = [...prev];
+            next[cursorIndex] = {
+              ...next[cursorIndex],
+              char: " ",
+              fg: "black",
+              bg: "black",
+              graphics: null,
+            };
+            return next;
+          });
           setCursorIndex(Math.max(COLS, cursorIndex - 1));
           return;
         case "Delete":
@@ -253,11 +263,19 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
           }
       }
     },
-    [cursorIndex, setCellChar],
+    [cursorIndex, setCellChar, setPage],
   );
 
+  // Keep the teletext screen focused so arrow keys work without clicking it first
   useEffect(() => {
     gridRef.current?.focus();
+    const id = setTimeout(() => gridRef.current?.focus(), 0);
+    return () => clearTimeout(id);
+  }, []);
+
+  const handleGridBlur = useCallback(() => {
+    // Refocus the grid so arrow keys keep working after clicking sidebar, etc.
+    setTimeout(() => gridRef.current?.focus(), 0);
   }, []);
 
   return (
@@ -485,6 +503,7 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
           className={`teletext-screen-wrapper${brushMode ? " brush-cursor" : ""}`}
           tabIndex={0}
           onKeyDown={handleKeyDown}
+          onBlur={handleGridBlur}
           onMouseLeave={handleGridMouseLeave}
           role="application"
           aria-label="Teletext editor grid"
