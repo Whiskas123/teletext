@@ -1,9 +1,10 @@
 /**
- * Page store: Vercel KV when env is set, otherwise file-based (so data persists across requests in local dev).
+ * Page store: Redis (Vercel Marketplace) when REDIS_URL is set,
+ * otherwise file-based (so data persists across requests in local dev).
  */
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
-import { kv } from '@vercel/kv';
+import { createClient, type RedisClientType } from 'redis';
 
 const PAGE_NUMBERS = [100, 200, 300, 400, 500, 600, 700, 800, 900] as const;
 const TOTAL_CELLS = 40 * 24;
@@ -46,29 +47,49 @@ export function getPageNumbers(): readonly number[] {
   return PAGE_NUMBERS;
 }
 
-async function getFromKv(num: number): Promise<string | null> {
+let _redis: RedisClientType | null = null;
+
+async function getRedis(): Promise<RedisClientType | null> {
+  const url = process.env.REDIS_URL;
+  if (!url) return null;
+  if (_redis?.isOpen) return _redis;
   try {
-    const v = await kv.get<string>(key(num));
+    _redis = createClient({ url });
+    await _redis.connect();
+    return _redis;
+  } catch {
+    _redis = null;
+    return null;
+  }
+}
+
+async function getFromRedis(num: number): Promise<string | null> {
+  const redis = await getRedis();
+  if (!redis) return null;
+  try {
+    const v = await redis.get(key(num));
     return v ?? null;
   } catch {
     return null;
   }
 }
 
-async function setInKv(num: number, value: string): Promise<void> {
-  await kv.set(key(num), value);
+async function setInRedis(num: number, value: string): Promise<void> {
+  const redis = await getRedis();
+  if (!redis) return;
+  await redis.set(key(num), value);
 }
 
 export async function getPage(num: number): Promise<string | null> {
-  if (process.env.KV_REST_API_URL) {
-    return getFromKv(num);
+  if (process.env.REDIS_URL) {
+    return getFromRedis(num);
   }
   return getFromFile(num);
 }
 
 export async function setPage(num: number, value: string): Promise<void> {
-  if (process.env.KV_REST_API_URL) {
-    await setInKv(num, value);
+  if (process.env.REDIS_URL) {
+    await setInRedis(num, value);
   } else {
     await setInFile(num, value);
   }
@@ -76,17 +97,20 @@ export async function setPage(num: number, value: string): Promise<void> {
 
 export async function getAllPages(): Promise<Record<string, string>> {
   const result: Record<string, string> = {};
-  if (process.env.KV_REST_API_URL) {
-    try {
-      const keys = PAGE_NUMBERS.map((n) => key(n));
-      const values = await kv.mget<string>(...keys);
-      PAGE_NUMBERS.forEach((n, i) => {
-        result[String(n)] = values[i] ?? '';
-      });
-    } catch {
-      PAGE_NUMBERS.forEach((n) => {
-        result[String(n)] = '';
-      });
+  if (process.env.REDIS_URL) {
+    const redis = await getRedis();
+    if (redis) {
+      try {
+        const keys = PAGE_NUMBERS.map((n) => key(n));
+        const values = await redis.mGet(keys);
+        PAGE_NUMBERS.forEach((n, i) => {
+          result[String(n)] = values[i] ?? '';
+        });
+      } catch {
+        PAGE_NUMBERS.forEach((n) => {
+          result[String(n)] = '';
+        });
+      }
     }
   } else {
     for (const num of PAGE_NUMBERS) {

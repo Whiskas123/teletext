@@ -38,15 +38,11 @@ Output is in `dist/` (static files).
 1. **Create a GitHub repo** and push this project (see below).
 2. In [Vercel](https://vercel.com), **Import** the GitHub repo. Set the **Root Directory** to the project folder (e.g. `teletext-workshop` if the repo only contains this app).
 3. **Build**: Vercel will detect Vite; build command `npm run build` (or `bun run build`), output `dist`. The `api/` folder is deployed as serverless functions.
-4. **Optional – persistence**: To save pages (100–900) across visits, create a [Vercel KV](https://vercel.com/docs/storage/vercel-kv) store and add the env vars to the project:
-   - `KV_REST_API_URL`
-   - `KV_REST_API_TOKEN`
-   - `KV_REST_API_READ_ONLY_TOKEN`
-   Without KV, pages are stored in the deployment environment only (e.g. file store in `/tmp`); they do not persist on serverless.
+4. **Optional – persistence**: To save pages (100–900) across visits, add **Redis** from the [Vercel Marketplace](https://vercel.com/marketplace?category=storage) (Storage). Connect it to your project, run `vercel env pull .env.development.local` locally, and ensure `REDIS_URL` is set. Without Redis, pages use the file store in `/tmp` and do not persist on serverless.
 
 ## Tech
 
 - **React 19** + **TypeScript** + **Vite 7**
 - **React Router** for `/`, `/view?page=...`, `/edit/:pageNumber`
-- **API** (`/api/pages`, `/api/pages/[number]`) for loading/saving pages; optional **Vercel KV** for persistence
+- **API** (`/api/pages`, `/api/pages/[number]`) for loading/saving pages; optional **Redis** (Marketplace, `redis` npm package) for persistence
 - Teletext-style UI: 40×24 grid, index line (INDEX / TV GUIDE / WORLD / FINANCE), page number cycling animation
