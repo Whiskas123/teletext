@@ -34,7 +34,6 @@ function formatPageNumber(n: number): string {
   return String(n).padStart(3).slice(-3);
 }
 
-const COLS_PER_INDEX = 10;
 const INDEX_LINE_RANGES: { start: number; end: number; label: string; fg: string }[] = [
   { label: 'INDEX', fg: 'red', start: 2, end: 7 },
   { label: 'TV GUIDE', fg: 'green', start: 10, end: 19 },
