@@ -44,6 +44,20 @@ export const DEFAULT_SIXEL_COLORS: SixelColors = [
   'white',
 ];
 
+/** Preset motifs for quick one-click selection in brush mode. */
+export const PRESET_MOTIFS: readonly { name: string; colors: SixelColors }[] = [
+  { name: 'White', colors: ['white', 'white', 'white', 'white', 'white', 'white'] },
+  { name: 'Red', colors: ['red', 'red', 'red', 'red', 'red', 'red'] },
+  { name: 'Cyan', colors: ['cyan', 'cyan', 'cyan', 'cyan', 'cyan', 'cyan'] },
+  { name: 'Yellow', colors: ['yellow', 'yellow', 'yellow', 'yellow', 'yellow', 'yellow'] },
+  { name: 'Green', colors: ['green', 'green', 'green', 'green', 'green', 'green'] },
+  { name: 'Magenta', colors: ['magenta', 'magenta', 'magenta', 'magenta', 'magenta', 'magenta'] },
+  { name: 'Checker', colors: ['white', 'black', 'white', 'black', 'white', 'black'] },
+  { name: 'Gradient', colors: ['red', 'yellow', 'green', 'cyan', 'blue', 'magenta'] },
+  { name: 'Split', colors: ['cyan', 'cyan', 'cyan', 'magenta', 'magenta', 'magenta'] },
+  { name: 'Corners', colors: ['yellow', 'yellow', 'black', 'black', 'yellow', 'yellow'] },
+];
+
 export interface Cell {
   char: string;
   fg: TeletextColor;

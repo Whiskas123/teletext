@@ -359,6 +359,62 @@
   gap: 0.75rem;
 }
 
+/* Preset motifs: compact clickable previews */
+.preset-motifs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.preset-motif-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.35rem;
+  background: #252525;
+  border: 1px solid #404040;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.preset-motif-btn:hover {
+  background: #333;
+  border-color: #555;
+}
+
+.preset-motif-preview {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr 1fr;
+  gap: 1px;
+  width: 1.8rem;
+  height: 1.2rem;
+  background: #444;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.preset-motif-dot {
+  min-width: 2px;
+  min-height: 2px;
+}
+
+.preset-motif-name {
+  font-size: 0.6rem;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.sidebar-hint {
+  font-size: 0.7rem;
+  color: #777;
+  margin: 0;
+  line-height: 1.35;
+}
+
 /* Brush sixel preview: same 2×3 proportions as teletext screen, with dividing lines */
 .brush-sixel-preview {
   display: grid;

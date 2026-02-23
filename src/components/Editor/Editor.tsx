@@ -6,6 +6,7 @@ import {
   createEmptyPage,
   DEFAULT_SIXEL_COLORS,
   indexAt,
+  PRESET_MOTIFS,
   ROWS,
   rowColFromIndex,
   SIXEL_MAX,
@@ -117,9 +118,27 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
     setBrushColors([color, color, color, color, color, color] as SixelColors);
   }, []);
 
-  const handleCellClick = useCallback(
+  const pickMotifFromCell = useCallback(
     (index: number) => {
+      const cell = page[index];
+      if (
+        cell &&
+        typeof cell.graphics === "number" &&
+        cell.graphicsColors
+      ) {
+        setBrushColors([...cell.graphicsColors] as SixelColors);
+      }
+    },
+    [page],
+  );
+
+  const handleCellClick = useCallback(
+    (index: number, e?: React.MouseEvent) => {
       if (index < COLS) return;
+      if (brushMode && e?.altKey) {
+        pickMotifFromCell(index);
+        return;
+      }
       if (brushMode) {
         paintCell(index);
       } else {
@@ -127,18 +146,22 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
         gridRef.current?.focus();
       }
     },
-    [brushMode, paintCell],
+    [brushMode, paintCell, pickMotifFromCell],
   );
 
   const handleCellMouseDown = useCallback(
-    (index: number) => {
+    (index: number, e?: React.MouseEvent) => {
       if (index < COLS) return;
+      if (brushMode && e?.altKey) {
+        pickMotifFromCell(index);
+        return;
+      }
       if (brushMode) {
         isDrawingRef.current = true;
         paintCell(index);
       }
     },
-    [brushMode, paintCell],
+    [brushMode, paintCell, pickMotifFromCell],
   );
 
   const handleCellMouseEnter = useCallback(
@@ -328,6 +351,41 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
           </button>
           {brushMode && (
             <div className="brush-options">
+              <div className="color-block">
+                <span className="sidebar-field-label">
+                  Preset motifs
+                </span>
+                <div className="preset-motifs">
+                  {PRESET_MOTIFS.map((preset) => (
+                    <button
+                      key={preset.name}
+                      type="button"
+                      className="preset-motif-btn"
+                      title={preset.name}
+                      onClick={() => setBrushColors([...preset.colors] as SixelColors)}
+                      aria-label={`Use ${preset.name} motif`}
+                    >
+                      <div className="preset-motif-preview">
+                        {([0, 1, 2, 3, 4, 5] as const).map((i) => (
+                          <span
+                            key={i}
+                            className={`preset-motif-dot teletext-bg-${preset.colors[i]}`}
+                          />
+                        ))}
+                      </div>
+                      <span className="preset-motif-name">{preset.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="color-block">
+                <span className="sidebar-field-label">
+                  Pick from grid (Alt+click)
+                </span>
+                <p className="sidebar-hint">
+                  Hold Alt and click a block on the grid to copy its motif.
+                </p>
+              </div>
               <div
                 className="color-block sixel-color-tooltip-ref"
                 ref={sixelColorTooltipRef}

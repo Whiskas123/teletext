@@ -78,8 +78,8 @@ interface TeletextGridProps {
   page: TeletextPage;
   pageNumber?: number;
   cursorIndex?: number | null;
-  onCellClick?: (index: number) => void;
-  onCellMouseDown?: (index: number) => void;
+  onCellClick?: (index: number, e?: React.MouseEvent) => void;
+  onCellMouseDown?: (index: number, e?: React.MouseEvent) => void;
   onCellMouseEnter?: (index: number) => void;
   readOnly?: boolean;
   compact?: boolean;
@@ -157,7 +157,7 @@ export function TeletextGrid({
             ? (e: React.MouseEvent) => { e.preventDefault(); onPageNumberClick?.(); }
             : pageLinkTarget != null
               ? (e: React.MouseEvent) => { e.preventDefault(); onIndexPageSelect?.(pageLinkTarget); }
-              : () => onCellClick?.(index);
+              : (e: React.MouseEvent) => onCellClick?.(index, e);
           const isPageLink = pageLinkTarget != null;
           return (
             <div
@@ -166,7 +166,7 @@ export function TeletextGrid({
                 !readOnly && cursorIndex === index ? 'cursor' : ''
               } ${pageNumberClickable && isPageCell ? 'teletext-page-number-clickable' : ''} ${isPageLink ? 'teletext-index-link' : ''}`}
               onClick={handleClick}
-              onMouseDown={isPageCell && pageNumberClickable ? undefined : isPageLink ? undefined : () => onCellMouseDown?.(index)}
+              onMouseDown={isPageCell && pageNumberClickable ? undefined : isPageLink ? undefined : (e: React.MouseEvent) => onCellMouseDown?.(index, e)}
               onMouseEnter={isPageCell && pageNumberClickable ? undefined : isPageLink ? undefined : () => onCellMouseEnter?.(index)}
               role={readOnly ? (pageNumberClickable && isPageCell || isPageLink ? 'button' : undefined) : 'button'}
               tabIndex={-1}
