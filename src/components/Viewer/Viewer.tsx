@@ -1,8 +1,8 @@
-import { useRef, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useTeletext } from '../../context/TeletextContext';
-import { TeletextGrid } from '../TeletextGrid/TeletextGrid';
-import { exportPageAsPng } from '../../utils/exportPng';
+import { useRef, useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useTeletext } from "../../context/TeletextContext";
+import { TeletextGrid } from "../TeletextGrid/TeletextGrid";
+import { exportPageAsPng } from "../../utils/exportPng";
 
 const VALID_PAGE = (n: number) => Number.isInteger(n) && n >= 100 && n <= 999;
 
@@ -17,7 +17,7 @@ export function Viewer({ pageNumber, onGoToPage }: ViewerProps) {
   const { page } = useTeletext();
   const navigate = useNavigate();
   const [editingPage, setEditingPage] = useState(false);
-  const [pageInput, setPageInput] = useState('');
+  const [pageInput, setPageInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -25,7 +25,7 @@ export function Viewer({ pageNumber, onGoToPage }: ViewerProps) {
   }, [editingPage]);
 
   const openPageInput = () => {
-    setPageInput('');
+    setPageInput("");
     setEditingPage(true);
   };
 
@@ -37,11 +37,11 @@ export function Viewer({ pageNumber, onGoToPage }: ViewerProps) {
       onGoToPage(rounded);
     }
     setEditingPage(false);
-    setPageInput('');
+    setPageInput("");
   };
 
   const handlePageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const v = e.target.value.replace(/\D/g, '').slice(0, 3);
+    const v = e.target.value.replace(/\D/g, "").slice(0, 3);
     setPageInput(v);
     if (v.length === 3) {
       const n = parseInt(v, 10);
@@ -49,22 +49,22 @@ export function Viewer({ pageNumber, onGoToPage }: ViewerProps) {
         const rounded = Math.round(n / 100) * 100;
         onGoToPage?.(rounded);
         setEditingPage(false);
-        setPageInput('');
+        setPageInput("");
       }
     }
   };
 
   const handlePageInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') submitPageInput();
-    if (e.key === 'Escape') {
+    if (e.key === "Enter") submitPageInput();
+    if (e.key === "Escape") {
       setEditingPage(false);
-      setPageInput('');
+      setPageInput("");
     }
   };
 
   return (
     <div className="viewer">
-      <h1 className="viewer-title">TELETEXT</h1>
+      <h1 className="viewer-title">TELETEXT BROWSER</h1>
       <div className="teletext-screen-wrapper">
         {editingPage && (
           <input
@@ -89,13 +89,16 @@ export function Viewer({ pageNumber, onGoToPage }: ViewerProps) {
         />
       </div>
       <div className="viewer-actions">
-        <button type="button" onClick={() => navigate('/')}>
+        <button type="button" onClick={() => navigate("/")}>
           Back to grid
         </button>
         <button type="button" onClick={() => navigate(`/edit/${pageNumber}`)}>
           Edit
         </button>
-        <button type="button" onClick={() => exportPageAsPng(page)}>
+        <button
+          type="button"
+          onClick={() => exportPageAsPng(page, "teletext.png", pageNumber)}
+        >
           Export PNG
         </button>
       </div>

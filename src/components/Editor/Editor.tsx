@@ -440,7 +440,7 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
           <button
             type="button"
             className="sidebar-action-btn"
-            onClick={() => exportPageAsPng(page)}
+            onClick={() => exportPageAsPng(page, 'teletext.png', pageNumber ?? 100)}
           >
             Export PNG
           </button>

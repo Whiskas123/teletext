@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getPage, setPage, isValidPageNumber } from '../store';
-import { isValidPageBody, emptyPageJson } from '../validate';
-import { getSeedPage } from '../seed-pages';
+import { getPage, setPage, isValidPageNumber } from '../store.js';
+import { isValidPageBody, emptyPageJson } from '../validate.js';
+import { getSeedPage } from '../seed-pages.js';
 
 function getNumberFromRequest(req: VercelRequest): number | null {
   const num = req.query.number;

@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getAllPages, getPageNumbers } from '../store';
-import { emptyPageJson } from '../validate';
-import { getSeedPage } from '../seed-pages';
+import { getAllPages, getPageNumbers } from '../store.js';
+import { emptyPageJson } from '../validate.js';
+import { getSeedPage } from '../seed-pages.js';
 
 /**
  * GET /api/pages - returns all 9 pages as { "100": TeletextPage, ... }.
