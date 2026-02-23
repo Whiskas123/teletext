@@ -120,7 +120,7 @@ export function TeletextGrid({
 
           const displayCell = headerChar !== null ? { ...cell, char: headerChar, fg: headerFg as typeof cell.fg } : cell;
           const showGraphics = !isHeaderOverlay && !isIndexOverlay && typeof displayCell.graphics === 'number' && displayCell.graphics >= 0 && displayCell.graphics <= 63;
-          let displayChar: string = isHeaderOverlay ? (headerChar === ' ' ? '\u00a0' : headerChar) : (displayCell.char === ' ' ? '\u00a0' : displayCell.char);
+          let displayChar: string = isHeaderOverlay ? (headerChar === ' ' || headerChar === null ? '\u00a0' : headerChar) : (displayCell.char === ' ' ? '\u00a0' : displayCell.char);
           let indexLink: { label: string; fg: 'red' | 'green' | 'yellow' | 'cyan'; page: number } | null = null;
           if (isIndexOverlay) {
             for (const { start, end, item } of INDEX_LINE_RANGES) {
