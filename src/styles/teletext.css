@@ -247,6 +247,22 @@
   min-height: 100vh;
 }
 
+.viewer-screen-and-hint {
+  position: relative;
+  display: inline-block;
+}
+
+.viewer-page-number-hint {
+  position: absolute;
+  right: 100%;
+  margin-right: 0.75rem;
+  top: 0.5rem;
+  font-family: 'Press Start 2P', 'Courier New', Courier, monospace;
+  font-size: 0.65rem;
+  color: #888;
+  white-space: nowrap;
+}
+
 .editor-layout {
   display: flex;
   flex-direction: row;

@@ -65,28 +65,31 @@ export function Viewer({ pageNumber, onGoToPage }: ViewerProps) {
   return (
     <div className="viewer">
       <h1 className="viewer-title">TELETEXT BROWSER</h1>
-      <div className="teletext-screen-wrapper">
-        {editingPage && (
-          <input
-            ref={inputRef}
-            type="text"
-            inputMode="numeric"
-            className="teletext-page-number-input"
-            placeholder="___"
-            value={pageInput}
-            onChange={handlePageInputChange}
-            onBlur={submitPageInput}
-            onKeyDown={handlePageInputKeyDown}
-            aria-label="Page number"
+      <div className="viewer-screen-and-hint">
+        <span className="viewer-page-number-hint">change page here -{">"}</span>
+        <div className="teletext-screen-wrapper">
+          {editingPage && (
+            <input
+              ref={inputRef}
+              type="text"
+              inputMode="numeric"
+              className="teletext-page-number-input"
+              placeholder="___"
+              value={pageInput}
+              onChange={handlePageInputChange}
+              onBlur={submitPageInput}
+              onKeyDown={handlePageInputKeyDown}
+              aria-label="Page number"
+            />
+          )}
+          <TeletextGrid
+            page={page}
+            pageNumber={pageNumber}
+            readOnly
+            onIndexPageSelect={onGoToPage}
+            onPageNumberClick={onGoToPage ? openPageInput : undefined}
           />
-        )}
-        <TeletextGrid
-          page={page}
-          pageNumber={pageNumber}
-          readOnly
-          onIndexPageSelect={onGoToPage}
-          onPageNumberClick={onGoToPage ? openPageInput : undefined}
-        />
+        </div>
       </div>
       <div className="viewer-actions">
         <button type="button" onClick={() => navigate("/")}>
