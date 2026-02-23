@@ -44,19 +44,46 @@ export const DEFAULT_SIXEL_COLORS: SixelColors = [
   'white',
 ];
 
-/** Preset motifs for quick one-click selection in brush mode. */
-export const PRESET_MOTIFS: readonly { name: string; colors: SixelColors }[] = [
-  { name: 'White', colors: ['white', 'white', 'white', 'white', 'white', 'white'] },
-  { name: 'Red', colors: ['red', 'red', 'red', 'red', 'red', 'red'] },
-  { name: 'Cyan', colors: ['cyan', 'cyan', 'cyan', 'cyan', 'cyan', 'cyan'] },
-  { name: 'Yellow', colors: ['yellow', 'yellow', 'yellow', 'yellow', 'yellow', 'yellow'] },
-  { name: 'Green', colors: ['green', 'green', 'green', 'green', 'green', 'green'] },
-  { name: 'Magenta', colors: ['magenta', 'magenta', 'magenta', 'magenta', 'magenta', 'magenta'] },
-  { name: 'Checker', colors: ['white', 'black', 'white', 'black', 'white', 'black'] },
-  { name: 'Gradient', colors: ['red', 'yellow', 'green', 'cyan', 'blue', 'magenta'] },
-  { name: 'Split', colors: ['cyan', 'cyan', 'cyan', 'magenta', 'magenta', 'magenta'] },
-  { name: 'Corners', colors: ['yellow', 'yellow', 'black', 'black', 'yellow', 'yellow'] },
+/**
+ * Motif pattern: slots[i] = which color slot (0-based) position i uses.
+ * Same pattern can be used with different color palettes.
+ */
+export type MotifSlotPattern = readonly [number, number, number, number, number, number];
+
+export const MOTIF_PATTERNS: readonly { name: string; slots: MotifSlotPattern }[] = [
+  { name: 'Solid', slots: [0, 0, 0, 0, 0, 0] },       // 1 slot
+  { name: 'Checker', slots: [0, 1, 0, 1, 0, 1] },     // 2 slots (alternating)
+  { name: 'Split', slots: [0, 0, 0, 1, 1, 1] },       // 2 slots (left / right)
+  { name: 'Corners', slots: [0, 0, 1, 1, 0, 0] },     // 2 slots (corners vs middle)
+  { name: 'Gradient', slots: [0, 1, 2, 3, 4, 5] },   // 6 slots (each part independent)
 ];
+
+/** Get number of color slots for a motif pattern. */
+export function motifSlotCount(slots: MotifSlotPattern): number {
+  return Math.max(...slots) + 1;
+}
+
+/** Derive brush colors from slot colors. */
+export function brushColorsFromSlots(
+  slots: MotifSlotPattern,
+  slotColors: readonly TeletextColor[],
+): SixelColors {
+  return slots.map((s) => slotColors[s] ?? 'white') as SixelColors;
+}
+
+/** Extract slot colors from brush colors (first occurrence per slot). */
+export function slotColorsFromBrush(
+  slots: MotifSlotPattern,
+  brushColors: SixelColors,
+): TeletextColor[] {
+  const count = motifSlotCount(slots);
+  const result: TeletextColor[] = [];
+  for (let slot = 0; slot < count; slot++) {
+    const idx = slots.indexOf(slot);
+    result.push(idx >= 0 ? brushColors[idx] : 'white');
+  }
+  return result;
+}
 
 export interface Cell {
   char: string;
