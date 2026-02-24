@@ -68,7 +68,7 @@ export function brushColorsFromSlots(
   slots: MotifSlotPattern,
   slotColors: readonly TeletextColor[],
 ): SixelColors {
-  return slots.map((s) => slotColors[s] ?? 'white') as SixelColors;
+  return slots.map((s) => slotColors[s] ?? 'white') as unknown as SixelColors;
 }
 
 /** Extract slot colors from brush colors (first occurrence per slot). */
