@@ -125,10 +125,6 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
     [brushColors, setPage, addMotifToHistory],
   );
 
-  const setAllBrushColors = useCallback((color: TeletextColor) => {
-    setBrushColors([color, color, color, color, color, color] as SixelColors);
-  }, []);
-
   const selectedMotif = MOTIF_PATTERNS[selectedMotifIndex];
   const motifSlotColors = slotColorsFromBrush(selectedMotif.slots, brushColors);
 
@@ -522,19 +518,6 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
                       </div>
                     );
                   })()}
-                  <span className="sidebar-field-label">Set all parts</span>
-                  <div className="color-swatches">
-                    {TELETEXT_COLORS.map((color) => (
-                      <button
-                        key={color}
-                        type="button"
-                        className={`color-swatch teletext-bg-${color}`}
-                        title={color}
-                        onClick={() => setAllBrushColors(color)}
-                        aria-label={`All parts ${color}`}
-                      />
-                    ))}
-                  </div>
                 </div>
               </div>
               {motifHistory.length > 0 && (

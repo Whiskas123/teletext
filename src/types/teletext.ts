@@ -52,12 +52,11 @@ export const DEFAULT_SIXEL_COLORS: SixelColors = [
 export type MotifSlotPattern = readonly [number, number, number, number, number, number];
 
 export const MOTIF_PATTERNS: readonly { name: string; slots: MotifSlotPattern }[] = [
-  { name: 'Solid', slots: [0, 0, 0, 0, 0, 0] },       // 1 slot
-  { name: 'Checker', slots: [0, 1, 0, 1, 0, 1] },     // 2 slots (alternating)
-  { name: 'Split', slots: [0, 0, 0, 1, 1, 1] },       // 2 slots (left / right)
-  { name: 'Corners', slots: [0, 0, 1, 1, 0, 0] },     // 2 slots (corners vs middle)
-  { name: 'Gradient', slots: [0, 1, 2, 3, 4, 5] },   // 6 slots (each part independent)
-  { name: 'Custom', slots: [0, 1, 2, 3, 4, 5] },     // 6 slots (per-part editor)
+  { name: 'Solid', slots: [0, 0, 0, 0, 0, 0] },     // 1 slot
+  { name: 'Checker', slots: [0, 1, 0, 1, 0, 1] },   // 2 slots (alternating)
+  { name: 'Split', slots: [0, 0, 0, 1, 1, 1] },     // 2 slots (left / right)
+  { name: 'Corners', slots: [0, 0, 1, 1, 0, 0] },   // 2 slots (corners vs middle)
+  { name: 'Custom', slots: [0, 1, 2, 3, 4, 5] },    // 6 slots (each part independent)
 ];
 
 /** Get number of color slots for a motif pattern. */
