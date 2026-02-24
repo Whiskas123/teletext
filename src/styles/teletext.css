@@ -358,17 +358,20 @@
   min-width: 0;
 }
 
-/* Text style: three columns — Fg (4×4), Bg (4×4), preview (same ratio as teletext cell) */
+/* Text style: three columns — Fg (4×4), Bg (4×4), preview — use full width */
 .text-preview-three-col {
   display: flex;
   align-items: flex-start;
   gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
 }
 
 .text-preview-col {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  flex: 1;
   min-width: 0;
 }
 
@@ -377,38 +380,52 @@
   color: #888;
 }
 
-/* 4 columns × 2 rows for 8 colors */
+/* 4 columns × 2 rows for 8 colors; fill column width */
 .text-preview-swatches-4x4 {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   grid-template-rows: repeat(2, 1fr);
   gap: 0.2rem;
-  width: 4.4rem;
+  width: 100%;
+  max-width: 5rem;
 }
 
 .text-preview-swatches-4x4 .color-swatch-mini {
-  width: 1rem;
-  height: 1rem;
-  min-width: 1rem;
-  min-height: 1rem;
+  width: 100%;
+  aspect-ratio: 1;
+  min-width: 0;
+  min-height: 0;
   padding: 0;
 }
 
-/* Preview cell: same aspect ratio as teletext grid cell (1 : 1.35) */
+/* Preview: same as teletext cell — 1em × 1.35em, letter fills the block (no extra padding) */
 .text-preview-cell {
   font-family: 'Press Start 2P', 'Courier New', Courier, monospace;
-  font-size: 1rem;
+  font-size: 22px;
   line-height: 1.35;
-  width: 2em;
-  height: 2.7em;  /* 2 * 1.35 = same ratio as 1em : 1.35em */
-  min-width: 2em;
-  min-height: 2.7em;
+  letter-spacing: -0.03em;
+  font-weight: 400;
+  width: 1em;
+  height: 1.35em;
+  padding: 0;
+  margin: 0;
+  box-sizing: content-box;
   display: flex;
   align-items: center;
   justify-content: center;
   border: 2px solid #444;
   border-radius: 4px;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+/* Scale letter so it extends near the borders like in the grid */
+.text-preview-cell::before {
+  content: 'A';
+  font: inherit;
+  letter-spacing: inherit;
+  transform: scale(1.15);
+  line-height: 1;
 }
 
 .color-swatch-mini {

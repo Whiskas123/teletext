@@ -255,6 +255,8 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
     (index: number, e?: React.MouseEvent) => {
       if (index < COLS) return;
       if (brushMode === "block" && e?.altKey) {
+        e?.preventDefault();
+        e?.stopPropagation();
         pickMotifFromCell(index);
         return;
       }
@@ -476,9 +478,7 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
             <div
               className={`text-preview-cell teletext-fg-${fg} teletext-bg-${bg}`}
               aria-hidden
-            >
-              A
-            </div>
+            />
           </div>
         </section>
 
