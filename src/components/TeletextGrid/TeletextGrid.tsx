@@ -57,6 +57,16 @@ function useLiveTime() {
   return now;
 }
 
+/** Global blink phase so all blinking cells are in sync (1s on, 1s off). */
+function useBlinkPhase() {
+  const [visible, setVisible] = useState(true);
+  useEffect(() => {
+    const id = setInterval(() => setVisible((v) => !v), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return visible;
+}
+
 const COLS_PER_INDEX = 10; /* 40 / 4 */
 const INDEX_LINE: { label: string; fg: 'red' | 'green' | 'yellow' | 'cyan'; page: number }[] = [
   { label: 'INDEX', fg: 'red', page: 100 },
@@ -123,6 +133,7 @@ export function TeletextGrid({
   onPageNumberClick,
 }: TeletextGridProps) {
   const now = useLiveTime();
+  const blinkVisible = useBlinkPhase();
   const pageStr = formatPageNumber(pageNumber);
   const dateTimeStr = formatHeaderDateTime(now);
   const showIndexLine = readOnly;
@@ -164,7 +175,7 @@ export function TeletextGrid({
               key={index}
               className={`teletext-cell teletext-fg-${cellFg} teletext-bg-${displayCell.bg} ${
                 !readOnly && cursorIndex === index ? 'cursor' : ''
-              } ${!isHeaderOverlay && displayCell.blink ? 'teletext-blink' : ''} ${pageNumberClickable && isPageCell ? 'teletext-page-number-clickable' : ''} ${isPageLink ? 'teletext-index-link' : ''}`}
+              } ${!isHeaderOverlay && displayCell.blink ? `teletext-blink${!blinkVisible ? ' teletext-blink-hidden' : ''}` : ''} ${pageNumberClickable && isPageCell ? 'teletext-page-number-clickable' : ''} ${isPageLink ? 'teletext-index-link' : ''}`}
               onClick={handleClick}
               onMouseDown={isPageCell && pageNumberClickable ? undefined : isPageLink ? undefined : (e: React.MouseEvent) => onCellMouseDown?.(index, e)}
               onMouseEnter={isPageCell && pageNumberClickable ? undefined : isPageLink ? undefined : () => onCellMouseEnter?.(index)}

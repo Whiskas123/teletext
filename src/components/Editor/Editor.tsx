@@ -113,9 +113,9 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
   const [cursorIndex, setCursorIndex] = useState(COLS);
   const [fg, setFg] = useState<TeletextColor>("white");
   const [bg, setBg] = useState<TeletextColor>("black");
-  const [blink, setBlink] = useState(false);
   const [clearConfirmShown, setClearConfirmShown] = useState(false);
-  const [brushMode, setBrushMode] = useState(false);
+  type BrushMode = "off" | "block" | "blink";
+  const [brushMode, setBrushMode] = useState<BrushMode>("off");
   const [motifColors, setMotifColors] = useState<(SixelColors | undefined)[]>(
     () => MOTIF_PATTERNS.map(() => undefined),
   );
@@ -160,14 +160,25 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
           bg: "black",
           graphics: SIXEL_MAX,
           graphicsColors: [...brushColors],
-          blink,
         };
         return next;
       });
       setCursorIndex(index);
       addMotifToHistory(brushColors);
     },
-    [brushColors, blink, setPage, addMotifToHistory],
+    [brushColors, setPage, addMotifToHistory],
+  );
+
+  const paintBlinkCell = useCallback(
+    (index: number, value: boolean) => {
+      setPage((prev) => {
+        const next = [...prev];
+        next[index] = { ...next[index], blink: value };
+        return next;
+      });
+      setCursorIndex(index);
+    },
+    [setPage],
   );
 
   const setMotifSlotColor = useCallback(
@@ -222,33 +233,40 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
   const handleCellClick = useCallback(
     (index: number, e?: React.MouseEvent) => {
       if (index < COLS) return;
-      if (brushMode && e?.altKey) {
+      if (brushMode === "block" && e?.altKey) {
         pickMotifFromCell(index);
         return;
       }
-      if (brushMode) {
+      if (brushMode === "blink") {
+        paintBlinkCell(index, !e?.altKey);
+        return;
+      }
+      if (brushMode === "block") {
         paintCell(index);
       } else {
         setCursorIndex(index);
         focusHiddenInput();
       }
     },
-    [brushMode, paintCell, pickMotifFromCell, focusHiddenInput],
+    [brushMode, paintCell, paintBlinkCell, pickMotifFromCell, focusHiddenInput],
   );
 
   const handleCellMouseDown = useCallback(
     (index: number, e?: React.MouseEvent) => {
       if (index < COLS) return;
-      if (brushMode && e?.altKey) {
+      if (brushMode === "block" && e?.altKey) {
         pickMotifFromCell(index);
         return;
       }
-      if (brushMode) {
+      if (brushMode === "blink") {
+        isDrawingRef.current = true;
+        paintBlinkCell(index, !e?.altKey);
+      } else if (brushMode === "block") {
         isDrawingRef.current = true;
         paintCell(index);
       }
     },
-    [brushMode, paintCell, pickMotifFromCell],
+    [brushMode, paintCell, paintBlinkCell, pickMotifFromCell],
   );
 
   const handleCellMouseEnter = useCallback(
@@ -257,12 +275,14 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
         setHoveredCellIndex(null);
         return;
       }
-      if (brushMode) {
+      if (brushMode === "block") {
         setHoveredCellIndex(index);
         if (isDrawingRef.current) paintCell(index);
+      } else if (brushMode === "blink" && isDrawingRef.current) {
+        paintBlinkCell(index, true);
       }
     },
-    [brushMode, paintCell],
+    [brushMode, paintCell, paintBlinkCell],
   );
 
   const handleGridMouseLeave = useCallback(() => {
@@ -307,12 +327,11 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
           fg,
           bg,
           graphics: null,
-          blink,
         };
         return next;
       });
     },
-    [fg, bg, blink, setPage],
+    [fg, bg, setPage],
   );
 
   const handleKeyDown = useCallback(
@@ -374,7 +393,7 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
           );
           return;
         default:
-          if (brushMode) {
+          if (brushMode === "block" || brushMode === "blink") {
             e.preventDefault();
             return;
           }
@@ -389,7 +408,7 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
 
   const handleHiddenInput = useCallback(
     (e: React.FormEvent<HTMLInputElement>) => {
-      if (brushMode) return;
+      if (brushMode !== "off") return;
       const input = e.currentTarget;
       const value = input.value;
       if (!value) return;
@@ -403,6 +422,8 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
     },
     [brushMode, cursorIndex, setCellChar],
   );
+
+  const isBrushActive = brushMode === "block" || brushMode === "blink";
 
   useEffect(() => {
     hiddenInputRef.current?.focus();
@@ -420,61 +441,76 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
         <h1 className="editor-title">TELETEXT EDITOR</h1>
 
         <section className="sidebar-section">
-          <h2 className="sidebar-heading">Text colors</h2>
-          <div className="color-block">
-            <span className="sidebar-field-label">Foreground</span>
-            <div className="color-swatches">
-              {TELETEXT_COLORS.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  className={`color-swatch teletext-bg-${color} ${fg === color ? "active" : ""}`}
-                  title={color}
-                  onClick={() => setFg(color)}
-                  aria-label={`Foreground ${color}`}
-                />
-              ))}
-            </div>
-          </div>
-          <div className="color-block">
-            <span className="sidebar-field-label">Background</span>
-            <div className="color-swatches">
-              {TELETEXT_COLORS.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  className={`color-swatch teletext-bg-${color} ${bg === color ? "active" : ""}`}
-                  title={color}
-                  onClick={() => setBg(color)}
-                  aria-label={`Background ${color}`}
-                />
-              ))}
-            </div>
-          </div>
-          <div className="color-block">
-            <span className="sidebar-field-label">Blink</span>
-            <button
-              type="button"
-              className={`sidebar-toggle ${blink ? "active" : ""}`}
-              onClick={() => setBlink((v) => !v)}
-              aria-pressed={blink}
-              aria-label="Toggle blink (1s on, 1s off)"
+          <h2 className="sidebar-heading">Text style</h2>
+          <div className="text-preview-mini">
+            <div
+              className={`text-preview-cell teletext-fg-${fg} teletext-bg-${bg}`}
+              aria-hidden
             >
-              {blink ? "Blink on" : "Blink off"}
-            </button>
+              A
+            </div>
+            <div className="text-preview-pickers">
+              <div className="text-preview-row">
+                <span className="text-preview-label">Fg</span>
+                <div className="color-swatches color-swatches-inline">
+                  {TELETEXT_COLORS.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      className={`color-swatch color-swatch-mini teletext-bg-${color} ${fg === color ? "active" : ""}`}
+                      title={`Foreground ${color}`}
+                      onClick={() => setFg(color)}
+                      aria-label={`Foreground ${color}`}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="text-preview-row">
+                <span className="text-preview-label">Bg</span>
+                <div className="color-swatches color-swatches-inline">
+                  {TELETEXT_COLORS.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      className={`color-swatch color-swatch-mini teletext-bg-${color} ${bg === color ? "active" : ""}`}
+                      title={`Background ${color}`}
+                      onClick={() => setBg(color)}
+                      aria-label={`Background ${color}`}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
         <section className="sidebar-section">
-          <h2 className="sidebar-heading">Block graphics</h2>
-          <button
-            type="button"
-            className={`sidebar-toggle ${brushMode ? "active" : ""}`}
-            onClick={() => setBrushMode((v) => !v)}
-          >
-            {brushMode ? "Brush on" : "Brush off"}
-          </button>
-          {brushMode && (
+          <h2 className="sidebar-heading">Brush</h2>
+          <div className="brush-mode-toggles">
+            <button
+              type="button"
+              className={`sidebar-toggle ${brushMode === "off" ? "active" : ""}`}
+              onClick={() => setBrushMode("off")}
+            >
+              Off
+            </button>
+            <button
+              type="button"
+              className={`sidebar-toggle ${brushMode === "block" ? "active" : ""}`}
+              onClick={() => setBrushMode("block")}
+            >
+              Block
+            </button>
+            <button
+              type="button"
+              className={`sidebar-toggle ${brushMode === "blink" ? "active" : ""}`}
+              onClick={() => setBrushMode("blink")}
+              title="Paint blink on cells. Alt+click to remove blink."
+            >
+              Blink
+            </button>
+          </div>
+          {brushMode === "block" && (
             <div className="brush-options">
               <div className="color-block">
                 <div className="preset-motifs">
@@ -651,13 +687,18 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
               )}
               <div className="color-block">
                 <span className="sidebar-field-label">
-                  Pick from grid (Alt/Option + click)
+                  Pick from grid (Alt + click)
                 </span>
                 <p className="sidebar-hint">
                   Hold Alt and click a block on the grid to copy its motif.
                 </p>
               </div>
             </div>
+          )}
+          {brushMode === "blink" && (
+            <p className="sidebar-hint">
+              Click or drag to set blink on. Alt + click to remove blink.
+            </p>
           )}
         </section>
 
@@ -724,7 +765,7 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
       <div className="editor-main">
         <div
           ref={gridRef}
-          className={`teletext-screen-wrapper${brushMode ? " brush-cursor" : ""}`}
+          className={`teletext-screen-wrapper${isBrushActive ? " brush-cursor" : ""}`}
           tabIndex={0}
           onFocus={focusHiddenInput}
           onBlur={handleGridBlur}
@@ -744,7 +785,7 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
           <TeletextGrid
             page={page}
             pageNumber={pageNumber ?? 100}
-            cursorIndex={brushMode ? hoveredCellIndex : cursorIndex}
+            cursorIndex={isBrushActive ? hoveredCellIndex : cursorIndex}
             onCellClick={handleCellClick}
             onCellMouseDown={handleCellMouseDown}
             onCellMouseEnter={handleCellMouseEnter}
