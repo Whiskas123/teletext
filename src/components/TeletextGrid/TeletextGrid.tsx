@@ -185,7 +185,7 @@ export function TeletextGrid({
               {showGraphics ? (
                 <SixelBlock cell={displayCell} />
               ) : (
-                <span className="teletext-char">{displayChar}</span>
+                displayChar
               )}
             </div>
           );
@@ -211,7 +211,7 @@ export function TeletextGrid({
                 role={indexClickable && indexLink ? 'button' : undefined}
                 tabIndex={-1}
               >
-                <span className="teletext-char">{displayChar}</span>
+                {displayChar}
               </div>
             );
           })}
