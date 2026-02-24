@@ -91,8 +91,13 @@ function isDeadKeyOrCombiningOnly(str: string): boolean {
 }
 
 /** Default sixel colors for a motif pattern (used when that motif has no saved colors yet). */
-function defaultColorsForMotif(slots: (typeof MOTIF_PATTERNS)[number]["slots"]): SixelColors {
-  return brushColorsFromSlots(slots, slotColorsFromBrush(slots, DEFAULT_SIXEL_COLORS));
+function defaultColorsForMotif(
+  slots: (typeof MOTIF_PATTERNS)[number]["slots"],
+): SixelColors {
+  return brushColorsFromSlots(
+    slots,
+    slotColorsFromBrush(slots, DEFAULT_SIXEL_COLORS),
+  );
 }
 
 interface EditorProps {
@@ -140,7 +145,8 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
 
   const selectedMotif = MOTIF_PATTERNS[selectedMotifIndex];
   const brushColors: SixelColors =
-    motifColors[selectedMotifIndex] ?? defaultColorsForMotif(selectedMotif.slots);
+    motifColors[selectedMotifIndex] ??
+    defaultColorsForMotif(selectedMotif.slots);
   const motifSlotColors = slotColorsFromBrush(selectedMotif.slots, brushColors);
 
   const paintCell = useCallback(
@@ -197,11 +203,7 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
   const pickMotifFromCell = useCallback(
     (index: number) => {
       const cell = page[index];
-      if (
-        cell &&
-        typeof cell.graphics === "number" &&
-        cell.graphicsColors
-      ) {
+      if (cell && typeof cell.graphics === "number" && cell.graphicsColors) {
         const picked = [...cell.graphicsColors] as SixelColors;
         setMotifColors((prev) => {
           const n = [...prev];
@@ -299,7 +301,14 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
       const c = getFirstGrapheme(char) || " ";
       setPage((prev) => {
         const next = [...prev];
-        next[index] = { ...next[index], char: c, fg, bg, graphics: null, blink };
+        next[index] = {
+          ...next[index],
+          char: c,
+          fg,
+          bg,
+          graphics: null,
+          blink,
+        };
         return next;
       });
     },
@@ -468,9 +477,6 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
           {brushMode && (
             <div className="brush-options">
               <div className="color-block">
-                <span className="sidebar-field-label">
-                  Motif pattern
-                </span>
                 <div className="preset-motifs">
                   {MOTIF_PATTERNS.map((pattern, idx) => {
                     const previewColors =
@@ -493,7 +499,9 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
                             />
                           ))}
                         </div>
-                        <span className="preset-motif-name">{pattern.name}</span>
+                        <span className="preset-motif-name">
+                          {pattern.name}
+                        </span>
                       </button>
                     );
                   })}
@@ -516,51 +524,55 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
                       /* Grid is 2×3 row-major: [0][1] / [2][3] / [4][5]. Right = i+1 when left col; bottom = i+2 when row 0 or 1. */
                       const rightNeighbor = i % 2 === 0 && i < 5 ? i + 1 : null;
                       const bottomNeighbor = i <= 3 ? i + 2 : null;
-                      const borderRight = rightNeighbor !== null && slots[i] !== slots[rightNeighbor];
-                      const borderBottom = bottomNeighbor !== null && slots[i] !== slots[bottomNeighbor];
+                      const borderRight =
+                        rightNeighbor !== null &&
+                        slots[i] !== slots[rightNeighbor];
+                      const borderBottom =
+                        bottomNeighbor !== null &&
+                        slots[i] !== slots[bottomNeighbor];
                       return (
-                      <button
-                        key={i}
-                        type="button"
-                        className={`brush-sixel-part brush-sixel-part-slot-${slotIndex} teletext-bg-${brushColors[i]} ${borderRight ? "brush-sixel-part-border-r" : ""} ${borderBottom ? "brush-sixel-part-border-b" : ""} ${hoveredSlotIndex === slotIndex ? "brush-sixel-part-hover" : ""} ${selectedSixelIndex === i && colorTooltipOpen ? "brush-sixel-part-active" : ""}`}
-                        title={`Part ${i + 1}`}
-                        onMouseEnter={() => setHoveredSlotIndex(slotIndex)}
-                        onMouseLeave={() => setHoveredSlotIndex(null)}
-                        onClick={(e) => {
-                          const open =
-                            colorTooltipOpen && selectedSixelIndex === i
-                              ? false
-                              : true;
-                          setSelectedSixelIndex(i);
-                          if (open && brushSixelPreviewRef.current) {
-                            const partRect = (
-                              e.currentTarget as HTMLButtonElement
-                            ).getBoundingClientRect();
-                            const previewRect =
-                              brushSixelPreviewRef.current.getBoundingClientRect();
-                            setTooltipAnchor({
-                              part: {
-                                left: partRect.left,
-                                top: partRect.top,
-                                width: partRect.width,
-                                height: partRect.height,
-                              },
-                              preview: {
-                                left: previewRect.left,
-                                top: previewRect.top,
-                                width: previewRect.width,
-                                height: previewRect.height,
-                              },
-                            });
+                        <button
+                          key={i}
+                          type="button"
+                          className={`brush-sixel-part brush-sixel-part-slot-${slotIndex} teletext-bg-${brushColors[i]} ${borderRight ? "brush-sixel-part-border-r" : ""} ${borderBottom ? "brush-sixel-part-border-b" : ""} ${hoveredSlotIndex === slotIndex ? "brush-sixel-part-hover" : ""} ${selectedSixelIndex === i && colorTooltipOpen ? "brush-sixel-part-active" : ""}`}
+                          title={`Part ${i + 1}`}
+                          onMouseEnter={() => setHoveredSlotIndex(slotIndex)}
+                          onMouseLeave={() => setHoveredSlotIndex(null)}
+                          onClick={(e) => {
+                            const open =
+                              colorTooltipOpen && selectedSixelIndex === i
+                                ? false
+                                : true;
+                            setSelectedSixelIndex(i);
+                            if (open && brushSixelPreviewRef.current) {
+                              const partRect = (
+                                e.currentTarget as HTMLButtonElement
+                              ).getBoundingClientRect();
+                              const previewRect =
+                                brushSixelPreviewRef.current.getBoundingClientRect();
+                              setTooltipAnchor({
+                                part: {
+                                  left: partRect.left,
+                                  top: partRect.top,
+                                  width: partRect.width,
+                                  height: partRect.height,
+                                },
+                                preview: {
+                                  left: previewRect.left,
+                                  top: previewRect.top,
+                                  width: previewRect.width,
+                                  height: previewRect.height,
+                                },
+                              });
+                            }
+                            setColorTooltipOpen(open);
+                          }}
+                          aria-label={`Part ${i + 1}, ${brushColors[i]}`}
+                          aria-expanded={
+                            selectedSixelIndex === i && colorTooltipOpen
                           }
-                          setColorTooltipOpen(open);
-                        }}
-                        aria-label={`Part ${i + 1}, ${brushColors[i]}`}
-                        aria-expanded={
-                          selectedSixelIndex === i && colorTooltipOpen
-                        }
-                      />
-                    );
+                        />
+                      );
                     })}
                   </div>
                   {(() => {
@@ -613,9 +625,7 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
               </div>
               {motifHistory.length > 0 && (
                 <div className="color-block">
-                  <span className="sidebar-field-label">
-                    Recent motifs
-                  </span>
+                  <span className="sidebar-field-label">Recent motifs</span>
                   <div className="motif-history">
                     {motifHistory.map((motif, idx) => (
                       <button
@@ -641,7 +651,7 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
               )}
               <div className="color-block">
                 <span className="sidebar-field-label">
-                  Pick from grid (Alt+click)
+                  Pick from grid (Alt/Option + click)
                 </span>
                 <p className="sidebar-hint">
                   Hold Alt and click a block on the grid to copy its motif.
@@ -670,7 +680,9 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
           <button
             type="button"
             className="sidebar-action-btn"
-            onClick={() => exportPageAsPng(page, 'teletext.png', pageNumber ?? 100)}
+            onClick={() =>
+              exportPageAsPng(page, "teletext.png", pageNumber ?? 100)
+            }
           >
             Export PNG
           </button>
