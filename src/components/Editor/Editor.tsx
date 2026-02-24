@@ -97,6 +97,14 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
   const sixelColorTooltipRef = useRef<HTMLDivElement>(null);
   const brushSixelPreviewRef = useRef<HTMLDivElement>(null);
 
+  const addMotifToHistory = useCallback((motif: SixelColors) => {
+    setMotifHistory((prev) => {
+      const filtered = prev.filter((m) => !motifsEqual(m, motif));
+      const next = [[...motif] as SixelColors, ...filtered];
+      return next.slice(0, MOTIF_HISTORY_MAX);
+    });
+  }, []);
+
   const paintCell = useCallback(
     (index: number) => {
       setPage((prev) => {
@@ -112,26 +120,14 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
         return next;
       });
       setCursorIndex(index);
+      addMotifToHistory(brushColors);
     },
-    [brushColors, setPage],
+    [brushColors, setPage, addMotifToHistory],
   );
 
-  const addMotifToHistory = useCallback((motif: SixelColors) => {
-    setMotifHistory((prev) => {
-      const filtered = prev.filter((m) => !motifsEqual(m, motif));
-      const next = [[...motif] as SixelColors, ...filtered];
-      return next.slice(0, MOTIF_HISTORY_MAX);
-    });
+  const setAllBrushColors = useCallback((color: TeletextColor) => {
+    setBrushColors([color, color, color, color, color, color] as SixelColors);
   }, []);
-
-  const setAllBrushColors = useCallback(
-    (color: TeletextColor) => {
-      const motif = [color, color, color, color, color, color] as SixelColors;
-      setBrushColors(motif);
-      addMotifToHistory(motif);
-    },
-    [addMotifToHistory],
-  );
 
   const selectedMotif = MOTIF_PATTERNS[selectedMotifIndex];
   const motifSlotColors = slotColorsFromBrush(selectedMotif.slots, brushColors);
@@ -141,28 +137,18 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
       const slots = selectedMotif.slots;
       const next = [...motifSlotColors];
       next[slotIndex] = color;
-      const motif = brushColorsFromSlots(slots, next);
-      setBrushColors(motif);
-      addMotifToHistory(motif);
+      setBrushColors(brushColorsFromSlots(slots, next));
     },
-    [selectedMotif, motifSlotColors, addMotifToHistory],
+    [selectedMotif, motifSlotColors],
   );
 
   const applyMotifFromHistory = useCallback((motif: SixelColors) => {
     setBrushColors([...motif] as SixelColors);
   }, []);
 
-  const selectMotif = useCallback(
-    (index: number) => {
-      const pattern = MOTIF_PATTERNS[index];
-      const slotColors = slotColorsFromBrush(pattern.slots, brushColors);
-      const next = brushColorsFromSlots(pattern.slots, slotColors);
-      setBrushColors(next);
-      setSelectedMotifIndex(index);
-      addMotifToHistory(next);
-    },
-    [brushColors, addMotifToHistory],
-  );
+  const selectMotif = useCallback((index: number) => {
+    setSelectedMotifIndex(index);
+  }, []);
 
   const pickMotifFromCell = useCallback(
     (index: number) => {
@@ -172,12 +158,10 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
         typeof cell.graphics === "number" &&
         cell.graphicsColors
       ) {
-        const motif = [...cell.graphicsColors] as SixelColors;
-        setBrushColors(motif);
-        addMotifToHistory(motif);
+        setBrushColors([...cell.graphicsColors] as SixelColors);
       }
     },
-    [page, addMotifToHistory],
+    [page],
   );
 
   const handleCellClick = useCallback(
