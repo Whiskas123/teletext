@@ -358,49 +358,57 @@
   min-width: 0;
 }
 
-/* Text style: miniature "A" preview + compact fg/bg pickers */
-.text-preview-mini {
+/* Text style: three columns — Fg (4×4), Bg (4×4), preview (same ratio as teletext cell) */
+.text-preview-three-col {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.text-preview-col {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-}
-
-.text-preview-cell {
-  font-family: 'Press Start 2P', 'Courier New', Courier, monospace;
-  font-size: 1.5rem;
-  line-height: 1.35;
-  width: 2.5rem;
-  height: 2.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 2px solid #444;
-  border-radius: 4px;
-  flex-shrink: 0;
-}
-
-.text-preview-pickers {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.text-preview-row {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
+  gap: 0.25rem;
   min-width: 0;
 }
 
 .text-preview-label {
   font-size: 0.7rem;
   color: #888;
-  min-width: 1.4rem;
 }
 
-.color-swatches-inline {
-  flex: 1;
-  min-width: 0;
+/* 4 columns × 2 rows for 8 colors */
+.text-preview-swatches-4x4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 0.2rem;
+  width: 4.4rem;
+}
+
+.text-preview-swatches-4x4 .color-swatch-mini {
+  width: 1rem;
+  height: 1rem;
+  min-width: 1rem;
+  min-height: 1rem;
+  padding: 0;
+}
+
+/* Preview cell: same aspect ratio as teletext grid cell (1 : 1.35) */
+.text-preview-cell {
+  font-family: 'Press Start 2P', 'Courier New', Courier, monospace;
+  font-size: 1rem;
+  line-height: 1.35;
+  width: 2em;
+  height: 2.7em;  /* 2 * 1.35 = same ratio as 1em : 1.35em */
+  min-width: 2em;
+  min-height: 2.7em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #444;
+  border-radius: 4px;
+  flex-shrink: 0;
 }
 
 .color-swatch-mini {

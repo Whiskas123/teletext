@@ -442,44 +442,42 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
 
         <section className="sidebar-section">
           <h2 className="sidebar-heading">Text style</h2>
-          <div className="text-preview-mini">
+          <div className="text-preview-three-col">
+            <div className="text-preview-col">
+              <span className="text-preview-label">Fg</span>
+              <div className="text-preview-swatches text-preview-swatches-4x4">
+                {TELETEXT_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    className={`color-swatch color-swatch-mini teletext-bg-${color} ${fg === color ? "active" : ""}`}
+                    title={`Foreground ${color}`}
+                    onClick={() => setFg(color)}
+                    aria-label={`Foreground ${color}`}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="text-preview-col">
+              <span className="text-preview-label">Bg</span>
+              <div className="text-preview-swatches text-preview-swatches-4x4">
+                {TELETEXT_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    className={`color-swatch color-swatch-mini teletext-bg-${color} ${bg === color ? "active" : ""}`}
+                    title={`Background ${color}`}
+                    onClick={() => setBg(color)}
+                    aria-label={`Background ${color}`}
+                  />
+                ))}
+              </div>
+            </div>
             <div
               className={`text-preview-cell teletext-fg-${fg} teletext-bg-${bg}`}
               aria-hidden
             >
               A
-            </div>
-            <div className="text-preview-pickers">
-              <div className="text-preview-row">
-                <span className="text-preview-label">Fg</span>
-                <div className="color-swatches color-swatches-inline">
-                  {TELETEXT_COLORS.map((color) => (
-                    <button
-                      key={color}
-                      type="button"
-                      className={`color-swatch color-swatch-mini teletext-bg-${color} ${fg === color ? "active" : ""}`}
-                      title={`Foreground ${color}`}
-                      onClick={() => setFg(color)}
-                      aria-label={`Foreground ${color}`}
-                    />
-                  ))}
-                </div>
-              </div>
-              <div className="text-preview-row">
-                <span className="text-preview-label">Bg</span>
-                <div className="color-swatches color-swatches-inline">
-                  {TELETEXT_COLORS.map((color) => (
-                    <button
-                      key={color}
-                      type="button"
-                      className={`color-swatch color-swatch-mini teletext-bg-${color} ${bg === color ? "active" : ""}`}
-                      title={`Background ${color}`}
-                      onClick={() => setBg(color)}
-                      aria-label={`Background ${color}`}
-                    />
-                  ))}
-                </div>
-              </div>
             </div>
           </div>
         </section>
