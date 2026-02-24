@@ -74,6 +74,27 @@ function getFirstGrapheme(str: string): string {
   return segments[0]?.segment ?? "";
 }
 
+/** True if the string is only a dead key or combining character – wait for the letter to compose (e.g. ´ + e → é). */
+function isDeadKeyOrCombiningOnly(str: string): boolean {
+  if (!str) return false;
+  const first = getFirstGrapheme(str);
+  if (!first || first.length !== str.length) return false;
+  if (first.length > 1) return false;
+  const cp = first.codePointAt(0);
+  if (cp === undefined) return false;
+  if (/\p{M}/u.test(first)) return true;
+  const deadKeyCodePoints = new Set([
+    0x00b4, 0x0060, 0x005e, 0x007e, 0x00a8, 0x00af, 0x02da, 0x02c7, 0x02cb,
+    0x2018, 0x2019, 0x2032, 0x2033,
+  ]);
+  return deadKeyCodePoints.has(cp);
+}
+
+/** Default sixel colors for a motif pattern (used when that motif has no saved colors yet). */
+function defaultColorsForMotif(slots: (typeof MOTIF_PATTERNS)[number]["slots"]): SixelColors {
+  return brushColorsFromSlots(slots, slotColorsFromBrush(slots, DEFAULT_SIXEL_COLORS));
+}
+
 interface EditorProps {
   /** When set (from grid route), show Back to grid in sidebar */
   pageNumber?: number;
@@ -89,8 +110,8 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
   const [bg, setBg] = useState<TeletextColor>("black");
   const [clearConfirmShown, setClearConfirmShown] = useState(false);
   const [brushMode, setBrushMode] = useState(false);
-  const [brushColors, setBrushColors] = useState<SixelColors>(
-    () => [...DEFAULT_SIXEL_COLORS] as SixelColors,
+  const [motifColors, setMotifColors] = useState<(SixelColors | undefined)[]>(
+    () => MOTIF_PATTERNS.map(() => undefined),
   );
   const [selectedMotifIndex, setSelectedMotifIndex] = useState(0);
   const [motifHistory, setMotifHistory] = useState<SixelColors[]>([]);
@@ -116,6 +137,11 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
     });
   }, []);
 
+  const selectedMotif = MOTIF_PATTERNS[selectedMotifIndex];
+  const brushColors: SixelColors =
+    motifColors[selectedMotifIndex] ?? defaultColorsForMotif(selectedMotif.slots);
+  const motifSlotColors = slotColorsFromBrush(selectedMotif.slots, brushColors);
+
   const paintCell = useCallback(
     (index: number) => {
       setPage((prev) => {
@@ -136,22 +162,31 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
     [brushColors, setPage, addMotifToHistory],
   );
 
-  const selectedMotif = MOTIF_PATTERNS[selectedMotifIndex];
-  const motifSlotColors = slotColorsFromBrush(selectedMotif.slots, brushColors);
-
   const setMotifSlotColor = useCallback(
     (slotIndex: number, color: TeletextColor) => {
       const slots = selectedMotif.slots;
       const next = [...motifSlotColors];
       next[slotIndex] = color;
-      setBrushColors(brushColorsFromSlots(slots, next));
+      const newColors = brushColorsFromSlots(slots, next);
+      setMotifColors((prev) => {
+        const n = [...prev];
+        n[selectedMotifIndex] = newColors;
+        return n;
+      });
     },
-    [selectedMotif, motifSlotColors],
+    [selectedMotif, selectedMotifIndex, motifSlotColors],
   );
 
-  const applyMotifFromHistory = useCallback((motif: SixelColors) => {
-    setBrushColors([...motif] as SixelColors);
-  }, []);
+  const applyMotifFromHistory = useCallback(
+    (motif: SixelColors) => {
+      setMotifColors((prev) => {
+        const n = [...prev];
+        n[selectedMotifIndex] = [...motif] as SixelColors;
+        return n;
+      });
+    },
+    [selectedMotifIndex],
+  );
 
   const selectMotif = useCallback((index: number) => {
     setSelectedMotifIndex(index);
@@ -165,10 +200,15 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
         typeof cell.graphics === "number" &&
         cell.graphicsColors
       ) {
-        setBrushColors([...cell.graphicsColors] as SixelColors);
+        const picked = [...cell.graphicsColors] as SixelColors;
+        setMotifColors((prev) => {
+          const n = [...prev];
+          n[selectedMotifIndex] = picked;
+          return n;
+        });
       }
     },
-    [page],
+    [page, selectedMotifIndex],
   );
 
   const focusHiddenInput = useCallback(() => {
@@ -341,6 +381,7 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
       const input = e.currentTarget;
       const value = input.value;
       if (!value) return;
+      if (isDeadKeyOrCombiningOnly(value)) return;
       const c = getFirstGrapheme(value);
       if (c) {
         setCellChar(cursorIndex, c);
@@ -417,8 +458,8 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
                 </span>
                 <div className="preset-motifs">
                   {MOTIF_PATTERNS.map((pattern, idx) => {
-                    const slotColors = slotColorsFromBrush(pattern.slots, brushColors);
-                    const previewColors = brushColorsFromSlots(pattern.slots, slotColors);
+                    const previewColors =
+                      motifColors[idx] ?? defaultColorsForMotif(pattern.slots);
                     return (
                       <button
                         key={pattern.name}
