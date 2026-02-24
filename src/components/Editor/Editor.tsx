@@ -425,8 +425,9 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
                     {([0, 1, 2, 3, 4, 5] as const).map((i) => {
                       const slotIndex = selectedMotif.slots[i];
                       const slots = selectedMotif.slots;
-                      const rightNeighbor = i <= 2 ? i + 3 : null;
-                      const bottomNeighbor = i === 0 ? 1 : i === 1 ? 2 : i === 3 ? 4 : i === 4 ? 5 : null;
+                      /* Grid is 2×3 row-major: [0][1] / [2][3] / [4][5]. Right = i+1 when left col; bottom = i+2 when row 0 or 1. */
+                      const rightNeighbor = i % 2 === 0 && i < 5 ? i + 1 : null;
+                      const bottomNeighbor = i <= 3 ? i + 2 : null;
                       const borderRight = rightNeighbor !== null && slots[i] !== slots[rightNeighbor];
                       const borderBottom = bottomNeighbor !== null && slots[i] !== slots[bottomNeighbor];
                       return (
