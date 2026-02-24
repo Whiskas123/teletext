@@ -415,27 +415,31 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
                   Motif pattern
                 </span>
                 <div className="preset-motifs">
-                  {MOTIF_PATTERNS.map((pattern, idx) => (
-                    <button
-                      key={pattern.name}
-                      type="button"
-                      className={`preset-motif-btn ${selectedMotifIndex === idx ? "preset-motif-btn-active" : ""}`}
-                      title={pattern.name}
-                      onClick={() => selectMotif(idx)}
-                      aria-label={`Use ${pattern.name} motif`}
-                      aria-pressed={selectedMotifIndex === idx}
-                    >
-                      <div className="preset-motif-preview">
-                        {([0, 1, 2, 3, 4, 5] as const).map((i) => (
-                          <span
-                            key={i}
-                            className={`preset-motif-dot teletext-bg-${brushColors[i]}`}
-                          />
-                        ))}
-                      </div>
-                      <span className="preset-motif-name">{pattern.name}</span>
-                    </button>
-                  ))}
+                  {MOTIF_PATTERNS.map((pattern, idx) => {
+                    const slotColors = slotColorsFromBrush(pattern.slots, brushColors);
+                    const previewColors = brushColorsFromSlots(pattern.slots, slotColors);
+                    return (
+                      <button
+                        key={pattern.name}
+                        type="button"
+                        className={`preset-motif-btn ${selectedMotifIndex === idx ? "preset-motif-btn-active" : ""}`}
+                        title={pattern.name}
+                        onClick={() => selectMotif(idx)}
+                        aria-label={`Use ${pattern.name} motif`}
+                        aria-pressed={selectedMotifIndex === idx}
+                      >
+                        <div className="preset-motif-preview">
+                          {([0, 1, 2, 3, 4, 5] as const).map((i) => (
+                            <span
+                              key={i}
+                              className={`preset-motif-dot teletext-bg-${previewColors[i]}`}
+                            />
+                          ))}
+                        </div>
+                        <span className="preset-motif-name">{pattern.name}</span>
+                      </button>
+                    );
+                  })}
                 </div>
                 <span className="sidebar-field-label motif-slots-label">
                   Colors for {selectedMotif.name}
@@ -500,113 +504,115 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
                   Hold Alt and click a block on the grid to copy its motif.
                 </p>
               </div>
-              <div
-                className="color-block sixel-color-tooltip-ref"
-                ref={sixelColorTooltipRef}
-              >
-                <span className="sidebar-field-label">
-                  Color each part (click a part)
-                </span>
+              {selectedMotif.name === "Custom" && (
                 <div
-                  className="brush-sixel-preview"
-                  ref={brushSixelPreviewRef}
-                  aria-hidden
+                  className="color-block sixel-color-tooltip-ref"
+                  ref={sixelColorTooltipRef}
                 >
-                  {([0, 1, 2, 3, 4, 5] as const).map((i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      className={`brush-sixel-part teletext-bg-${brushColors[i]} ${selectedSixelIndex === i && colorTooltipOpen ? "brush-sixel-part-active" : ""}`}
-                      title={`Part ${i + 1}`}
-                      onClick={(e) => {
-                        const open =
-                          colorTooltipOpen && selectedSixelIndex === i
-                            ? false
-                            : true;
-                        setSelectedSixelIndex(i);
-                        if (open && brushSixelPreviewRef.current) {
-                          const partRect = (
-                            e.currentTarget as HTMLButtonElement
-                          ).getBoundingClientRect();
-                          const previewRect =
-                            brushSixelPreviewRef.current.getBoundingClientRect();
-                          setTooltipAnchor({
-                            part: {
-                              left: partRect.left,
-                              top: partRect.top,
-                              width: partRect.width,
-                              height: partRect.height,
-                            },
-                            preview: {
-                              left: previewRect.left,
-                              top: previewRect.top,
-                              width: previewRect.width,
-                              height: previewRect.height,
-                            },
-                          });
+                  <span className="sidebar-field-label">
+                    Color each part (click a part)
+                  </span>
+                  <div
+                    className="brush-sixel-preview"
+                    ref={brushSixelPreviewRef}
+                    aria-hidden
+                  >
+                    {([0, 1, 2, 3, 4, 5] as const).map((i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        className={`brush-sixel-part teletext-bg-${brushColors[i]} ${selectedSixelIndex === i && colorTooltipOpen ? "brush-sixel-part-active" : ""}`}
+                        title={`Part ${i + 1}`}
+                        onClick={(e) => {
+                          const open =
+                            colorTooltipOpen && selectedSixelIndex === i
+                              ? false
+                              : true;
+                          setSelectedSixelIndex(i);
+                          if (open && brushSixelPreviewRef.current) {
+                            const partRect = (
+                              e.currentTarget as HTMLButtonElement
+                            ).getBoundingClientRect();
+                            const previewRect =
+                              brushSixelPreviewRef.current.getBoundingClientRect();
+                            setTooltipAnchor({
+                              part: {
+                                left: partRect.left,
+                                top: partRect.top,
+                                width: partRect.width,
+                                height: partRect.height,
+                              },
+                              preview: {
+                                left: previewRect.left,
+                                top: previewRect.top,
+                                width: previewRect.width,
+                                height: previewRect.height,
+                              },
+                            });
+                          }
+                          setColorTooltipOpen(open);
+                        }}
+                        aria-label={`Part ${i + 1}, ${brushColors[i]}`}
+                        aria-expanded={
+                          selectedSixelIndex === i && colorTooltipOpen
                         }
-                        setColorTooltipOpen(open);
-                      }}
-                      aria-label={`Part ${i + 1}, ${brushColors[i]}`}
-                      aria-expanded={
-                        selectedSixelIndex === i && colorTooltipOpen
-                      }
-                    />
-                  ))}
-                </div>
-                {(() => {
-                  const clamped = tooltipAnchor
-                    ? clampTooltipToViewport(tooltipAnchor)
-                    : null;
-                  return (
-                    <div
-                      className={`sixel-color-tooltip ${colorTooltipOpen ? "sixel-color-tooltip-open" : ""}`}
-                      role="tooltip"
-                      aria-hidden={!colorTooltipOpen}
-                      style={{
-                        position: "fixed",
-                        left: clamped ? clamped.left : -9999,
-                        top: clamped ? clamped.top : 0,
-                      }}
-                    >
+                      />
+                    ))}
+                  </div>
+                  {(() => {
+                    const clamped = tooltipAnchor
+                      ? clampTooltipToViewport(tooltipAnchor)
+                      : null;
+                    return (
                       <div
-                        className="sixel-color-tooltip-label"
-                        aria-live="polite"
+                        className={`sixel-color-tooltip ${colorTooltipOpen ? "sixel-color-tooltip-open" : ""}`}
+                        role="tooltip"
+                        aria-hidden={!colorTooltipOpen}
+                        style={{
+                          position: "fixed",
+                          left: clamped ? clamped.left : -9999,
+                          top: clamped ? clamped.top : 0,
+                        }}
                       >
-                        {SIXEL_PART_NAMES[selectedSixelIndex]}
+                        <div
+                          className="sixel-color-tooltip-label"
+                          aria-live="polite"
+                        >
+                          {SIXEL_PART_NAMES[selectedSixelIndex]}
+                        </div>
+                        <div className="sixel-color-tooltip-swatches">
+                          {TELETEXT_COLORS.map((color) => (
+                            <button
+                              key={color}
+                              type="button"
+                              className={`color-swatch teletext-bg-${color}`}
+                              title={color}
+                              onClick={() => {
+                                setBrushColorAt(selectedSixelIndex, color);
+                                setColorTooltipOpen(false);
+                              }}
+                              aria-label={`Set to ${color}`}
+                            />
+                          ))}
+                        </div>
                       </div>
-                      <div className="sixel-color-tooltip-swatches">
-                        {TELETEXT_COLORS.map((color) => (
-                          <button
-                            key={color}
-                            type="button"
-                            className={`color-swatch teletext-bg-${color}`}
-                            title={color}
-                            onClick={() => {
-                              setBrushColorAt(selectedSixelIndex, color);
-                              setColorTooltipOpen(false);
-                            }}
-                            aria-label={`Set to ${color}`}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })()}
-                <span className="sidebar-field-label">Set all parts</span>
-                <div className="color-swatches">
-                  {TELETEXT_COLORS.map((color) => (
-                    <button
-                      key={color}
-                      type="button"
-                      className={`color-swatch teletext-bg-${color}`}
-                      title={color}
-                      onClick={() => setAllBrushColors(color)}
-                      aria-label={`All parts ${color}`}
-                    />
-                  ))}
+                    );
+                  })()}
+                  <span className="sidebar-field-label">Set all parts</span>
+                  <div className="color-swatches">
+                    {TELETEXT_COLORS.map((color) => (
+                      <button
+                        key={color}
+                        type="button"
+                        className={`color-swatch teletext-bg-${color}`}
+                        title={color}
+                        onClick={() => setAllBrushColors(color)}
+                        aria-label={`All parts ${color}`}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </section>

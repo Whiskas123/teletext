@@ -359,10 +359,10 @@
   gap: 0.75rem;
 }
 
-/* Preset motifs: compact clickable previews */
+/* Preset motifs: compact clickable previews, equal-size buttons */
 .preset-motifs {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 0.5rem;
 }
 
@@ -370,8 +370,10 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: flex-start;
   gap: 0.25rem;
   padding: 0.35rem;
+  min-width: 0;
   background: #252525;
   border: 1px solid #404040;
   border-radius: 4px;
@@ -459,6 +461,8 @@
   color: #999;
   text-transform: uppercase;
   letter-spacing: 0.02em;
+  text-align: center;
+  line-height: 1.2;
 }
 
 .sidebar-hint {
