@@ -426,11 +426,13 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
                     ref={brushSixelPreviewRef}
                     aria-hidden
                   >
-                    {([0, 1, 2, 3, 4, 5] as const).map((i) => (
+                    {([0, 1, 2, 3, 4, 5] as const).map((i) => {
+                      const slotIndex = selectedMotif.slots[i];
+                      return (
                       <button
                         key={i}
                         type="button"
-                        className={`brush-sixel-part teletext-bg-${brushColors[i]} ${selectedSixelIndex === i && colorTooltipOpen ? "brush-sixel-part-active" : ""}`}
+                        className={`brush-sixel-part brush-sixel-part-slot-${slotIndex} teletext-bg-${brushColors[i]} ${selectedSixelIndex === i && colorTooltipOpen ? "brush-sixel-part-active" : ""}`}
                         title={`Part ${i + 1}`}
                         onClick={(e) => {
                           const open =
@@ -466,7 +468,8 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
                           selectedSixelIndex === i && colorTooltipOpen
                         }
                       />
-                    ))}
+                    );
+                    })}
                   </div>
                   {(() => {
                     const clamped = tooltipAnchor
