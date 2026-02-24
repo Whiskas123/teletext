@@ -361,7 +361,7 @@
 /* Text style: three columns — Fg (4×4), Bg (4×4), preview — use full width */
 .text-preview-three-col {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.5rem;
   width: 100%;
   min-width: 0;
@@ -401,7 +401,7 @@
 /* Preview: same as teletext cell — 1em × 1.35em, letter fills the block (no extra padding) */
 .text-preview-cell {
   font-family: 'Press Start 2P', 'Courier New', Courier, monospace;
-  font-size: 22px;
+  font-size: 28px;
   line-height: 1.35;
   letter-spacing: -0.03em;
   font-weight: 400;
