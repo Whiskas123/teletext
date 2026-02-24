@@ -108,6 +108,7 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
   const [cursorIndex, setCursorIndex] = useState(COLS);
   const [fg, setFg] = useState<TeletextColor>("white");
   const [bg, setBg] = useState<TeletextColor>("black");
+  const [blink, setBlink] = useState(false);
   const [clearConfirmShown, setClearConfirmShown] = useState(false);
   const [brushMode, setBrushMode] = useState(false);
   const [motifColors, setMotifColors] = useState<(SixelColors | undefined)[]>(
@@ -153,13 +154,14 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
           bg: "black",
           graphics: SIXEL_MAX,
           graphicsColors: [...brushColors],
+          blink,
         };
         return next;
       });
       setCursorIndex(index);
       addMotifToHistory(brushColors);
     },
-    [brushColors, setPage, addMotifToHistory],
+    [brushColors, blink, setPage, addMotifToHistory],
   );
 
   const setMotifSlotColor = useCallback(
@@ -297,11 +299,11 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
       const c = getFirstGrapheme(char) || " ";
       setPage((prev) => {
         const next = [...prev];
-        next[index] = { ...next[index], char: c, fg, bg, graphics: null };
+        next[index] = { ...next[index], char: c, fg, bg, graphics: null, blink };
         return next;
       });
     },
-    [fg, bg, setPage],
+    [fg, bg, blink, setPage],
   );
 
   const handleKeyDown = useCallback(
@@ -323,6 +325,7 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
               fg: "black",
               bg: "black",
               graphics: null,
+              blink: false,
             };
             return next;
           });
@@ -438,6 +441,18 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
                 />
               ))}
             </div>
+          </div>
+          <div className="color-block">
+            <span className="sidebar-field-label">Blink</span>
+            <button
+              type="button"
+              className={`sidebar-toggle ${blink ? "active" : ""}`}
+              onClick={() => setBlink((v) => !v)}
+              aria-pressed={blink}
+              aria-label="Toggle blink (1s on, 1s off)"
+            >
+              {blink ? "Blink on" : "Blink off"}
+            </button>
           </div>
         </section>
 

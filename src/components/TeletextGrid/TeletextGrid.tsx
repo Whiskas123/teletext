@@ -164,7 +164,7 @@ export function TeletextGrid({
               key={index}
               className={`teletext-cell teletext-fg-${cellFg} teletext-bg-${displayCell.bg} ${
                 !readOnly && cursorIndex === index ? 'cursor' : ''
-              } ${pageNumberClickable && isPageCell ? 'teletext-page-number-clickable' : ''} ${isPageLink ? 'teletext-index-link' : ''}`}
+              } ${!isHeaderOverlay && displayCell.blink ? 'teletext-blink' : ''} ${pageNumberClickable && isPageCell ? 'teletext-page-number-clickable' : ''} ${isPageLink ? 'teletext-index-link' : ''}`}
               onClick={handleClick}
               onMouseDown={isPageCell && pageNumberClickable ? undefined : isPageLink ? undefined : (e: React.MouseEvent) => onCellMouseDown?.(index, e)}
               onMouseEnter={isPageCell && pageNumberClickable ? undefined : isPageLink ? undefined : () => onCellMouseEnter?.(index)}

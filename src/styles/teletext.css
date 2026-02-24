@@ -158,6 +158,16 @@
   /* Background comes from .teletext-bg-* class per part */
 }
 
+/* Blinking blocks/cells: 1s visible, 1s hidden */
+@keyframes teletext-blink-keyframes {
+  0%, 49.999% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+.teletext-cell.teletext-blink {
+  animation: teletext-blink-keyframes 2s step-end infinite;
+}
+
 /* Retro brush cursor when brush mode is on (pixel block tip) */
 .teletext-screen-wrapper.brush-cursor {
   cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Crect x='0' y='0' width='6' height='6' fill='%23fff' stroke='%23000' stroke-width='1'/%3E%3C/svg%3E") 2 2, crosshair;

@@ -94,6 +94,8 @@ export interface Cell {
   graphics?: number | null;
   /** When graphics is set, color for each of the 6 sixel positions (filled parts). Empty parts use bg. */
   graphicsColors?: SixelColors;
+  /** When true, cell content blinks (1s on, 1s off). */
+  blink?: boolean;
 }
 
 export type TeletextPage = Cell[];
