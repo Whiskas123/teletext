@@ -133,6 +133,13 @@
   -webkit-user-select: none;
 }
 
+/* Scale text so it almost hits left/right edges (a couple of pixels gap) */
+.teletext-cell .teletext-char {
+  display: inline-block;
+  transform: scaleX(1.25);
+  transform-origin: center;
+}
+
 .teletext-cell.cursor {
   outline: 2px solid #ffff00;
   outline-offset: -2px;
