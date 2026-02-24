@@ -487,6 +487,10 @@
   padding: 0;
 }
 
+.color-block.sixel-color-tooltip-ref .brush-sixel-preview {
+  width: 6.5em;
+}
+
 .brush-sixel-part {
   padding: 0;
   border: none;
@@ -557,6 +561,9 @@
 /* Parent of sixel grid + tooltip needs position for tooltip placement */
 .color-block.sixel-color-tooltip-ref {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .brush-pattern-row {

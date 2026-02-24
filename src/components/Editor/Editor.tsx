@@ -124,17 +124,6 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
     });
   }, []);
 
-  const setBrushColorAt = useCallback(
-    (index: number, color: TeletextColor) => {
-      const next = [...brushColors] as TeletextColor[];
-      next[index] = color;
-      const motif = next as unknown as SixelColors;
-      setBrushColors(motif);
-      addMotifToHistory(motif);
-    },
-    [brushColors, addMotifToHistory],
-  );
-
   const setAllBrushColors = useCallback(
     (color: TeletextColor) => {
       const motif = [color, color, color, color, color, color] as SixelColors;
@@ -441,76 +430,12 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
                     );
                   })}
                 </div>
-                <span className="sidebar-field-label motif-slots-label">
-                  Colors for {selectedMotif.name}
-                </span>
-                <div className="motif-slot-pickers">
-                  {Array.from({ length: motifSlotCount(selectedMotif.slots) }, (_, slotIdx) => (
-                    <div key={slotIdx} className="motif-slot-row">
-                      <span className="motif-slot-label">
-                        {motifSlotCount(selectedMotif.slots) === 1
-                          ? "Color"
-                          : `Slot ${slotIdx + 1}`}
-                      </span>
-                      <div className="color-swatches">
-                        {TELETEXT_COLORS.map((color) => (
-                          <button
-                            key={color}
-                            type="button"
-                            className={`color-swatch teletext-bg-${color} ${motifSlotColors[slotIdx] === color ? "active" : ""}`}
-                            title={color}
-                            onClick={() => setMotifSlotColor(slotIdx, color)}
-                            aria-label={`Slot ${slotIdx + 1} ${color}`}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              {motifHistory.length > 0 && (
-                <div className="color-block">
-                  <span className="sidebar-field-label">
-                    Recent motifs
-                  </span>
-                  <div className="motif-history">
-                    {motifHistory.map((motif, idx) => (
-                      <button
-                        key={`${motif.join("-")}`}
-                        type="button"
-                        className="motif-history-btn"
-                        title="Apply motif"
-                        onClick={() => applyMotifFromHistory(motif)}
-                        aria-label={`Apply recent motif ${idx + 1}`}
-                      >
-                        <div className="preset-motif-preview">
-                          {([0, 1, 2, 3, 4, 5] as const).map((i) => (
-                            <span
-                              key={i}
-                              className={`preset-motif-dot teletext-bg-${motif[i]}`}
-                            />
-                          ))}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <div className="color-block">
-                <span className="sidebar-field-label">
-                  Pick from grid (Alt+click)
-                </span>
-                <p className="sidebar-hint">
-                  Hold Alt and click a block on the grid to copy its motif.
-                </p>
-              </div>
-              {selectedMotif.name === "Custom" && (
                 <div
                   className="color-block sixel-color-tooltip-ref"
                   ref={sixelColorTooltipRef}
                 >
                   <span className="sidebar-field-label">
-                    Color each part (click a part)
+                    Click a part to change its color
                   </span>
                   <div
                     className="brush-sixel-preview"
@@ -563,6 +488,11 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
                     const clamped = tooltipAnchor
                       ? clampTooltipToViewport(tooltipAnchor)
                       : null;
+                    const slotCount = motifSlotCount(selectedMotif.slots);
+                    const tooltipLabel =
+                      slotCount === 1
+                        ? "Color"
+                        : SIXEL_PART_NAMES[selectedSixelIndex];
                     return (
                       <div
                         className={`sixel-color-tooltip ${colorTooltipOpen ? "sixel-color-tooltip-open" : ""}`}
@@ -578,7 +508,7 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
                           className="sixel-color-tooltip-label"
                           aria-live="polite"
                         >
-                          {SIXEL_PART_NAMES[selectedSixelIndex]}
+                          {tooltipLabel}
                         </div>
                         <div className="sixel-color-tooltip-swatches">
                           {TELETEXT_COLORS.map((color) => (
@@ -588,7 +518,9 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
                               className={`color-swatch teletext-bg-${color}`}
                               title={color}
                               onClick={() => {
-                                setBrushColorAt(selectedSixelIndex, color);
+                                const slotIndex =
+                                  selectedMotif.slots[selectedSixelIndex];
+                                setMotifSlotColor(slotIndex, color);
                                 setColorTooltipOpen(false);
                               }}
                               aria-label={`Set to ${color}`}
@@ -612,7 +544,43 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
                     ))}
                   </div>
                 </div>
+              </div>
+              {motifHistory.length > 0 && (
+                <div className="color-block">
+                  <span className="sidebar-field-label">
+                    Recent motifs
+                  </span>
+                  <div className="motif-history">
+                    {motifHistory.map((motif, idx) => (
+                      <button
+                        key={`${motif.join("-")}`}
+                        type="button"
+                        className="motif-history-btn"
+                        title="Apply motif"
+                        onClick={() => applyMotifFromHistory(motif)}
+                        aria-label={`Apply recent motif ${idx + 1}`}
+                      >
+                        <div className="preset-motif-preview">
+                          {([0, 1, 2, 3, 4, 5] as const).map((i) => (
+                            <span
+                              key={i}
+                              className={`preset-motif-dot teletext-bg-${motif[i]}`}
+                            />
+                          ))}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               )}
+              <div className="color-block">
+                <span className="sidebar-field-label">
+                  Pick from grid (Alt+click)
+                </span>
+                <p className="sidebar-hint">
+                  Hold Alt and click a block on the grid to copy its motif.
+                </p>
+              </div>
             </div>
           )}
         </section>

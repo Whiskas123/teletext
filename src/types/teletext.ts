@@ -35,13 +35,14 @@ export type SixelColors = readonly [
   TeletextColor,
 ];
 
+/** Default: one color per part so motif patterns are distinguishable from the start. */
 export const DEFAULT_SIXEL_COLORS: SixelColors = [
-  'white',
-  'white',
-  'white',
-  'white',
-  'white',
-  'white',
+  'red',
+  'green',
+  'yellow',
+  'blue',
+  'magenta',
+  'cyan',
 ];
 
 /**
