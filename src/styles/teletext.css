@@ -1,3 +1,11 @@
+/* Teletext font */
+@font-face {
+  font-family: 'European Teletext';
+  src: url('../assets/EuropeanTeletext.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
 /* Teletext color palette (broadcast-style) */
 .teletext-fg-black { color: #000000; }
 .teletext-fg-red { color: #ff0000; }
@@ -20,7 +28,7 @@
 /* Pixelated teletext font (SAA5050-style); accentuated chars appear squished in same cell */
 .teletext-screen {
   position: relative;
-  font-family: 'Press Start 2P', 'Courier New', Courier, monospace;
+  font-family: 'European Teletext', 'Courier New', Courier, monospace;
   font-size: 14px;
   line-height: 1.35;
   font-weight: 400;
@@ -72,7 +80,7 @@
   height: 1.35em;
   padding: 0;
   margin: 0;
-  font-family: 'Press Start 2P', 'Courier New', Courier, monospace;
+  font-family: 'European Teletext', 'Courier New', Courier, monospace;
   font-size: 14px;
   line-height: 1.35;
   letter-spacing: -0.03em;
@@ -178,7 +186,7 @@
 }
 
 .page-grid-title {
-  font-family: 'Press Start 2P', 'Courier New', Courier, monospace;
+  font-family: 'European Teletext', 'Courier New', Courier, monospace;
   color: #e0e0e0;
   margin: 0 0 1rem 0;
   font-size: 1rem;
@@ -236,7 +244,7 @@
 }
 
 .page-grid-card-number {
-  font-family: 'Press Start 2P', 'Courier New', Courier, monospace;
+  font-family: 'European Teletext', 'Courier New', Courier, monospace;
   font-size: 0.75rem;
   color: #aaa;
 }
@@ -273,7 +281,7 @@
   right: 100%;
   margin-right: 0.75rem;
   top: 0.5rem;
-  font-family: 'Press Start 2P', 'Courier New', Courier, monospace;
+  font-family: 'European Teletext', 'Courier New', Courier, monospace;
   font-size: 0.65rem;
   color: #888;
   white-space: nowrap;
@@ -400,7 +408,7 @@
 
 /* Preview: same as teletext cell — 1em × 1.35em, letter fills the block (no extra padding) */
 .text-preview-cell {
-  font-family: 'Press Start 2P', 'Courier New', Courier, monospace;
+  font-family: 'European Teletext', 'Courier New', Courier, monospace;
   font-size: 28px;
   line-height: 1.35;
   letter-spacing: -0.03em;
@@ -645,7 +653,7 @@
   font-size: 0.7rem;
   color: #aaa;
   margin-bottom: 0.35rem;
-  font-family: 'Press Start 2P', 'Courier New', Courier, monospace;
+  font-family: 'European Teletext', 'Courier New', Courier, monospace;
 }
 
 .sixel-color-tooltip-swatches {
@@ -700,7 +708,7 @@
 
 .viewer-title,
 .editor-title {
-  font-family: 'Press Start 2P', 'Courier New', Courier, monospace;
+  font-family: 'European Teletext', 'Courier New', Courier, monospace;
   color: #e0e0e0;
   margin: 0;
   font-size: 0.8rem;

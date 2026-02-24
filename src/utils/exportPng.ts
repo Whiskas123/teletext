@@ -16,7 +16,7 @@ const COLS = 40;
 const ROWS = 24;
 const CELL_W = 14;
 const CELL_H = 18;
-const FONT = '14px "Press Start 2P", "Courier New", Courier, monospace';
+const FONT = '14px "European Teletext", "Courier New", Courier, monospace';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
