@@ -65,6 +65,15 @@ function clampTooltipToViewport(anchor: {
   return { left, top };
 }
 
+/** Get the first grapheme cluster (one user-perceived character, e.g. é or a). */
+function getFirstGrapheme(str: string): string {
+  if (!str) return "";
+  const normalized = str.normalize("NFC");
+  const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+  const segments = [...segmenter.segment(normalized)];
+  return segments[0]?.segment ?? "";
+}
+
 interface EditorProps {
   /** When set (from grid route), show Back to grid in sidebar */
   pageNumber?: number;
@@ -86,6 +95,7 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
   const [selectedMotifIndex, setSelectedMotifIndex] = useState(0);
   const [motifHistory, setMotifHistory] = useState<SixelColors[]>([]);
   const [selectedSixelIndex, setSelectedSixelIndex] = useState(0);
+  const [hoveredSlotIndex, setHoveredSlotIndex] = useState<number | null>(null);
   const [colorTooltipOpen, setColorTooltipOpen] = useState(false);
   const [tooltipAnchor, setTooltipAnchor] = useState<{
     part: { left: number; top: number; width: number; height: number };
@@ -94,6 +104,7 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
   const [hoveredCellIndex, setHoveredCellIndex] = useState<number | null>(null);
   const isDrawingRef = useRef(false);
   const gridRef = useRef<HTMLDivElement>(null);
+  const hiddenInputRef = useRef<HTMLInputElement>(null);
   const sixelColorTooltipRef = useRef<HTMLDivElement>(null);
   const brushSixelPreviewRef = useRef<HTMLDivElement>(null);
 
@@ -160,6 +171,10 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
     [page],
   );
 
+  const focusHiddenInput = useCallback(() => {
+    hiddenInputRef.current?.focus();
+  }, []);
+
   const handleCellClick = useCallback(
     (index: number, e?: React.MouseEvent) => {
       if (index < COLS) return;
@@ -171,10 +186,10 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
         paintCell(index);
       } else {
         setCursorIndex(index);
-        gridRef.current?.focus();
+        focusHiddenInput();
       }
     },
-    [brushMode, paintCell, pickMotifFromCell],
+    [brushMode, paintCell, pickMotifFromCell, focusHiddenInput],
   );
 
   const handleCellMouseDown = useCallback(
@@ -239,7 +254,7 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
   const setCellChar = useCallback(
     (index: number, char: string) => {
       if (index < COLS) return;
-      const c = char.length === 1 ? char : (char[0] ?? " ");
+      const c = getFirstGrapheme(char) || " ";
       setPage((prev) => {
         const next = [...prev];
         next[index] = { ...next[index], char: c, fg, bg, graphics: null };
@@ -307,26 +322,43 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
           );
           return;
         default:
-          if (e.key.length === 1) {
+          if (brushMode) {
             e.preventDefault();
-            setCellChar(cursorIndex, e.key);
-            setCursorIndex(Math.min(ROWS * COLS - 1, cursorIndex + 1));
+            return;
           }
+          if (e.key === "Dead" || e.key.length === 1) {
+            return;
+          }
+          e.preventDefault();
       }
     },
-    [cursorIndex, setCellChar, setPage],
+    [cursorIndex, setCellChar, setPage, brushMode],
   );
 
-  // Keep the teletext screen focused so arrow keys work without clicking it first
+  const handleHiddenInput = useCallback(
+    (e: React.FormEvent<HTMLInputElement>) => {
+      if (brushMode) return;
+      const input = e.currentTarget;
+      const value = input.value;
+      if (!value) return;
+      const c = getFirstGrapheme(value);
+      if (c) {
+        setCellChar(cursorIndex, c);
+        setCursorIndex((prev) => Math.min(ROWS * COLS - 1, prev + 1));
+      }
+      input.value = "";
+    },
+    [brushMode, cursorIndex, setCellChar],
+  );
+
   useEffect(() => {
-    gridRef.current?.focus();
-    const id = setTimeout(() => gridRef.current?.focus(), 0);
+    hiddenInputRef.current?.focus();
+    const id = setTimeout(() => hiddenInputRef.current?.focus(), 0);
     return () => clearTimeout(id);
   }, []);
 
   const handleGridBlur = useCallback(() => {
-    // Refocus the grid so arrow keys keep working after clicking sidebar, etc.
-    setTimeout(() => gridRef.current?.focus(), 0);
+    setTimeout(() => hiddenInputRef.current?.focus(), 0);
   }, []);
 
   return (
@@ -434,8 +466,10 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
                       <button
                         key={i}
                         type="button"
-                        className={`brush-sixel-part brush-sixel-part-slot-${slotIndex} teletext-bg-${brushColors[i]} ${borderRight ? "brush-sixel-part-border-r" : ""} ${borderBottom ? "brush-sixel-part-border-b" : ""} ${selectedSixelIndex === i && colorTooltipOpen ? "brush-sixel-part-active" : ""}`}
+                        className={`brush-sixel-part brush-sixel-part-slot-${slotIndex} teletext-bg-${brushColors[i]} ${borderRight ? "brush-sixel-part-border-r" : ""} ${borderBottom ? "brush-sixel-part-border-b" : ""} ${hoveredSlotIndex === slotIndex ? "brush-sixel-part-hover" : ""} ${selectedSixelIndex === i && colorTooltipOpen ? "brush-sixel-part-active" : ""}`}
                         title={`Part ${i + 1}`}
+                        onMouseEnter={() => setHoveredSlotIndex(slotIndex)}
+                        onMouseLeave={() => setHoveredSlotIndex(null)}
                         onClick={(e) => {
                           const open =
                             colorTooltipOpen && selectedSixelIndex === i
@@ -624,12 +658,21 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
           ref={gridRef}
           className={`teletext-screen-wrapper${brushMode ? " brush-cursor" : ""}`}
           tabIndex={0}
-          onKeyDown={handleKeyDown}
+          onFocus={focusHiddenInput}
           onBlur={handleGridBlur}
           onMouseLeave={handleGridMouseLeave}
           role="application"
           aria-label="Teletext editor grid"
         >
+          <input
+            ref={hiddenInputRef}
+            type="text"
+            className="editor-hidden-input"
+            aria-hidden
+            tabIndex={-1}
+            onKeyDown={handleKeyDown}
+            onInput={handleHiddenInput}
+          />
           <TeletextGrid
             page={page}
             pageNumber={pageNumber ?? 100}
