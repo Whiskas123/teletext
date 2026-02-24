@@ -428,11 +428,16 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
                   >
                     {([0, 1, 2, 3, 4, 5] as const).map((i) => {
                       const slotIndex = selectedMotif.slots[i];
+                      const slots = selectedMotif.slots;
+                      const rightNeighbor = i <= 2 ? i + 3 : null;
+                      const bottomNeighbor = i === 0 ? 1 : i === 1 ? 2 : i === 3 ? 4 : i === 4 ? 5 : null;
+                      const borderRight = rightNeighbor !== null && slots[i] !== slots[rightNeighbor];
+                      const borderBottom = bottomNeighbor !== null && slots[i] !== slots[bottomNeighbor];
                       return (
                       <button
                         key={i}
                         type="button"
-                        className={`brush-sixel-part brush-sixel-part-slot-${slotIndex} teletext-bg-${brushColors[i]} ${selectedSixelIndex === i && colorTooltipOpen ? "brush-sixel-part-active" : ""}`}
+                        className={`brush-sixel-part brush-sixel-part-slot-${slotIndex} teletext-bg-${brushColors[i]} ${borderRight ? "brush-sixel-part-border-r" : ""} ${borderBottom ? "brush-sixel-part-border-b" : ""} ${selectedSixelIndex === i && colorTooltipOpen ? "brush-sixel-part-active" : ""}`}
                         title={`Part ${i + 1}`}
                         onClick={(e) => {
                           const open =
