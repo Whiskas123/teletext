@@ -5,6 +5,7 @@ import {
   Navigate,
   useParams,
 } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import { GlobalProvider } from './collab/GlobalProvider';
 import { RoomContext } from './collab/RoomContext';
 import { Landing } from './components/Room/Landing';
@@ -65,6 +66,7 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </GlobalProvider>
+      <Analytics />
     </BrowserRouter>
   );
 }

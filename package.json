@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@playhtml/react": "^2.0.1",
+    "@vercel/analytics": "^2.0.1",
     "playhtml": "^2.13.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
