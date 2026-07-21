@@ -85,7 +85,7 @@ export function Landing() {
               className="landing-name-input"
               value={draftName}
               maxLength={32}
-              placeholder="e.g. Ada"
+              placeholder="Your name here"
               autoComplete="off"
               spellCheck={false}
               autoFocus
