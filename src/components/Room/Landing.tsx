@@ -129,7 +129,7 @@ export function Landing() {
               Watch together
             </h2>
             <p className="landing-section-description">
-              Join one of the six rooms to watch teletext together.
+              Join one of the rooms to watch teletext together.
             </p>
             <ul className="room-picker-grid">
               {ROOMS.map((room) => (
