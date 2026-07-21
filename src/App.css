@@ -707,6 +707,23 @@
   line-height: 1.5;
 }
 
+.room-picker-occupancy {
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: #666;
+  letter-spacing: 0.04em;
+}
+
+.room-picker-occupancy-active {
+  color: #4cf;
+}
+
+.room-picker-occupancy-active::before {
+  content: '● ';
+  font-size: 0.6rem;
+  color: #4cf;
+}
+
 .room-picker-actions {
   display: flex;
   gap: 0.5rem;

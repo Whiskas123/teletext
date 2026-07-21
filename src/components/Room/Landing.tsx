@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { validateDisplayName } from '../../domain/identity';
 import { getStoredDisplayName, setStoredDisplayName } from '../../collab/session';
+import { useRoomOccupancy } from '../../collab/useRoomOccupancy';
 import { ROOMS } from './rooms';
 
 /**
@@ -37,6 +38,8 @@ export function Landing() {
   const [editingName, setEditingName] = useState(false);
 
   const hasName = name != null && !editingName;
+
+  const occupancy = useRoomOccupancy(ROOMS.map((r) => r.id));
 
   function handleNameSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -132,10 +135,15 @@ export function Landing() {
               Join one of the rooms to watch teletext together.
             </p>
             <ul className="room-picker-grid">
-              {ROOMS.map((room) => (
+              {ROOMS.map((room) => {
+                const count = occupancy[room.id] ?? 0;
+                return (
                 <li key={room.id} className="room-picker-item">
                   <div className="room-picker-card">
                     <span className="room-picker-card-label">{room.label}</span>
+                    <span className={`room-picker-occupancy${count > 0 ? ' room-picker-occupancy-active' : ''}`}>
+                      {count > 0 ? `${count} watching` : 'Empty'}
+                    </span>
                     <div className="room-picker-actions">
                       <button
                         type="button"
@@ -148,7 +156,8 @@ export function Landing() {
                     </div>
                   </div>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           </div>
 
