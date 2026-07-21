@@ -76,3 +76,14 @@ export function useTeletext() {
   }
   return ctx;
 }
+
+/**
+ * Non-throwing variant of {@link useTeletext}. Returns the context value when a
+ * {@link TeletextProvider} is present, or `null` otherwise. Used by components
+ * (e.g. the refactored `Editor`) that can be driven either by the local
+ * TeletextContext or by injected props (a collaborative hook) without requiring
+ * a provider in the injected case.
+ */
+export function useTeletextOptional() {
+  return useContext(TeletextContext);
+}

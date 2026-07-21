@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useTeletext } from "../../context/TeletextContext";
+import { useTeletextOptional } from "../../context/TeletextContext";
 import {
   brushColorsFromSlots,
   COLS,
@@ -14,8 +13,11 @@ import {
   SIXEL_MAX,
   slotColorsFromBrush,
   TELETEXT_COLORS,
+  TOTAL_CELLS,
+  type Cell,
   type SixelColors,
   type TeletextColor,
+  type TeletextPage,
 } from "../../types/teletext";
 import { exportPageAsPng } from "../../utils/exportPng";
 import { TeletextGrid } from "../TeletextGrid/TeletextGrid";
@@ -100,17 +102,129 @@ function defaultColorsForMotif(
   );
 }
 
-interface EditorProps {
-  /** When set (from grid route), show Back to grid in sidebar */
-  pageNumber?: number;
-  /** When set, Back to grid calls this (e.g. save then navigate) instead of navigating directly */
-  onBackToGrid?: () => void | Promise<void>;
+/** Hex values matching the teletext palette in styles/teletext.css, used to color remote cursors. */
+const TELETEXT_COLOR_HEX: Record<string, string> = {
+  black: "#000000",
+  red: "#ff0000",
+  green: "#00ff00",
+  yellow: "#ffff00",
+  blue: "#0000ff",
+  magenta: "#ff00ff",
+  cyan: "#00ffff",
+  white: "#ffffff",
+};
+
+/** Resolve a remote-cursor color (a teletext color name or a raw CSS color) to a CSS color value. */
+function resolveCursorColor(color: string): string {
+  return TELETEXT_COLOR_HEX[color] ?? color;
 }
 
-export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
-  const navigate = useNavigate();
-  const { page, setPage } = useTeletext();
-  const [cursorIndex, setCursorIndex] = useState(COLS);
+/** A default empty cell value, matching createEmptyPage()'s cell shape. */
+function emptyCellValue(): Cell {
+  return { char: " ", fg: "white", bg: "black", graphics: null };
+}
+
+/** Another Member's editing cursor rendered on the shared grid, attributed by Identity color. */
+export interface EditorRemoteCursor {
+  /** Cell index (0..959) the remote member's cursor is on. */
+  index: number;
+  /** The remote member's Identity color (teletext color name or CSS color). */
+  color: string;
+  /** The remote member's display name, shown as a small label. */
+  name: string;
+}
+
+interface EditorProps {
+  /** Page number used for header/export (does not by itself render a back button). */
+  pageNumber?: number;
+  /** When set, renders a "Back to grid" button in the sidebar actions that calls this. */
+  onBackToGrid?: () => void | Promise<void>;
+  /**
+   * Optional content rendered at the top of the sidebar (under the title), used
+   * by hosts (e.g. the solo editor) to add a cohesive "Page" section — a back
+   * link, page-number chooser, and title field — instead of a separate bar.
+   */
+  sidebarHeader?: import('react').ReactNode;
+  /**
+   * Injected page to edit. When provided, the Editor renders and edits this page
+   * instead of the {@link useTeletextOptional TeletextContext} page, letting a
+   * collaborative hook (e.g. `useEditPage`) drive it. When omitted, the Editor
+   * falls back to the context-backed single-page behavior.
+   */
+  page?: TeletextPage;
+  /**
+   * Single-cell edit callback. When provided, every edit (typing, painting,
+   * blink, backspace, clear) is applied through this callback as an absolute
+   * cell value at `index` instead of the context `setPage`, so a collaborative
+   * store can persist and merge edits at cell granularity (Req 6.1, 6.5).
+   */
+  onEditCell?: (index: number, cell: Cell) => void;
+  /**
+   * Controlled cursor index. When provided, the Editor uses it as the local
+   * cursor position instead of its own internal state.
+   */
+  cursorIndex?: number;
+  /** Notified whenever the local cursor position changes (e.g. to publish presence). */
+  onCursorChange?: (index: number | null) => void;
+  /** Other members' editing cursors to render on the grid, attributed by color (Req 6.6). */
+  remoteCursors?: EditorRemoteCursor[];
+}
+
+export function Editor({
+  pageNumber,
+  onBackToGrid,
+  sidebarHeader,
+  page: injectedPage,
+  onEditCell,
+  cursorIndex: controlledCursorIndex,
+  onCursorChange,
+  remoteCursors,
+}: EditorProps) {
+  const ctx = useTeletextOptional();
+  // Injected page (collaborative/driven mode) takes precedence over context.
+  // The empty-page fallback only applies in the impossible case of no injected
+  // page and no provider, keeping the type non-optional.
+  const page: TeletextPage = injectedPage ?? ctx?.page ?? createEmptyPage();
+
+  // Cursor is controlled when a cursorIndex prop is supplied; otherwise local.
+  const cursorControlled = controlledCursorIndex !== undefined;
+  const [localCursorIndex, setLocalCursorIndex] = useState(COLS);
+  const cursorIndex = cursorControlled ? controlledCursorIndex : localCursorIndex;
+  const setCursorIndex = useCallback(
+    (next: number) => {
+      if (!cursorControlled) setLocalCursorIndex(next);
+      onCursorChange?.(next);
+    },
+    [cursorControlled, onCursorChange],
+  );
+
+  // Unified single-cell writer: routes through the injected edit callback when
+  // present (collaborative cell-level edits), else the context setPage.
+  const writeCell = useCallback(
+    (index: number, cell: Cell) => {
+      if (onEditCell) {
+        onEditCell(index, cell);
+      } else if (ctx) {
+        ctx.setPage((prev) => {
+          const next = [...prev];
+          next[index] = cell;
+          return next;
+        });
+      }
+    },
+    [onEditCell, ctx],
+  );
+
+  // Whole-page clear: apply an empty cell to every position (collaborative) or
+  // replace the page in context (standalone).
+  const clearPage = useCallback(() => {
+    if (onEditCell) {
+      for (let i = 0; i < TOTAL_CELLS; i++) onEditCell(i, emptyCellValue());
+    } else if (ctx) {
+      ctx.setPage(createEmptyPage());
+    }
+  }, [onEditCell, ctx]);
+
   const [fg, setFg] = useState<TeletextColor>("white");
   const [bg, setBg] = useState<TeletextColor>("black");
   const [clearConfirmShown, setClearConfirmShown] = useState(false);
@@ -151,34 +265,26 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
 
   const paintCell = useCallback(
     (index: number) => {
-      setPage((prev) => {
-        const next = [...prev];
-        next[index] = {
-          ...next[index],
-          char: " ",
-          fg: "white",
-          bg: "black",
-          graphics: SIXEL_MAX,
-          graphicsColors: [...brushColors],
-        };
-        return next;
+      writeCell(index, {
+        ...page[index],
+        char: " ",
+        fg: "white",
+        bg: "black",
+        graphics: SIXEL_MAX,
+        graphicsColors: [...brushColors],
       });
       setCursorIndex(index);
       addMotifToHistory(brushColors);
     },
-    [brushColors, setPage, addMotifToHistory],
+    [brushColors, writeCell, page, setCursorIndex, addMotifToHistory],
   );
 
   const paintBlinkCell = useCallback(
     (index: number, value: boolean) => {
-      setPage((prev) => {
-        const next = [...prev];
-        next[index] = { ...next[index], blink: value };
-        return next;
-      });
+      writeCell(index, { ...page[index], blink: value });
       setCursorIndex(index);
     },
-    [setPage],
+    [writeCell, page, setCursorIndex],
   );
 
   const setMotifSlotColor = useCallback(
@@ -321,19 +427,15 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
     (index: number, char: string) => {
       if (index < COLS) return;
       const c = getFirstGrapheme(char) || " ";
-      setPage((prev) => {
-        const next = [...prev];
-        next[index] = {
-          ...next[index],
-          char: c,
-          fg,
-          bg,
-          graphics: null,
-        };
-        return next;
+      writeCell(index, {
+        ...page[index],
+        char: c,
+        fg,
+        bg,
+        graphics: null,
       });
     },
-    [fg, bg, setPage],
+    [fg, bg, writeCell, page],
   );
 
   const handleKeyDown = useCallback(
@@ -347,17 +449,13 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
       switch (e.key) {
         case "Backspace":
           e.preventDefault();
-          setPage((prev) => {
-            const next = [...prev];
-            next[cursorIndex] = {
-              ...next[cursorIndex],
-              char: " ",
-              fg: "black",
-              bg: "black",
-              graphics: null,
-              blink: false,
-            };
-            return next;
+          writeCell(cursorIndex, {
+            ...page[cursorIndex],
+            char: " ",
+            fg: "black",
+            bg: "black",
+            graphics: null,
+            blink: false,
           });
           setCursorIndex(Math.max(COLS, cursorIndex - 1));
           return;
@@ -405,7 +503,7 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
           e.preventDefault();
       }
     },
-    [cursorIndex, setCellChar, setPage, brushMode],
+    [cursorIndex, setCellChar, writeCell, page, setCursorIndex, brushMode],
   );
 
   const handleHiddenInput = useCallback(
@@ -418,11 +516,11 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
       const c = getFirstGrapheme(value);
       if (c) {
         setCellChar(cursorIndex, c);
-        setCursorIndex((prev) => Math.min(ROWS * COLS - 1, prev + 1));
+        setCursorIndex(Math.min(ROWS * COLS - 1, cursorIndex + 1));
       }
       input.value = "";
     },
-    [brushMode, cursorIndex, setCellChar],
+    [brushMode, cursorIndex, setCellChar, setCursorIndex],
   );
 
   const isBrushActive = brushMode === "block" || brushMode === "blink";
@@ -433,7 +531,22 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
     return () => clearTimeout(id);
   }, []);
 
-  const handleGridBlur = useCallback(() => {
+  const handleGridBlur = useCallback((e: React.FocusEvent<HTMLDivElement>) => {
+    // Don't reclaim focus when the user is moving to another interactive
+    // control (e.g. the sidebar's page-number / title inputs or buttons);
+    // otherwise the hidden grid input would immediately steal focus back and
+    // those fields could never be typed into.
+    const next = e.relatedTarget as HTMLElement | null;
+    if (
+      next &&
+      (next.tagName === "INPUT" ||
+        next.tagName === "TEXTAREA" ||
+        next.tagName === "SELECT" ||
+        next.tagName === "BUTTON" ||
+        next.isContentEditable)
+    ) {
+      return;
+    }
     setTimeout(() => hiddenInputRef.current?.focus(), 0);
   }, []);
 
@@ -441,6 +554,8 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
     <div className="editor-layout">
       <aside className="editor-sidebar">
         <h1 className="editor-title">TELETEXT EDITOR</h1>
+
+        {sidebarHeader}
 
         <section className="sidebar-section">
           <h2 className="sidebar-heading">Text style</h2>
@@ -701,16 +816,12 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
         </section>
 
         <section className="sidebar-section sidebar-actions">
-          {pageNumber != null && (
+          {onBackToGrid != null && (
             <button
               type="button"
               className="sidebar-action-btn"
-              onClick={async () => {
-                if (onBackToGrid) {
-                  await onBackToGrid();
-                } else {
-                  navigate("/");
-                }
+              onClick={() => {
+                void onBackToGrid();
               }}
             >
               Back to grid
@@ -733,7 +844,7 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
                   type="button"
                   className="sidebar-action-btn sidebar-action-btn-clear"
                   onClick={() => {
-                    setPage(createEmptyPage());
+                    clearPage();
                     setClearConfirmShown(false);
                   }}
                 >
@@ -789,6 +900,56 @@ export function Editor({ pageNumber, onBackToGrid }: EditorProps) {
             onCellMouseEnter={handleCellMouseEnter}
             readOnly={false}
           />
+          {remoteCursors && remoteCursors.length > 0 && (
+            <div
+              className="editor-remote-cursors"
+              aria-hidden
+              style={{
+                position: "absolute",
+                inset: 0,
+                pointerEvents: "none",
+                fontSize: "14px",
+              }}
+            >
+              {remoteCursors.map((rc) => {
+                const { col, row } = rowColFromIndex(rc.index);
+                const color = resolveCursorColor(rc.color);
+                return (
+                  <div
+                    key={`${rc.name}-${rc.index}`}
+                    className="editor-remote-cursor"
+                    style={{
+                      position: "absolute",
+                      left: `calc(14px + ${col} * 1em)`,
+                      top: `calc(14px + ${row} * 1.35em)`,
+                      width: "1em",
+                      height: "1.35em",
+                      outline: `2px solid ${color}`,
+                      outlineOffset: "-2px",
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    <span
+                      className="editor-remote-cursor-label"
+                      style={{
+                        position: "absolute",
+                        top: "-1em",
+                        left: 0,
+                        fontSize: "0.5em",
+                        lineHeight: 1,
+                        background: color,
+                        color: "#000",
+                        padding: "1px 2px",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {rc.name}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>
