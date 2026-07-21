@@ -168,12 +168,23 @@ function RoomViewerContent({
     <RoomLayout roomId={roomId} sidebar={chatSidebar ?? <ChatSidebar />}>
       <div className="room-viewer">
         <div className="room-viewer-screen">
-          <TeletextGrid
-            page={shownPage}
-            pageNumber={displayNumber}
-            readOnly
-            onIndexPageSelect={handleRequestPage}
-          />
+          <div className="tv-bezel">
+            <div className="tv-screen">
+              <TeletextGrid
+                page={shownPage}
+                pageNumber={displayNumber}
+                readOnly
+                onIndexPageSelect={handleRequestPage}
+              />
+            </div>
+          </div>
+          <div className="tv-controls">
+            <div className="tv-speaker" aria-hidden="true" />
+            <div className="tv-knobs" aria-hidden="true">
+              <div className="tv-knob" />
+              <div className="tv-knob" />
+            </div>
+          </div>
         </div>
 
         <div className="object-bar" role="toolbar" aria-label="Room objects">

@@ -97,8 +97,8 @@ function gfxRect(
   }
 }
 
-/** Draw a horizontal line of half-cells (top half filled = bits 3,4 = 0b110000 = 48). */
-function gfxHLine(
+/** Draw a horizontal line of half-cells (top half filled). */
+function _gfxHLine(
   map: PageCellMap,
   row: number,
   colStart: number,
@@ -108,13 +108,11 @@ function gfxHLine(
 ): void {
   const c: SixelColors = [color, color, color, color, color, color];
   for (let i = 0; i < length; i++) {
-    // top half: bits 3 (top-left) and 0... wait, corrected mapping:
-    // bit0=top-left, bit3=top-right → top half = bits 0 and 3 = 0b001001 = 9
-    // mid half = bits 1 and 4 = 0b010010 = 18
-    // bot half = bits 2 and 5 = 0b100100 = 36
-    gfx(map, row, colStart + i, 9, c, bg); // top strip
+    gfx(map, row, colStart + i, 9, c, bg);
   }
 }
+// suppress unused warning — kept for future use
+void _gfxHLine;
 
 // ─── Page 100: Main Index — pixel-art TV set ─────────────────────────────────
 
@@ -323,8 +321,6 @@ function buildWeather(): PageCellMap {
   // Sun — yellow circle, cols 1-7, rows 2-8
   const y: TeletextColor = 'yellow';
   const solidY: SixelColors = [y,y,y,y,y,y];
-  const r: TeletextColor = 'red';
-  const solidR: SixelColors = [r,r,r,r,r,r];
 
   // Sun rays (top)
   gfx(m, 2, 2, 0b100100, solidY, 'black');
