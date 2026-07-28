@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Cell, TeletextPage } from '../../types/teletext';
-import { COLS, ROWS, sixelBit } from '../../types/teletext';
+import {
+  COLS,
+  isDoubleHeightShadow,
+  isEffectiveDoubleHeight,
+  MAX_DOUBLE_HEIGHT_ROW,
+  MIN_DOUBLE_HEIGHT_ROW,
+  ROWS,
+  sixelBit,
+} from '../../types/teletext';
 
 const VALID_PAGE_NUMBERS = new Set([100, 200, 300, 400, 500, 600, 700, 800, 900]);
 
@@ -90,7 +98,24 @@ interface TeletextGridProps {
   cursorIndex?: number | null;
   onCellClick?: (index: number, e?: React.MouseEvent) => void;
   onCellMouseDown?: (index: number, e?: React.MouseEvent) => void;
-  onCellMouseEnter?: (index: number) => void;
+  onCellMouseEnter?: (index: number, e?: React.MouseEvent) => void;
+  /**
+   * Fires as the pointer moves *within* a cell. Used by the pixel brush, which
+   * needs finer granularity than cell-enter to paint individual sixths.
+   */
+  onCellMouseMove?: (index: number, e?: React.MouseEvent) => void;
+  /**
+   * Sixel sub-cell (0-5) to highlight on the cell at `cursorIndex`, so a
+   * sub-cell brush can show what it is about to paint.
+   */
+  hoverPartIndex?: number | null;
+  /**
+   * When true, the cursor cell renders double-height (and the cell below it
+   * is hidden the same way an actual double-height cell's would be) even
+   * though the cell itself isn't double-height yet — a preview so the "Double
+   * height" toggle shows what typing there will look like before it happens.
+   */
+  cursorDoubleHeight?: boolean;
   readOnly?: boolean;
   compact?: boolean;
   /** When set (and readOnly), bottom line index links are clickable and call this with page number */
@@ -99,7 +124,14 @@ interface TeletextGridProps {
   onPageNumberClick?: () => void;
 }
 
-function SixelBlock({ cell }: { cell: Cell }) {
+function SixelBlock({
+  cell,
+  hoverPartIndex = null,
+}: {
+  cell: Cell;
+  /** Sub-cell to outline as the brush target, or null for none. */
+  hoverPartIndex?: number | null;
+}) {
   const pattern = (cell.graphics ?? 0) & 0x3f;
   const colors = cell.graphicsColors;
   return (
@@ -112,7 +144,9 @@ function SixelBlock({ cell }: { cell: Cell }) {
         return (
           <div
             key={i}
-            className={`teletext-sixel-dot teletext-bg-${color}`}
+            className={`teletext-sixel-dot teletext-bg-${color}${
+              hoverPartIndex === i ? ' teletext-sixel-dot-hover' : ''
+            }`}
           />
         );
       })}
@@ -127,6 +161,9 @@ export function TeletextGrid({
   onCellClick,
   onCellMouseDown,
   onCellMouseEnter,
+  onCellMouseMove,
+  hoverPartIndex = null,
+  cursorDoubleHeight = false,
   readOnly = false,
   compact = false,
   onIndexPageSelect,
@@ -141,6 +178,17 @@ export function TeletextGrid({
   const pageNumberClickable = readOnly && onPageNumberClick != null;
   const pageLinkMap = useMemo(() => (readOnly && onIndexPageSelect ? getPageLinkMap(page) : new Map<number, number>()), [page, readOnly, onIndexPageSelect]);
 
+  // The double-height preview only makes sense on an actual cursor cell
+  // within the valid double-height row range (matches `isEffectiveDoubleHeight`'s
+  // own row check) — never in read-only view, which has no local cursor.
+  const cursorPreviewRow = cursorIndex != null ? Math.floor(cursorIndex / COLS) : -1;
+  const cursorPreviewEligible =
+    !readOnly &&
+    cursorDoubleHeight &&
+    cursorIndex != null &&
+    cursorPreviewRow >= MIN_DOUBLE_HEIGHT_ROW &&
+    cursorPreviewRow <= MAX_DOUBLE_HEIGHT_ROW;
+
   return (
     <div className={`teletext-screen${compact ? ' teletext-screen-compact' : ''}${showIndexLine ? ' teletext-screen-with-index' : ''}`}>
       <div className={`teletext-grid${showIndexLine ? ' teletext-grid-with-index' : ''}`}>
@@ -148,6 +196,21 @@ export function TeletextGrid({
         {page.map((cell, index) => {
           const row = Math.floor(index / COLS);
           const col = index % COLS;
+
+          // A cell covered by a double-height cell directly above it renders
+          // nothing — that cell's own box already spans down into this row (see
+          // the `gridRow` span below). Every other cell gets explicit grid
+          // placement so these gaps don't get backfilled by auto-placement.
+          // The cursor preview (see `cursorDoubleHeight`) covers its cell below
+          // the same way, even though nothing has actually been typed yet.
+          const isCursorPreviewShadow =
+            cursorPreviewEligible && index === (cursorIndex as number) + COLS;
+          if (isDoubleHeightShadow(page, index) || isCursorPreviewShadow) return null;
+          const isCursorPreviewDoubleHeight =
+            cursorPreviewEligible && index === cursorIndex;
+          const doubleHeight =
+            isEffectiveDoubleHeight(page, index) || isCursorPreviewDoubleHeight;
+
           const isHeaderRow = row === 0;
           const isPageCell = isHeaderRow && col < 3;
           const isDateTimeCell = isHeaderRow && col >= 20;
@@ -160,7 +223,19 @@ export function TeletextGrid({
           const headerFg = isPageCell ? 'white' : isDateTimeCell ? 'yellow' : null;
 
           const displayCell = headerChar !== null ? { ...cell, char: headerChar, fg: headerFg as typeof cell.fg } : cell;
-          const showGraphics = !isHeaderOverlay && typeof displayCell.graphics === 'number' && displayCell.graphics >= 0 && displayCell.graphics <= 63;
+          const hasGraphics = !isHeaderOverlay && typeof displayCell.graphics === 'number' && displayCell.graphics >= 0 && displayCell.graphics <= 63;
+          // The sub-cell brush target. A blank cell without graphics still shows
+          // the highlight (rendered as an all-background sixel block, which looks
+          // identical to the blank cell); a cell with a character keeps the
+          // character and settles for the cell-level cursor outline.
+          const isHoverTarget =
+            !readOnly &&
+            !isHeaderOverlay &&
+            hoverPartIndex != null &&
+            cursorIndex === index;
+          const showGraphics =
+            hasGraphics ||
+            (isHoverTarget && (displayCell.char === ' ' || displayCell.char === ''));
           const displayChar: string = isHeaderOverlay ? (headerChar === ' ' || headerChar === null ? '\u00a0' : headerChar) : (displayCell.char === ' ' ? '\u00a0' : displayCell.char);
           const cellFg = displayCell.fg;
           const pageLinkTarget = !isHeaderOverlay ? pageLinkMap.get(index) : undefined;
@@ -170,22 +245,32 @@ export function TeletextGrid({
               ? (e: React.MouseEvent) => { e.preventDefault(); onIndexPageSelect?.(pageLinkTarget); }
               : (e: React.MouseEvent) => onCellClick?.(index, e);
           const isPageLink = pageLinkTarget != null;
+          const content = showGraphics ? (
+            <SixelBlock
+              cell={hasGraphics ? displayCell : { ...displayCell, graphics: 0 }}
+              hoverPartIndex={isHoverTarget ? hoverPartIndex : null}
+            />
+          ) : (
+            displayChar
+          );
           return (
             <div
               key={index}
               className={`teletext-cell teletext-fg-${cellFg} teletext-bg-${displayCell.bg} ${
                 !readOnly && cursorIndex === index ? 'cursor' : ''
-              } ${!isHeaderOverlay && displayCell.blink ? `teletext-blink${!blinkVisible ? ' teletext-blink-hidden' : ''}` : ''} ${pageNumberClickable && isPageCell ? 'teletext-page-number-clickable' : ''} ${isPageLink ? 'teletext-index-link' : ''}`}
+              } ${!isHeaderOverlay && displayCell.blink ? `teletext-blink${!blinkVisible ? ' teletext-blink-hidden' : ''}` : ''} ${pageNumberClickable && isPageCell ? 'teletext-page-number-clickable' : ''} ${isPageLink ? 'teletext-index-link' : ''} ${doubleHeight ? 'teletext-cell-double-height' : ''}`}
+              style={{ gridColumn: col + 1, gridRow: doubleHeight ? `${row + 1} / span 2` : row + 1 }}
               onClick={handleClick}
               onMouseDown={isPageCell && pageNumberClickable ? undefined : isPageLink ? undefined : (e: React.MouseEvent) => onCellMouseDown?.(index, e)}
-              onMouseEnter={isPageCell && pageNumberClickable ? undefined : isPageLink ? undefined : () => onCellMouseEnter?.(index)}
+              onMouseEnter={isPageCell && pageNumberClickable ? undefined : isPageLink ? undefined : (e: React.MouseEvent) => onCellMouseEnter?.(index, e)}
+              onMouseMove={onCellMouseMove == null || (isPageCell && pageNumberClickable) || isPageLink ? undefined : (e: React.MouseEvent) => onCellMouseMove(index, e)}
               role={readOnly ? (pageNumberClickable && isPageCell || isPageLink ? 'button' : undefined) : 'button'}
               tabIndex={-1}
             >
-              {showGraphics ? (
-                <SixelBlock cell={displayCell} />
+              {doubleHeight ? (
+                <span className="teletext-cell-dh-content">{content}</span>
               ) : (
-                displayChar
+                content
               )}
             </div>
           );
@@ -207,6 +292,7 @@ export function TeletextGrid({
               <div
                 key={`index-${col}`}
                 className={`teletext-cell teletext-fg-${cellFg} teletext-bg-black ${indexClickable && indexLink ? 'teletext-index-link' : ''}`}
+                style={{ gridColumn: col + 1, gridRow: ROWS + 1 }}
                 onClick={indexClickable && indexLink ? (e: React.MouseEvent) => { e.preventDefault(); onIndexPageSelect?.(indexLink!.page); } : undefined}
                 role={indexClickable && indexLink ? 'button' : undefined}
                 tabIndex={-1}

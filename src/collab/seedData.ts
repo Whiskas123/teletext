@@ -2,9 +2,16 @@
  * Seed page content + titles for the one-time import into the Playhtml_Store.
  *
  * Pages contain both text and block graphics (teletext 2×3 sixels).
- * Sixel bitmask per cell: bit0=top-left, bit1=mid-left, bit2=bot-left,
- *                          bit3=top-right, bit4=mid-right, bit5=bot-right.
+ * Sixel bitmask per cell is row-major (see `SIXEL_BITS` in `types/teletext.ts`):
+ *   bit0=top-left,    bit1=top-right,
+ *   bit2=mid-left,    bit3=mid-right,
+ *   bit4=bottom-left, bit5=bottom-right.
  * graphicsColors is a 6-element array matching positions [0..5].
+ *
+ * Note: the inline comments beside the `gfx(...)` literals below were written
+ * against an earlier column-major reading of the bitmask, so a few of them name
+ * the sub-cells the author intended rather than the ones that actually light up.
+ * The literals themselves are left as-is — they render the art that ships today.
  */
 
 import { COLS, type Cell, type SixelColors, type TeletextColor } from '../types/teletext';

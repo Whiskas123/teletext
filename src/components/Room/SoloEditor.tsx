@@ -27,23 +27,31 @@ import { Link, useParams } from 'react-router-dom';
 
 import { useEditPage } from '../../collab/useEditPage';
 import { useGuide } from '../../collab/useGuide';
+import { useIsModerator } from '../../collab/useIsModerator';
+import { canEditPage, PLAYGROUND_MIN_PAGE } from '../../domain/access';
 import { inPageRange } from '../../domain/pageOps';
 import { Editor } from '../Editor/Editor';
 
-/** Default Page_Number when none is provided or the provided value is invalid. */
+/** Default Page_Number for a moderator when none is provided or invalid. */
 const DEFAULT_PAGE_NUMBER = 100;
 
 /** Maximum trimmed length of a Page_Title (Req 9.4, 9.6). */
 const TITLE_MAX_LENGTH = 60;
 
 /**
- * Resolve the initial Page_Number from the `:pageNumber` route param, defaulting
- * to {@link DEFAULT_PAGE_NUMBER} when absent or out of the valid 1..999 range.
+ * Resolve the initial Page_Number from the `:pageNumber` route param,
+ * defaulting to {@link DEFAULT_PAGE_NUMBER} (moderator) or
+ * {@link PLAYGROUND_MIN_PAGE} (everyone else) when absent, out of range, or —
+ * for a non-moderator — an archive page.
  */
-function resolveInitialPageNumber(paramPageNumber: string | undefined): number {
+function resolveInitialPageNumber(
+  paramPageNumber: string | undefined,
+  isModerator: boolean,
+): number {
   const candidate =
     paramPageNumber != null ? parseInt(paramPageNumber, 10) : NaN;
-  return inPageRange(candidate) ? candidate : DEFAULT_PAGE_NUMBER;
+  if (canEditPage(candidate, isModerator)) return candidate;
+  return isModerator ? DEFAULT_PAGE_NUMBER : PLAYGROUND_MIN_PAGE;
 }
 
 /**
@@ -51,9 +59,11 @@ function resolveInitialPageNumber(paramPageNumber: string | undefined): number {
  */
 export function SoloEditor() {
   const params = useParams<{ pageNumber: string }>();
+  const isModerator = useIsModerator();
   const [pageNumber, setPageNumber] = useState<number>(() =>
-    resolveInitialPageNumber(params.pageNumber),
+    resolveInitialPageNumber(params.pageNumber, isModerator),
   );
+  const [pageError, setPageError] = useState<string | null>(null);
 
   // Solo editing of the global page: injected page + cell-level writes.
   const { page, editCell, saveError } = useEditPage(pageNumber);
@@ -77,32 +87,48 @@ export function SoloEditor() {
     setPageDraft(String(pageNumber));
     setTitleDraft(title(pageNumber));
     setTitleError(null);
+    setPageError(null);
     // `title` is intentionally not a dependency: we only reseed on page change,
     // not on every store update, so typing is never clobbered mid-edit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageNumber]);
 
-  const handlePageDraftChange = useCallback((value: string) => {
-    // Allow only digits, up to 3, and permit an empty field while typing.
-    const cleaned = value.replace(/\D/g, '').slice(0, 3);
-    setPageDraft(cleaned);
-    const parsed = parseInt(cleaned, 10);
-    if (inPageRange(parsed)) {
-      setPageNumber(parsed);
-    }
-  }, []);
+  const handlePageDraftChange = useCallback(
+    (value: string) => {
+      // Allow only digits, up to 3, and permit an empty field while typing.
+      const cleaned = value.replace(/\D/g, '').slice(0, 3);
+      setPageDraft(cleaned);
+      const parsed = parseInt(cleaned, 10);
+      if (canEditPage(parsed, isModerator)) {
+        setPageNumber(parsed);
+        setPageError(null);
+        return;
+      }
+      // Only surface the archive message for an otherwise-valid page number a
+      // non-moderator can't edit; stay quiet while a page number is still
+      // mid-typed (e.g. "7" on its way to "700").
+      setPageError(
+        inPageRange(parsed) && !isModerator
+          ? `Pages 100–${PLAYGROUND_MIN_PAGE - 1} are the archive — only the moderator can edit them.`
+          : null,
+      );
+    },
+    [isModerator],
+  );
 
   const commitPageDraft = useCallback(() => {
     // On blur / Enter, snap the field back to the current valid page if the
-    // draft is empty or out of range.
+    // draft is empty, out of range, or (for a non-moderator) an archive page.
     const parsed = parseInt(pageDraft, 10);
-    if (inPageRange(parsed)) {
+    if (canEditPage(parsed, isModerator)) {
       setPageNumber(parsed);
       setPageDraft(String(parsed));
+      setPageError(null);
     } else {
       setPageDraft(String(pageNumber));
+      setPageError(null);
     }
-  }, [pageDraft, pageNumber]);
+  }, [pageDraft, pageNumber, isModerator]);
 
   const handleTitleChange = useCallback(
     (text: string) => {
@@ -150,6 +176,8 @@ export function SoloEditor() {
             placeholder="100"
             autoComplete="off"
             spellCheck={false}
+            aria-invalid={pageError != null}
+            aria-describedby={pageError != null ? 'solo-editor-page-error' : undefined}
             onChange={(e) => handlePageDraftChange(e.target.value)}
             onBlur={commitPageDraft}
             onKeyDown={(e) => {
@@ -159,6 +187,11 @@ export function SoloEditor() {
               }
             }}
           />
+          {pageError != null && (
+            <p id="solo-editor-page-error" className="sidebar-error" role="alert">
+              {pageError}
+            </p>
+          )}
         </div>
 
         <div className="sidebar-field">

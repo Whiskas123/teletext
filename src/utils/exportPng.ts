@@ -1,5 +1,5 @@
 import type { SixelColors, TeletextPage } from '../types/teletext';
-import { sixelBit } from '../types/teletext';
+import { isDoubleHeightShadow, isEffectiveDoubleHeight, sixelBit } from '../types/teletext';
 
 const COLOR_HEX: Record<string, string> = {
   black: '#000000',
@@ -48,12 +48,13 @@ function drawSixel(
   pattern: number,
   colors: SixelColors | undefined,
   defaultFg: string,
-  bg: string
+  bg: string,
+  cellHeight: number = CELL_H,
 ) {
   const w = CELL_W / 2;
-  const h = CELL_H / 3;
+  const h = cellHeight / 3;
   ctx.fillStyle = bg;
-  ctx.fillRect(x, y, CELL_W, CELL_H);
+  ctx.fillRect(x, y, CELL_W, cellHeight);
   for (let i = 0; i < 6; i++) {
     const filled = sixelBit(pattern, i);
     if (!filled) continue;
@@ -90,7 +91,12 @@ export function exportPageAsPng(
   for (let row = 0; row < ROWS; row++) {
     for (let col = 0; col < COLS; col++) {
       const index = row * COLS + col;
+      // This row is covered by a double-height cell directly above it \u2014 its
+      // own content already got drawn (stretched) by that cell.
+      if (isDoubleHeightShadow(page, index)) continue;
       const cell = page[index];
+      const doubleHeight = isEffectiveDoubleHeight(page, index);
+      const cellHeight = doubleHeight ? CELL_H * 2 : CELL_H;
       let bg = COLOR_HEX[cell.bg] ?? '#000000';
       let fg = COLOR_HEX[cell.fg] ?? '#ffffff';
       let char = cell.char === ' ' ? '\u00a0' : cell.char;
@@ -125,12 +131,22 @@ export function exportPageAsPng(
         cell.graphics >= 0 &&
         cell.graphics <= 63;
       if (isGraphics) {
-        drawSixel(ctx, x, y, cell.graphics! & 0x3f, cell.graphicsColors, fg, bg);
+        drawSixel(ctx, x, y, cell.graphics! & 0x3f, cell.graphicsColors, fg, bg, cellHeight);
       } else {
         ctx.fillStyle = bg;
-        ctx.fillRect(x, y, CELL_W, CELL_H);
+        ctx.fillRect(x, y, CELL_W, cellHeight);
         ctx.fillStyle = fg;
-        ctx.fillText(char, x, y);
+        if (doubleHeight) {
+          // Stretch the glyph vertically to fill the doubled cell height,
+          // matching the live CSS rendering's `scaleY(2)`.
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.scale(1, 2);
+          ctx.fillText(char, 0, 0);
+          ctx.restore();
+        } else {
+          ctx.fillText(char, x, y);
+        }
       }
     }
   }

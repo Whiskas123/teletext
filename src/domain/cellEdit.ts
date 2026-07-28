@@ -38,7 +38,9 @@ function emptyCell(): Cell {
  * Returns `true` iff the cell's `char`, `fg`, and `bg` fields are defined and
  * its `graphics` value is either unset (`null`/`undefined`) or an integer
  * within the inclusive range {@link SIXEL_MIN}..{@link SIXEL_MAX} (0..63);
- * otherwise returns `false`. Total: never throws for any input.
+ * otherwise returns `false`. Total: never throws for any input. (`blink` and
+ * `doubleHeight`, like `graphics`, are optional flags this check does not
+ * constrain beyond their presence.)
  *
  * _Requirements: 6.7_
  */

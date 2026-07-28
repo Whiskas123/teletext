@@ -131,6 +131,27 @@
   z-index: 1;
 }
 
+/* Double-height text: the cell's grid box spans two rows (inline `gridRow`),
+   but `.teletext-cell`'s own fixed `height: 1.35em` would otherwise fight that
+   span instead of filling it — override it to the doubled height explicitly.
+   The inner content box is sized at ONE normal row height (50% of that) and
+   then scaled 2x, so it fills the doubled box exactly instead of the scale
+   compounding with an already-doubled box and overflowing/clipping. */
+.teletext-cell.teletext-cell-double-height {
+  height: calc(1.35em * 2);
+  z-index: 1;
+}
+
+.teletext-cell-dh-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 50%;
+  transform: scaleY(2);
+  transform-origin: center center;
+}
+
 .teletext-index-link,
 .teletext-page-number-clickable {
   cursor: pointer;
@@ -156,6 +177,12 @@
   min-width: 2px;
   min-height: 2px;
   /* Background comes from .teletext-bg-* class per part */
+}
+
+/* The sixth the pixel brush is aimed at, so a 1/6 click can be targeted. */
+.teletext-sixel-dot-hover {
+  outline: 1px solid rgba(255, 255, 255, 0.85);
+  outline-offset: -1px;
 }
 
 /* Blinking blocks/cells: synchronized 1s on, 1s off (visibility driven by JS) */
@@ -507,13 +534,51 @@
 }
 
 /* Motif history: compact row of recent motifs */
-.motif-history {
+/* Recent brushes: a prev/next stepper over the history, plus a clickable strip */
+.brush-history-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.brush-history-step {
+  padding: 0.1rem 0.4rem;
+  background: #252525;
+  border: 1px solid #404040;
+  border-radius: 4px;
+  color: #ccc;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.brush-history-step:hover:not(:disabled) {
+  background: #333;
+  border-color: #555;
+}
+
+.brush-history-step:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.brush-history-current {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.4rem;
+}
+
+.brush-history-strip {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
 }
 
-.motif-history-btn {
+.brush-history-btn {
   padding: 0.25rem;
   background: #252525;
   border: 1px solid #404040;
@@ -522,14 +587,27 @@
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 
-.motif-history-btn:hover {
+.brush-history-btn:hover {
   background: #333;
   border-color: #555;
 }
 
-.motif-history-btn .preset-motif-preview {
+.brush-history-btn-active {
+  border-color: #ffcc00;
+}
+
+.brush-history-btn .preset-motif-preview {
   width: 1.5rem;
   height: 1rem;
+}
+
+/* A pixel brush has one color, so it previews as a single filled square. */
+.brush-pixel-swatch {
+  display: inline-block;
+  width: 1.5rem;
+  height: 1rem;
+  border-radius: 2px;
+  border: 1px solid #444;
 }
 
 .preset-motif-preview {
@@ -839,42 +917,6 @@
   background: #2d2d2d;
   border-color: #555;
   color: #ddd;
-}
-
-/* Brush: sixel pattern picker (2×3 grid) */
-.sixel-picker {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.sixel-picker-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr 1fr;
-  gap: 3px;
-  width: 2.75rem;
-  height: 2.1rem;
-}
-
-.sixel-picker-dot {
-  width: 100%;
-  height: 100%;
-  padding: 0;
-  border: 1px solid #555;
-  border-radius: 2px;
-  background: transparent;
-  cursor: pointer;
-  min-width: 10px;
-  min-height: 8px;
-}
-
-.sixel-picker-dot.on {
-  background: currentColor;
-}
-
-.sixel-picker-dot:hover {
-  opacity: 0.9;
 }
 
 .brush-presets {

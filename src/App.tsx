@@ -9,8 +9,10 @@ import { Analytics } from '@vercel/analytics/react';
 import { GlobalProvider } from './collab/GlobalProvider';
 import { RoomContext } from './collab/RoomContext';
 import { Landing } from './components/Room/Landing';
+import { ModeratorLogin } from './components/Room/ModeratorLogin';
 import { RoomViewer } from './components/Room/RoomViewer';
 import { SoloEditor } from './components/Room/SoloEditor';
+import { SoloViewer } from './components/Room/SoloViewer';
 import { validateRoomId } from './domain/roomId';
 import './App.css';
 import './styles/teletext.css';
@@ -38,8 +40,12 @@ function App() {
           global; room coordination is keyed by Room_ID inside it). */}
       <GlobalProvider>
         <Routes>
-          {/* Landing: capture the member's name, then watch or edit. */}
+          {/* Landing: watch solo, watch together, or edit. */}
           <Route path="/" element={<Landing />} />
+
+          {/* Watching on your own — no chat, no vote, no name needed. */}
+          <Route path="/watch" element={<SoloViewer />} />
+          <Route path="/watch/:pageNumber" element={<SoloViewer />} />
 
           {/* Watch-only co-watching in a room (Req 3–5, 9). */}
           <Route
@@ -54,6 +60,9 @@ function App() {
           {/* Solo editing of the global teletext pages/titles. */}
           <Route path="/edit" element={<SoloEditor />} />
           <Route path="/edit/:pageNumber" element={<SoloEditor />} />
+
+          {/* Moderator sign-in (device-local; see collab/moderator.ts). */}
+          <Route path="/moderator" element={<ModeratorLogin />} />
 
           {/* Legacy redirects so old links don't 404. */}
           <Route path="/view" element={<Navigate to="/" replace />} />

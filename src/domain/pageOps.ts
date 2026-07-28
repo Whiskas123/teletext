@@ -22,9 +22,9 @@ import {
 import type { PagesData } from '../collab/types';
 
 /** Lowest valid Page_Number (inclusive). Teletext pages run 100..999. */
-const MIN_PAGE = 100;
+export const MIN_PAGE = 100;
 /** Highest valid Page_Number (inclusive). */
-const MAX_PAGE = 999;
+export const MAX_PAGE = 999;
 /** Count of distinct Page_Numbers in the range, used for circular wrapping. */
 const PAGE_COUNT = MAX_PAGE - MIN_PAGE + 1; // 900
 
@@ -78,6 +78,7 @@ function normalizeCell(raw: unknown): Cell {
     cell.graphicsColors = source.graphicsColors as Cell['graphicsColors'];
   }
   if ('blink' in source) cell.blink = source.blink as boolean;
+  if ('doubleHeight' in source) cell.doubleHeight = source.doubleHeight as boolean;
   return cell;
 }
 
@@ -112,7 +113,8 @@ function isEmptyCell(cell: Cell): boolean {
     cell.fg === 'white' &&
     cell.bg === 'black' &&
     (cell.graphics === null || cell.graphics === undefined) &&
-    !cell.blink
+    !cell.blink &&
+    !cell.doubleHeight
   );
 }
 

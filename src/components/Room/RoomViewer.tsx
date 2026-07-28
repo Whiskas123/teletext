@@ -33,13 +33,12 @@ import { useVoting } from '../../collab/useVoting';
 import { TeletextGrid } from '../TeletextGrid/TeletextGrid';
 import RoomLayout from './RoomLayout';
 import ChatSidebar from './ChatSidebar';
+import PresenceList from './PresenceList';
 import VotePanel from './VotePanel';
 import YellowPages from './YellowPages';
+import { usePageRoll } from './usePageRoll';
 import remoteControlImg from '../../assets/remote_control.png';
 import yellowPagesImg from '../../assets/yellow_pages.png';
-
-/** Delay between each rolling digit step when the displayed page changes. */
-const PAGE_ROLL_MS = 22;
 
 /** Which object popup is currently open. */
 type OpenObject = 'remote' | 'guide' | null;
@@ -72,60 +71,9 @@ function RoomViewerContent({
   const [openObject, setOpenObject] = useState<OpenObject>(null);
   const remoteSlotRef = useRef<HTMLDivElement>(null);
 
-  // --- Page-number roll ---
   // The header rolls to the room's displayed page whenever it changes, and the
-  // page CONTENT is revealed only once the roll lands (instead of switching
-  // instantly). `page` (the target content) is held in a ref so the roll can
-  // reveal it on arrival; `shownPage` is what the grid renders.
-  const [displayNumber, setDisplayNumberState] = useState(displayedPageNumber);
-  const [shownPage, setShownPage] = useState(page);
-  const displayRef = useRef(displayedPageNumber);
-  const pageRef = useRef(page);
-  pageRef.current = page;
-  const rollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-  const rollingRef = useRef(false);
-
-  const setDisplayNumber = useCallback((n: number) => {
-    displayRef.current = n;
-    setDisplayNumberState(n);
-  }, []);
-
-  const stopRoll = useCallback(() => {
-    if (rollTimer.current !== null) {
-      clearInterval(rollTimer.current);
-      rollTimer.current = null;
-    }
-  }, []);
-
-  // Roll the header to the displayed page on change; keep content frozen until
-  // the roll lands. Declared BEFORE the content-sync effect so it marks the roll
-  // in progress first on the render where the displayed page changes.
-  useEffect(() => {
-    if (displayRef.current === displayedPageNumber) return;
-    const target = displayedPageNumber;
-    rollingRef.current = true;
-    stopRoll();
-    rollTimer.current = setInterval(() => {
-      const cur = displayRef.current;
-      if (cur === target) {
-        stopRoll();
-        rollingRef.current = false;
-        setShownPage(pageRef.current); // reveal the target page content
-        return;
-      }
-      setDisplayNumber(cur < target ? cur + 1 : cur - 1);
-    }, PAGE_ROLL_MS);
-  }, [displayedPageNumber, stopRoll, setDisplayNumber]);
-
-  // Keep shown content live while idle (so edits to the watched page appear),
-  // but never mid-roll (content stays frozen).
-  useEffect(() => {
-    if (!rollingRef.current) setShownPage(page);
-  }, [page]);
-
-  useEffect(() => {
-    return () => stopRoll();
-  }, [stopRoll]);
+  // page content is revealed only once the roll lands.
+  const { displayNumber, shownPage } = usePageRoll(displayedPageNumber, page);
 
   // Close the remote popover on outside click / Escape.
   useEffect(() => {
@@ -165,7 +113,16 @@ function RoomViewerContent({
   const closeObject = useCallback(() => setOpenObject(null), []);
 
   return (
-    <RoomLayout roomId={roomId} sidebar={chatSidebar ?? <ChatSidebar />}>
+    <RoomLayout
+      roomId={roomId}
+      sidebar={
+        <>
+          {/* The room is the one place a member sets their display name. */}
+          <PresenceList allowRename />
+          {chatSidebar ?? <ChatSidebar />}
+        </>
+      }
+    >
       <div className="room-viewer">
         <div className="room-viewer-screen">
           <div className="tv-bezel">

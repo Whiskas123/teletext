@@ -1,16 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useTeletextOptional } from "../../context/TeletextContext";
+import {
+  brushKey,
+  recordBrush,
+  stepBrush,
+  type Brush,
+  type BrushHistoryState,
+} from "../../domain/brush";
 import {
   brushColorsFromSlots,
   COLS,
-  createEmptyPage,
   DEFAULT_SIXEL_COLORS,
   indexAt,
+  MAX_DOUBLE_HEIGHT_ROW,
+  MIN_DOUBLE_HEIGHT_ROW,
   motifSlotCount,
   MOTIF_PATTERNS,
   ROWS,
   rowColFromIndex,
+  setSixelBit,
   SIXEL_MAX,
+  sixelPartAt,
+  resolveDoubleHeightCursor,
   slotColorsFromBrush,
   TELETEXT_COLORS,
   TOTAL_CELLS,
@@ -23,11 +33,6 @@ import { exportPageAsPng } from "../../utils/exportPng";
 import { TeletextGrid } from "../TeletextGrid/TeletextGrid";
 
 const SIXEL_TOOLTIP_MARGIN = 8;
-const MOTIF_HISTORY_MAX = 8;
-
-function motifsEqual(a: SixelColors, b: SixelColors): boolean {
-  return a.length === b.length && a.every((c, i) => c === b[i]);
-}
 const SIXEL_TOOLTIP_WIDTH = 200;
 const SIXEL_TOOLTIP_HEIGHT = 90;
 
@@ -124,6 +129,32 @@ function emptyCellValue(): Cell {
   return { char: " ", fg: "white", bg: "black", graphics: null };
 }
 
+/**
+ * Preview of a remembered brush: the 2×3 motif for a block brush, a single
+ * filled square for a pixel brush.
+ */
+function BrushSwatch({ brush }: { brush: Brush | undefined }) {
+  if (!brush) return null;
+  if (brush.kind === "pixel") {
+    return (
+      <span
+        className={`brush-pixel-swatch teletext-bg-${brush.color}`}
+        aria-hidden
+      />
+    );
+  }
+  return (
+    <span className="preset-motif-preview" aria-hidden>
+      {([0, 1, 2, 3, 4, 5] as const).map((i) => (
+        <span
+          key={i}
+          className={`preset-motif-dot teletext-bg-${brush.colors[i]}`}
+        />
+      ))}
+    </span>
+  );
+}
+
 /** Another Member's editing cursor rendered on the shared grid, attributed by Identity color. */
 export interface EditorRemoteCursor {
   /** Cell index (0..959) the remote member's cursor is on. */
@@ -145,20 +176,15 @@ interface EditorProps {
    * link, page-number chooser, and title field — instead of a separate bar.
    */
   sidebarHeader?: import('react').ReactNode;
+  /** The page to edit, supplied by the host (e.g. `useEditPage`'s normalized page). */
+  page: TeletextPage;
   /**
-   * Injected page to edit. When provided, the Editor renders and edits this page
-   * instead of the {@link useTeletextOptional TeletextContext} page, letting a
-   * collaborative hook (e.g. `useEditPage`) drive it. When omitted, the Editor
-   * falls back to the context-backed single-page behavior.
+   * Single-cell edit callback. Every edit (typing, painting, blink, backspace,
+   * clear) is applied through this callback as an absolute cell value at
+   * `index`, so a collaborative store can persist and merge edits at cell
+   * granularity (Req 6.1, 6.5).
    */
-  page?: TeletextPage;
-  /**
-   * Single-cell edit callback. When provided, every edit (typing, painting,
-   * blink, backspace, clear) is applied through this callback as an absolute
-   * cell value at `index` instead of the context `setPage`, so a collaborative
-   * store can persist and merge edits at cell granularity (Req 6.1, 6.5).
-   */
-  onEditCell?: (index: number, cell: Cell) => void;
+  onEditCell: (index: number, cell: Cell) => void;
   /**
    * Controlled cursor index. When provided, the Editor uses it as the local
    * cursor position instead of its own internal state.
@@ -174,18 +200,12 @@ export function Editor({
   pageNumber,
   onBackToGrid,
   sidebarHeader,
-  page: injectedPage,
+  page,
   onEditCell,
   cursorIndex: controlledCursorIndex,
   onCursorChange,
   remoteCursors,
 }: EditorProps) {
-  const ctx = useTeletextOptional();
-  // Injected page (collaborative/driven mode) takes precedence over context.
-  // The empty-page fallback only applies in the impossible case of no injected
-  // page and no provider, keeping the type non-optional.
-  const page: TeletextPage = injectedPage ?? ctx?.page ?? createEmptyPage();
-
   // Cursor is controlled when a cursorIndex prop is supplied; otherwise local.
   const cursorControlled = controlledCursorIndex !== undefined;
   const [localCursorIndex, setLocalCursorIndex] = useState(COLS);
@@ -198,43 +218,40 @@ export function Editor({
     [cursorControlled, onCursorChange],
   );
 
-  // Unified single-cell writer: routes through the injected edit callback when
-  // present (collaborative cell-level edits), else the context setPage.
+  // Single-cell writer: every edit funnels through the host's cell-level
+  // callback so a collaborative store can merge edits per cell.
   const writeCell = useCallback(
     (index: number, cell: Cell) => {
-      if (onEditCell) {
-        onEditCell(index, cell);
-      } else if (ctx) {
-        ctx.setPage((prev) => {
-          const next = [...prev];
-          next[index] = cell;
-          return next;
-        });
-      }
+      onEditCell(index, cell);
     },
-    [onEditCell, ctx],
+    [onEditCell],
   );
 
-  // Whole-page clear: apply an empty cell to every position (collaborative) or
-  // replace the page in context (standalone).
+  // Whole-page clear: apply an empty cell to every position.
   const clearPage = useCallback(() => {
-    if (onEditCell) {
-      for (let i = 0; i < TOTAL_CELLS; i++) onEditCell(i, emptyCellValue());
-    } else if (ctx) {
-      ctx.setPage(createEmptyPage());
-    }
-  }, [onEditCell, ctx]);
+    for (let i = 0; i < TOTAL_CELLS; i++) onEditCell(i, emptyCellValue());
+  }, [onEditCell]);
 
   const [fg, setFg] = useState<TeletextColor>("white");
   const [bg, setBg] = useState<TeletextColor>("black");
+  /** When on, typed characters render at double the row height (text only — not the block/pixel brushes). */
+  const [doubleHeightOn, setDoubleHeightOn] = useState(false);
   const [clearConfirmShown, setClearConfirmShown] = useState(false);
-  type BrushMode = "off" | "block" | "blink";
+  type BrushMode = "off" | "block" | "pixel" | "blink";
   const [brushMode, setBrushMode] = useState<BrushMode>("off");
   const [motifColors, setMotifColors] = useState<(SixelColors | undefined)[]>(
     () => MOTIF_PATTERNS.map(() => undefined),
   );
   const [selectedMotifIndex, setSelectedMotifIndex] = useState(0);
-  const [motifHistory, setMotifHistory] = useState<SixelColors[]>([]);
+  /** Color the pixel brush paints a single sixth with. */
+  const [pixelColor, setPixelColor] = useState<TeletextColor>("white");
+  /** Recently used brushes (index 0 = most recent) and the ◀ ▶ stepper cursor. */
+  const [brushes, setBrushes] = useState<BrushHistoryState>(() => ({
+    history: [],
+    index: 0,
+  }));
+  /** Sixel sub-cell (0-5) the pixel brush is currently aimed at. */
+  const [hoveredPartIndex, setHoveredPartIndex] = useState<number | null>(null);
   const [selectedSixelIndex, setSelectedSixelIndex] = useState(0);
   const [hoveredSlotIndex, setHoveredSlotIndex] = useState<number | null>(null);
   const [colorTooltipOpen, setColorTooltipOpen] = useState(false);
@@ -249,12 +266,9 @@ export function Editor({
   const sixelColorTooltipRef = useRef<HTMLDivElement>(null);
   const brushSixelPreviewRef = useRef<HTMLDivElement>(null);
 
-  const addMotifToHistory = useCallback((motif: SixelColors) => {
-    setMotifHistory((prev) => {
-      const filtered = prev.filter((m) => !motifsEqual(m, motif));
-      const next = [[...motif] as SixelColors, ...filtered];
-      return next.slice(0, MOTIF_HISTORY_MAX);
-    });
+  /** Remember a brush that was just painted with (see `domain/brush.ts`). */
+  const rememberBrush = useCallback((brush: Brush) => {
+    setBrushes((prev) => recordBrush(prev.history, prev.index, brush));
   }, []);
 
   const selectedMotif = MOTIF_PATTERNS[selectedMotifIndex];
@@ -274,9 +288,72 @@ export function Editor({
         graphicsColors: [...brushColors],
       });
       setCursorIndex(index);
-      addMotifToHistory(brushColors);
+      rememberBrush({
+        kind: "block",
+        motifIndex: selectedMotifIndex,
+        colors: [...brushColors] as SixelColors,
+      });
     },
-    [brushColors, writeCell, page, setCursorIndex, addMotifToHistory],
+    [
+      brushColors,
+      writeCell,
+      page,
+      setCursorIndex,
+      rememberBrush,
+      selectedMotifIndex,
+    ],
+  );
+
+  /**
+   * Paint (or erase) a single sixth of a cell, leaving the other five alone.
+   *
+   * A cell that was showing text becomes a graphics cell with just this one
+   * sub-block lit; clearing the last lit sub-block returns the cell to a plain
+   * empty cell (`graphics: null`) so it doesn't count as page content.
+   */
+  const paintSixelPart = useCallback(
+    (index: number, part: number, erase: boolean) => {
+      const cell = page[index];
+      const base = typeof cell.graphics === "number" ? cell.graphics & 0x3f : 0;
+      const next = setSixelBit(base, part, !erase);
+      // Dragging fires many events over the same sixth; skip writes that would
+      // not change the cell so the collaborative store isn't spammed.
+      const unchanged =
+        next === base &&
+        cell.char === " " &&
+        (erase || cell.graphicsColors?.[part] === pixelColor) &&
+        (next !== 0 || cell.graphics == null);
+      if (unchanged) {
+        setCursorIndex(index);
+        return;
+      }
+      if (next === 0) {
+        writeCell(index, {
+          ...cell,
+          char: " ",
+          fg: "white",
+          bg: "black",
+          graphics: null,
+          graphicsColors: undefined,
+        });
+      } else {
+        const colors = [
+          ...(cell.graphicsColors ?? (["black", "black", "black", "black", "black", "black"] as const)),
+        ] as TeletextColor[];
+        if (!erase) colors[part] = pixelColor;
+        writeCell(index, {
+          ...cell,
+          char: " ",
+          fg: "white",
+          bg: "black",
+          graphics: next,
+          graphicsColors: colors as unknown as SixelColors,
+        });
+      }
+      setCursorIndex(index);
+      if (!erase) rememberBrush({ kind: "pixel", color: pixelColor });
+    },
+    [page, writeCell, pixelColor, setCursorIndex, rememberBrush],
   );
 
   const paintBlinkCell = useCallback(
@@ -302,20 +379,51 @@ export function Editor({
     [selectedMotif, selectedMotifIndex, motifSlotColors],
   );
 
-  const applyMotifFromHistory = useCallback(
-    (motif: SixelColors) => {
-      setMotifColors((prev) => {
-        const n = [...prev];
-        n[selectedMotifIndex] = [...motif] as SixelColors;
-        return n;
-      });
-    },
-    [selectedMotifIndex],
-  );
-
   const selectMotif = useCallback((index: number) => {
     setSelectedMotifIndex(index);
   }, []);
+
+  /**
+   * Make a remembered brush the active one: select its mode and restore the
+   * motif + colors (block) or the color (pixel) it was used with.
+   */
+  const applyBrush = useCallback((brush: Brush) => {
+    if (brush.kind === "pixel") {
+      setPixelColor(brush.color);
+      setBrushMode("pixel");
+      return;
+    }
+    setSelectedMotifIndex(brush.motifIndex);
+    setMotifColors((prev) => {
+      const n = [...prev];
+      n[brush.motifIndex] = [...brush.colors] as SixelColors;
+      return n;
+    });
+    setBrushMode("block");
+  }, []);
+
+  /** Step the history cursor and switch to whatever brush it lands on. */
+  const stepBrushHistory = useCallback(
+    (delta: number) => {
+      const index = stepBrush(brushes.history, brushes.index, delta);
+      const brush = brushes.history[index];
+      if (!brush) return;
+      applyBrush(brush);
+      setBrushes((prev) => ({ ...prev, index }));
+    },
+    [brushes, applyBrush],
+  );
+
+  /** Jump straight to a brush in the strip. */
+  const selectBrushFromHistory = useCallback(
+    (index: number) => {
+      const brush = brushes.history[index];
+      if (!brush) return;
+      applyBrush(brush);
+      setBrushes((prev) => ({ ...prev, index }));
+    },
+    [brushes, applyBrush],
+  );
 
   const pickMotifFromCell = useCallback(
     (index: number) => {
@@ -336,6 +444,24 @@ export function Editor({
     hiddenInputRef.current?.focus();
   }, []);
 
+  /**
+   * Which sixth of a cell the pointer is over, from the event's position within
+   * the cell element. Returns null when the position can't be determined.
+   */
+  const partFromEvent = useCallback((e?: React.MouseEvent): number | null => {
+    const target = e?.currentTarget as HTMLElement | undefined;
+    if (!e || !target || typeof target.getBoundingClientRect !== "function") {
+      return null;
+    }
+    const rect = target.getBoundingClientRect();
+    return sixelPartAt(
+      e.clientX - rect.left,
+      e.clientY - rect.top,
+      rect.width,
+      rect.height,
+    );
+  }, []);
+
   const handleCellClick = useCallback(
     (index: number, e?: React.MouseEvent) => {
       if (index < COLS) return;
@@ -347,6 +473,11 @@ export function Editor({
         paintBlinkCell(index, !e?.altKey);
         return;
       }
+      if (brushMode === "pixel") {
+        const part = partFromEvent(e);
+        if (part != null) paintSixelPart(index, part, e?.altKey === true);
+        return;
+      }
       if (brushMode === "block") {
         paintCell(index);
       } else {
@@ -354,7 +485,16 @@ export function Editor({
         focusHiddenInput();
       }
     },
-    [brushMode, paintCell, paintBlinkCell, pickMotifFromCell, focusHiddenInput],
+    [
+      brushMode,
+      paintCell,
+      paintBlinkCell,
+      paintSixelPart,
+      partFromEvent,
+      pickMotifFromCell,
+      focusHiddenInput,
+      setCursorIndex,
+    ],
   );
 
   const handleCellMouseDown = useCallback(
@@ -372,29 +512,69 @@ export function Editor({
       } else if (brushMode === "block") {
         isDrawingRef.current = true;
         paintCell(index);
+      } else if (brushMode === "pixel") {
+        const part = partFromEvent(e);
+        if (part == null) return;
+        isDrawingRef.current = true;
+        paintSixelPart(index, part, e?.altKey === true);
       }
     },
-    [brushMode, paintCell, paintBlinkCell, pickMotifFromCell],
+    [
+      brushMode,
+      paintCell,
+      paintBlinkCell,
+      paintSixelPart,
+      partFromEvent,
+      pickMotifFromCell,
+    ],
   );
 
   const handleCellMouseEnter = useCallback(
-    (index: number) => {
+    (index: number, e?: React.MouseEvent) => {
       if (index < COLS) {
         setHoveredCellIndex(null);
+        setHoveredPartIndex(null);
         return;
       }
       if (brushMode === "block") {
         setHoveredCellIndex(index);
         if (isDrawingRef.current) paintCell(index);
+      } else if (brushMode === "pixel") {
+        setHoveredCellIndex(index);
+        const part = partFromEvent(e);
+        setHoveredPartIndex(part);
+        if (isDrawingRef.current && part != null) {
+          paintSixelPart(index, part, e?.altKey === true);
+        }
       } else if (brushMode === "blink" && isDrawingRef.current) {
         paintBlinkCell(index, true);
       }
     },
-    [brushMode, paintCell, paintBlinkCell],
+    [brushMode, paintCell, paintBlinkCell, paintSixelPart, partFromEvent],
+  );
+
+  /**
+   * Pixel-brush only: track (and paint) the individual sixths the pointer
+   * crosses *within* a cell — cell-enter granularity is too coarse for a brush
+   * that covers a sixth of a cell.
+   */
+  const handleCellMouseMove = useCallback(
+    (index: number, e?: React.MouseEvent) => {
+      if (brushMode !== "pixel" || index < COLS) return;
+      const part = partFromEvent(e);
+      if (part == null) return;
+      setHoveredCellIndex(index);
+      setHoveredPartIndex((prev) => (prev === part ? prev : part));
+      if (isDrawingRef.current) {
+        paintSixelPart(index, part, e?.altKey === true);
+      }
+    },
+    [brushMode, partFromEvent, paintSixelPart],
   );
 
   const handleGridMouseLeave = useCallback(() => {
     setHoveredCellIndex(null);
+    setHoveredPartIndex(null);
   }, []);
 
   useEffect(() => {
@@ -424,18 +604,34 @@ export function Editor({
   }, [colorTooltipOpen]);
 
   const setCellChar = useCallback(
-    (index: number, char: string) => {
-      if (index < COLS) return;
+    (index: number, char: string): boolean => {
+      if (index < COLS) return false;
       const c = getFirstGrapheme(char) || " ";
+      const row = Math.floor(index / COLS);
+      // Double height only takes visual effect within the valid row range (not
+      // the header row or the last row, which has no row below to span into);
+      // outside it, typing never sets the flag, so there's nothing to un-set
+      // later.
+      const applyDoubleHeight =
+        doubleHeightOn &&
+        row >= MIN_DOUBLE_HEIGHT_ROW &&
+        row <= MAX_DOUBLE_HEIGHT_ROW;
       writeCell(index, {
         ...page[index],
         char: c,
         fg,
         bg,
         graphics: null,
+        doubleHeight: applyDoubleHeight,
       });
+      if (applyDoubleHeight) {
+        // The row directly below is now covered by this glyph. Clear it so
+        // nothing stale reappears if double height is later turned off there.
+        writeCell(index + COLS, emptyCellValue());
+      }
+      return applyDoubleHeight;
     },
-    [fg, bg, writeCell, page],
+    [fg, bg, doubleHeightOn, writeCell, page],
   );
 
   const handleKeyDown = useCallback(
@@ -456,8 +652,11 @@ export function Editor({
             bg: "black",
             graphics: null,
             blink: false,
+            doubleHeight: false,
           });
-          setCursorIndex(Math.max(COLS, cursorIndex - 1));
+          setCursorIndex(
+            resolveDoubleHeightCursor(page, Math.max(COLS, cursorIndex - 1), -1),
+          );
           return;
         case "Delete":
           e.preventDefault();
@@ -465,35 +664,62 @@ export function Editor({
           return;
         case "ArrowLeft":
           e.preventDefault();
-          setCursorIndex(Math.max(COLS, cursorIndex - 1));
+          setCursorIndex(
+            resolveDoubleHeightCursor(page, Math.max(COLS, cursorIndex - 1), -1),
+          );
           return;
         case "ArrowRight":
           e.preventDefault();
-          setCursorIndex(Math.min(ROWS * COLS - 1, cursorIndex + 1));
+          setCursorIndex(
+            resolveDoubleHeightCursor(page, Math.min(ROWS * COLS - 1, cursorIndex + 1), 1),
+          );
           return;
         case "ArrowUp":
           e.preventDefault();
-          setCursorIndex(Math.max(COLS, indexAt(col, row - 1)));
+          setCursorIndex(
+            resolveDoubleHeightCursor(page, Math.max(COLS, indexAt(col, row - 1)), -COLS),
+          );
           return;
         case "ArrowDown":
           e.preventDefault();
-          setCursorIndex(Math.min(ROWS * COLS - 1, indexAt(col, row + 1)));
+          setCursorIndex(
+            resolveDoubleHeightCursor(page, Math.min(ROWS * COLS - 1, indexAt(col, row + 1)), COLS),
+          );
           return;
         case "Enter":
           e.preventDefault();
-          setCursorIndex(Math.min(ROWS * COLS - 1, indexAt(0, row + 1)));
-          return;
-        case "Tab":
-          e.preventDefault();
           setCursorIndex(
-            Math.max(
-              COLS,
-              Math.min(ROWS * COLS - 1, cursorIndex + (e.shiftKey ? -1 : 1)),
+            resolveDoubleHeightCursor(page, Math.min(ROWS * COLS - 1, indexAt(0, row + 1)), COLS),
+          );
+          return;
+        case "Tab": {
+          e.preventDefault();
+          const tabStep = e.shiftKey ? -1 : 1;
+          setCursorIndex(
+            resolveDoubleHeightCursor(
+              page,
+              Math.max(COLS, Math.min(ROWS * COLS - 1, cursorIndex + tabStep)),
+              tabStep,
             ),
           );
           return;
+        }
+        case "[":
+        case "]":
+          // Step through recent brushes. Only while a brush is active, so the
+          // brackets stay typeable in text mode.
+          if (brushMode !== "off" && brushes.history.length > 0) {
+            e.preventDefault();
+            stepBrushHistory(e.key === "[" ? 1 : -1);
+            return;
+          }
+          if (brushMode !== "off") {
+            e.preventDefault();
+            return;
+          }
+          return;
         default:
-          if (brushMode === "block" || brushMode === "blink") {
+          if (brushMode !== "off") {
             e.preventDefault();
             return;
           }
@@ -503,7 +729,16 @@ export function Editor({
           e.preventDefault();
       }
     },
-    [cursorIndex, setCellChar, writeCell, page, setCursorIndex, brushMode],
+    [
+      cursorIndex,
+      setCellChar,
+      writeCell,
+      page,
+      setCursorIndex,
+      brushMode,
+      brushes.history.length,
+      stepBrushHistory,
+    ],
   );
 
   const handleHiddenInput = useCallback(
@@ -515,15 +750,26 @@ export function Editor({
       if (isDeadKeyOrCombiningOnly(value)) return;
       const c = getFirstGrapheme(value);
       if (c) {
-        setCellChar(cursorIndex, c);
-        setCursorIndex(Math.min(ROWS * COLS - 1, cursorIndex + 1));
+        const wasDoubleHeight = setCellChar(cursorIndex, c);
+        const { col, row } = rowColFromIndex(cursorIndex);
+        const rawNext = Math.min(ROWS * COLS - 1, cursorIndex + 1);
+        // Wrapping off the last column of a row we just made double-height:
+        // skip the now-covered row below directly, rather than looking it up
+        // via `page` — which, typing quickly, can still be a keystroke or two
+        // behind the writes just made above (see `resolveDoubleHeightCursor`'s
+        // doc comment for why that lookup alone isn't reliable here).
+        const next =
+          col === COLS - 1 && wasDoubleHeight
+            ? Math.min(ROWS * COLS - 1, indexAt(0, row + 2))
+            : resolveDoubleHeightCursor(page, rawNext, 1);
+        setCursorIndex(next);
       }
       input.value = "";
     },
-    [brushMode, cursorIndex, setCellChar, setCursorIndex],
+    [brushMode, cursorIndex, setCellChar, setCursorIndex, page],
   );
 
-  const isBrushActive = brushMode === "block" || brushMode === "blink";
+  const isBrushActive = brushMode !== "off";
 
   useEffect(() => {
     hiddenInputRef.current?.focus();
@@ -595,6 +841,15 @@ export function Editor({
               aria-hidden
             />
           </div>
+          <button
+            type="button"
+            className={`sidebar-toggle ${doubleHeightOn ? "active" : ""}`}
+            onClick={() => setDoubleHeightOn((v) => !v)}
+            aria-pressed={doubleHeightOn}
+            title="Typed characters render at twice the row height. Not available on the last row."
+          >
+            Double height
+          </button>
         </section>
 
         <section className="sidebar-section">
@@ -613,6 +868,14 @@ export function Editor({
               onClick={() => setBrushMode("block")}
             >
               Block
+            </button>
+            <button
+              type="button"
+              className={`sidebar-toggle ${brushMode === "pixel" ? "active" : ""}`}
+              onClick={() => setBrushMode("pixel")}
+              title="Paint a single sixth of a cell. Alt+click to erase it."
+            >
+              Pixel
             </button>
             <button
               type="button"
@@ -772,32 +1035,6 @@ export function Editor({
                   })()}
                 </div>
               </div>
-              {motifHistory.length > 0 && (
-                <div className="color-block">
-                  <span className="sidebar-field-label">Recent motifs</span>
-                  <div className="motif-history">
-                    {motifHistory.map((motif, idx) => (
-                      <button
-                        key={`${motif.join("-")}`}
-                        type="button"
-                        className="motif-history-btn"
-                        title="Apply motif"
-                        onClick={() => applyMotifFromHistory(motif)}
-                        aria-label={`Apply recent motif ${idx + 1}`}
-                      >
-                        <div className="preset-motif-preview">
-                          {([0, 1, 2, 3, 4, 5] as const).map((i) => (
-                            <span
-                              key={i}
-                              className={`preset-motif-dot teletext-bg-${motif[i]}`}
-                            />
-                          ))}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
               <div className="color-block">
                 <span className="sidebar-field-label">
                   Pick from grid (Alt + click)
@@ -808,10 +1045,83 @@ export function Editor({
               </div>
             </div>
           )}
+          {brushMode === "pixel" && (
+            <div className="brush-options">
+              <div className="color-block">
+                <span className="sidebar-field-label">Pixel color</span>
+                <div className="text-preview-swatches text-preview-swatches-4x4">
+                  {TELETEXT_COLORS.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      className={`color-swatch color-swatch-mini teletext-bg-${color} ${pixelColor === color ? "active" : ""}`}
+                      title={`Pixel ${color}`}
+                      onClick={() => setPixelColor(color)}
+                      aria-label={`Pixel color ${color}`}
+                      aria-pressed={pixelColor === color}
+                    />
+                  ))}
+                </div>
+              </div>
+              <p className="sidebar-hint">
+                Click a sixth of a cell to paint just that sixth. Drag to keep
+                painting. Alt + click erases a sixth.
+              </p>
+            </div>
+          )}
           {brushMode === "blink" && (
             <p className="sidebar-hint">
               Click or drag to set blink on. Alt + click to remove blink.
             </p>
+          )}
+          {isBrushActive && brushes.history.length > 0 && (
+            <div className="color-block brush-history">
+              <span className="sidebar-field-label">Recent brushes</span>
+              <div className="brush-history-stepper">
+                <button
+                  type="button"
+                  className="brush-history-step"
+                  onClick={() => stepBrushHistory(1)}
+                  disabled={brushes.index >= brushes.history.length - 1}
+                  title="Older brush ( [ )"
+                  aria-label="Older brush"
+                >
+                  ◀
+                </button>
+                <span className="brush-history-current">
+                  <BrushSwatch brush={brushes.history[brushes.index]} />
+                </span>
+                <button
+                  type="button"
+                  className="brush-history-step"
+                  onClick={() => stepBrushHistory(-1)}
+                  disabled={brushes.index <= 0}
+                  title="Newer brush ( ] )"
+                  aria-label="Newer brush"
+                >
+                  ▶
+                </button>
+              </div>
+              <div className="brush-history-strip">
+                {brushes.history.map((brush, idx) => (
+                  <button
+                    key={brushKey(brush)}
+                    type="button"
+                    className={`brush-history-btn ${idx === brushes.index ? "brush-history-btn-active" : ""}`}
+                    title={
+                      brush.kind === "pixel"
+                        ? `Pixel brush (${brush.color})`
+                        : `${MOTIF_PATTERNS[brush.motifIndex]?.name ?? "Block"} brush`
+                    }
+                    onClick={() => selectBrushFromHistory(idx)}
+                    aria-label={`Use recent brush ${idx + 1}`}
+                    aria-pressed={idx === brushes.index}
+                  >
+                    <BrushSwatch brush={brush} />
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
         </section>
 
@@ -895,9 +1205,12 @@ export function Editor({
             page={page}
             pageNumber={pageNumber ?? 100}
             cursorIndex={isBrushActive ? hoveredCellIndex : cursorIndex}
+            hoverPartIndex={brushMode === "pixel" ? hoveredPartIndex : null}
+            cursorDoubleHeight={brushMode === "off" && doubleHeightOn}
             onCellClick={handleCellClick}
             onCellMouseDown={handleCellMouseDown}
             onCellMouseEnter={handleCellMouseEnter}
+            onCellMouseMove={brushMode === "pixel" ? handleCellMouseMove : undefined}
             readOnly={false}
           />
           {remoteCursors && remoteCursors.length > 0 && (

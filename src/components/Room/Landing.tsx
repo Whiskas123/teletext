@@ -1,66 +1,40 @@
-import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 
-import { validateDisplayName } from '../../domain/identity';
-import { getStoredDisplayName, setStoredDisplayName } from '../../collab/session';
 import { useRoomOccupancy } from '../../collab/useRoomOccupancy';
 import { ROOMS } from './rooms';
 
 /**
  * Landing — the app's entry screen shown at `/`.
  *
- * Two stages on one page:
- *  1. **Name capture** — the project title, a short description, and a required
- *     name field. The entered name is validated (1–32 characters) and persisted
- *     for the session so every room attributes this member's actions to it.
- *  2. **Watch or edit** — two clearly separated areas:
- *     - "Watch together": the six fixed rooms, each with a single "Watch"
- *       action that navigates into the room viewer (`/room/:roomId`).
- *     - "Edit teletext": a single "Open the editor" action that opens the solo
- *       editor (`/edit`).
- *     Rooms have no per-room edit control — editing is global and solo.
- *
- * If a name was already chosen earlier in the session the page skips straight to
- * the watch/edit areas, while still offering a "change name" control.
+ * Three ways in, none of which asks for anything up front:
+ *  - **Watch solo** (`/watch`) — the TV on your own. No chat, no vote, so no
+ *    name is needed.
+ *  - **Watch together** — reveals the six fixed rooms, each with its live
+ *    occupancy, and enters the room viewer (`/room/:roomId`). A name is
+ *    optional here too: members start as `Guest-XXXX` and can rename themselves
+ *    from the room sidebar.
+ *  - **Create / edit pages** (`/edit`) — the solo editor for the global pages.
  */
 
 const PROJECT_TITLE = 'TELETEXT ROOMS';
 const PROJECT_DESCRIPTION =
-  'Gather in a room and watch teletext together in real time. Flip through pages as a group and vote on what to view next, or open the editor to create and edit pages on your own.';
+  'Watch teletext on your own, gather in a room and watch it together in real time, or open the editor to create and change pages.';
+
+/** The entry options, in display order. */
+type Option = 'solo' | 'together' | 'edit';
 
 export function Landing() {
   const navigate = useNavigate();
 
-  const [name, setName] = useState<string | null>(() => getStoredDisplayName());
-  const [draftName, setDraftName] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  // When true, show the name form even though a name is already stored.
-  const [editingName, setEditingName] = useState(false);
-
-  const hasName = name != null && !editingName;
+  // Which option's detail is expanded. Only "Watch together" has one (the room
+  // grid); the others navigate straight away.
+  const [expanded, setExpanded] = useState<Option | null>(null);
 
   const occupancy = useRoomOccupancy(ROOMS.map((r) => r.id));
 
-  function handleNameSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const trimmed = draftName.trim();
-    if (!validateDisplayName(trimmed)) {
-      setError('Please enter a name between 1 and 32 characters.');
-      return;
-    }
-    setStoredDisplayName(trimmed);
-    setName(trimmed);
-    setDraftName('');
-    setError(null);
-    setEditingName(false);
-  }
-
   function handleWatchRoom(roomId: string) {
     navigate(`/room/${roomId}`);
-  }
-
-  function handleOpenEditor() {
-    navigate('/edit');
   }
 
   return (
@@ -70,78 +44,83 @@ export function Landing() {
         <p className="landing-description">{PROJECT_DESCRIPTION}</p>
       </header>
 
-      {!hasName ? (
-        <section className="landing-name" aria-labelledby="landing-name-heading">
-          <h2 id="landing-name-heading" className="sidebar-heading">
-            What should we call you?
-          </h2>
-          <form className="landing-name-form" onSubmit={handleNameSubmit} noValidate>
-            <label className="sidebar-field-label" htmlFor="landing-name-input">
-              Your name
-            </label>
-            <input
-              id="landing-name-input"
-              type="text"
-              className="landing-name-input"
-              value={draftName}
-              maxLength={32}
-              placeholder="Your name here"
-              autoComplete="off"
-              spellCheck={false}
-              autoFocus
-              aria-invalid={error != null}
-              aria-describedby={error != null ? 'landing-name-error' : undefined}
-              onChange={(e) => {
-                setDraftName(e.target.value);
-                if (error) setError(null);
-              }}
-            />
-            {error != null && (
-              <p id="landing-name-error" className="room-entry-error" role="alert">
-                {error}
-              </p>
-            )}
-            <button type="submit" className="sidebar-action-btn">
-              Continue
-            </button>
-          </form>
-        </section>
-      ) : (
-        <section className="landing-rooms" aria-labelledby="landing-rooms-heading">
-          <div className="landing-greeting">
-            <span>
-              Watching as <strong>{name}</strong>
-            </span>
+      <section className="landing-options" aria-label="Choose how to start">
+        <ul className="landing-option-grid">
+          <li className="landing-option">
             <button
               type="button"
-              className="landing-change-name-btn"
-              onClick={() => {
-                setDraftName(name ?? '');
-                setEditingName(true);
-              }}
+              className="landing-option-card"
+              onClick={() => navigate('/watch')}
+              aria-label="Watch teletext solo"
             >
-              Change name
+              <span className="landing-option-title">Watch solo</span>
+              <span className="landing-option-description">
+                Just you and the TV. Flip through pages whenever you like.
+              </span>
             </button>
-          </div>
+          </li>
 
-          <div className="landing-section landing-watch">
-            <h2
-              id="landing-rooms-heading"
-              className="sidebar-heading landing-section-heading"
+          <li className="landing-option">
+            <button
+              type="button"
+              className={`landing-option-card${expanded === 'together' ? ' landing-option-card-active' : ''}`}
+              onClick={() =>
+                setExpanded((o) => (o === 'together' ? null : 'together'))
+              }
+              aria-expanded={expanded === 'together'}
+              aria-controls="landing-rooms"
+              aria-label="Watch teletext together"
             >
-              Watch together
-            </h2>
-            <p className="landing-section-description">
-              Join one of the rooms to watch teletext together.
-            </p>
-            <ul className="room-picker-grid">
-              {ROOMS.map((room) => {
-                const count = occupancy[room.id] ?? 0;
-                return (
+              <span className="landing-option-title">Watch together</span>
+              <span className="landing-option-description">
+                Join a room to watch with others, chat, and vote on the next
+                page.
+              </span>
+            </button>
+          </li>
+
+          <li className="landing-option">
+            <button
+              type="button"
+              className="landing-option-card"
+              onClick={() => navigate('/edit')}
+              aria-label="Create or edit teletext pages"
+            >
+              <span className="landing-option-title">Create / edit pages</span>
+              <span className="landing-option-description">
+                Draw and write pages. Your edits show up wherever the page is
+                watched.
+              </span>
+            </button>
+          </li>
+        </ul>
+      </section>
+
+      {expanded === 'together' && (
+        <section
+          id="landing-rooms"
+          className="landing-section landing-watch"
+          aria-labelledby="landing-rooms-heading"
+        >
+          <h2
+            id="landing-rooms-heading"
+            className="sidebar-heading landing-section-heading"
+          >
+            Pick a room
+          </h2>
+          <p className="landing-section-description">
+            You'll join as a guest — you can change your name once you're in.
+          </p>
+          <ul className="room-picker-grid">
+            {ROOMS.map((room) => {
+              const count = occupancy[room.id] ?? 0;
+              return (
                 <li key={room.id} className="room-picker-item">
                   <div className="room-picker-card">
                     <span className="room-picker-card-label">{room.label}</span>
-                    <span className={`room-picker-occupancy${count > 0 ? ' room-picker-occupancy-active' : ''}`}>
+                    <span
+                      className={`room-picker-occupancy${count > 0 ? ' room-picker-occupancy-active' : ''}`}
+                    >
                       {count > 0 ? `${count} watching` : 'Empty'}
                     </span>
                     <div className="room-picker-actions">
@@ -156,29 +135,17 @@ export function Landing() {
                     </div>
                   </div>
                 </li>
-                );
-              })}
-            </ul>
-          </div>
-
-          <div className="landing-section landing-edit">
-            <h2 className="sidebar-heading landing-section-heading">
-              Edit teletext
-            </h2>
-            <p className="landing-section-description">
-              Open the editor to create or change a page on your own: your edits show up wherever the page is watched.
-            </p>
-            <button
-              type="button"
-              className="sidebar-action-btn landing-open-editor-btn"
-              onClick={handleOpenEditor}
-              aria-label="Open the teletext editor"
-            >
-              Open the editor
-            </button>
-          </div>
+              );
+            })}
+          </ul>
         </section>
       )}
+
+      <footer className="landing-footer">
+        <Link to="/moderator" className="landing-footer-link">
+          Moderator
+        </Link>
+      </footer>
     </div>
   );
 }
