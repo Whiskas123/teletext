@@ -13,27 +13,26 @@
  *   therefore be mounted inside `BrowserRouter`.
  * - Cursors are disabled: co-presence cursors are not needed anymore (editing is
  *   solo and watching is coordinated via chat / votes / the presence list).
- * - The one-time seed import ({@link useSeedPages}) runs here, once, so the
- *   global `pages` channel is seeded regardless of which screen mounts first.
+ *
+ * ## No seeding happens here any more
+ *
+ * This used to mount a `SeedPages` helper that wrote the compiled seed pages
+ * into the `pages` channel on load, overwriting whatever was there whenever
+ * `SEED_VERSION` was raised — collaborative edits included, by design. That was
+ * the mechanism that made a redeploy able to destroy pages.
+ *
+ * Content now comes from the database: the seed pages were preserved into
+ * `live_pages` by `scripts/importSeedPages.ts`, and what visitors see is
+ * whatever has been published from `/manage`. Deploying changes nothing about
+ * the live document.
  */
 
 import { type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { PlayProvider } from '@playhtml/react';
 
-import { useSeedPages } from './seedPages';
-
 /** Fixed playhtml namespace for the app's single shared document. */
 export const GLOBAL_ROOM = 'teletext-house';
-
-/**
- * Render-null helper that runs the one-time seed import (Req 7.1) inside the
- * `PlayProvider` so the global `pages` channel is seeded exactly once.
- */
-function SeedPages() {
-  useSeedPages();
-  return null;
-}
 
 export interface GlobalProviderProps {
   children: ReactNode;
@@ -53,7 +52,6 @@ export function GlobalProvider({ children }: GlobalProviderProps) {
       }}
       pathname={pathname}
     >
-      <SeedPages />
       {children}
     </PlayProvider>
   );

@@ -14,6 +14,20 @@ export const TELETEXT_COLORS = [
 
 export type TeletextColor = (typeof TELETEXT_COLORS)[number];
 
+/** Hex values matching the teletext palette in styles/teletext.css — the one
+ * place this mapping is defined; other modules (export, remote cursors, PNG
+ * import) import it rather than keeping their own copy. */
+export const TELETEXT_COLOR_HEX: Record<TeletextColor, string> = {
+  black: '#000000',
+  red: '#ff0000',
+  green: '#00ff00',
+  yellow: '#ffff00',
+  blue: '#0000ff',
+  magenta: '#ff00ff',
+  cyan: '#00ffff',
+  white: '#ffffff',
+};
+
 export const COLS = 40;
 export const ROWS = 24;
 export const TOTAL_CELLS = COLS * ROWS;

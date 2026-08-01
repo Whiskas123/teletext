@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import {
   BrowserRouter,
   Routes,
@@ -16,6 +17,13 @@ import { SoloViewer } from './components/Room/SoloViewer';
 import { validateRoomId } from './domain/roomId';
 import './App.css';
 import './styles/teletext.css';
+
+// Lazy: carries the glyph atlas, which only this rarely-visited admin page
+// needs — no reason to put it in the bundle every visitor downloads.
+const ImportArchivePage = lazy(() => import('./components/Room/ImportArchivePage'));
+
+// Lazy for the same reason: an admin-only screen no visitor ever opens.
+const ManageArchivePage = lazy(() => import('./components/Room/ManageArchivePage'));
 
 /**
  * Guards the `:roomId` route param: validates the Room_ID *before* entering the
@@ -63,6 +71,26 @@ function App() {
 
           {/* Moderator sign-in (device-local; see collab/moderator.ts). */}
           <Route path="/moderator" element={<ModeratorLogin />} />
+
+          {/* Convert an archive render into a page (see domain/archiveImport.ts). */}
+          <Route
+            path="/import"
+            element={
+              <Suspense fallback={null}>
+                <ImportArchivePage />
+              </Suspense>
+            }
+          />
+
+          {/* Choose which archive captures are published to which page numbers. */}
+          <Route
+            path="/manage"
+            element={
+              <Suspense fallback={null}>
+                <ManageArchivePage />
+              </Suspense>
+            }
+          />
 
           {/* Legacy redirects so old links don't 404. */}
           <Route path="/view" element={<Navigate to="/" replace />} />

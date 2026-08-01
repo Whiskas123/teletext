@@ -346,10 +346,7 @@
   cursor: pointer;
 }
 
-.tv-guide-entry-btn:hover {
-  background: #1a1a1a;
-  border-color: #555;
-}
+
 
 .tv-guide-entry-btn:focus-visible {
   outline: 2px solid #ffff00;
@@ -629,6 +626,7 @@
 .landing-footer {
   display: flex;
   justify-content: center;
+  gap: 1.5rem;
   padding-top: 0.5rem;
 }
 
@@ -1146,16 +1144,20 @@
   font-size: 1rem;
 }
 
+/* CSS Grid (not `columns`/multicol) so each entry is a genuinely separate,
+   correctly hit-tested box — see the comment in YellowPages.tsx on why
+   multicol was replaced. `grid-auto-flow: column` + the row count set inline
+   there fills column 1 top-to-bottom, then column 2, same as before. */
 .yellow-pages-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  columns: 2;
+  display: grid;
+  grid-auto-flow: column;
   column-gap: 1.5rem;
 }
 
 .yellow-pages-entry {
-  break-inside: avoid;
   margin: 0;
 }
 
@@ -1171,6 +1173,12 @@
   cursor: pointer;
   color: inherit;
   font: inherit;
+}
+
+/* Override the global button:hover grey background (index.css) — this button
+   stays transparent, only the name underlines on hover. */
+.yellow-pages-entry-btn:hover {
+  background: transparent;
 }
 
 .yellow-pages-entry-btn:hover .yellow-pages-name {
@@ -1218,4 +1226,153 @@
 
 .room-back-link:hover {
   text-decoration: underline;
+}
+
+/* --- Manage archive (/manage): choosing what the site shows --- */
+/*
+ * A working screen rather than a designed one: dense, monospaced, and close to
+ * the terminal aesthetic of the rest of the app. Two columns on a wide window
+ * (results | selected capture), stacked below 900px.
+ */
+.manage {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 1rem;
+  font-family: monospace;
+  color: #ddd;
+}
+
+.manage-backup {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #333;
+}
+
+.manage-filters {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.manage-filters select,
+.manage-filters input[type='number'] {
+  background: #111;
+  color: #ddd;
+  border: 1px solid #444;
+  font-family: monospace;
+  padding: 0.25rem 0.4rem;
+}
+
+.manage-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.manage-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .manage-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The result list scrolls on its own so the preview stays put while browsing. */
+.manage-results {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.manage-capture-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.manage-capture {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  width: 100%;
+  text-align: left;
+  background: #111;
+  border: 1px solid #333;
+  color: #ddd;
+  font-family: monospace;
+  font-size: 0.78rem;
+  padding: 0.45rem 0.6rem;
+  cursor: pointer;
+}
+
+.manage-capture:hover {
+  border-color: #4cf;
+}
+
+.manage-capture-selected {
+  border-color: #ff0;
+  background: #1a1a00;
+}
+
+.manage-capture-title {
+  color: #999;
+  flex-basis: 100%;
+}
+
+/* The preview is a real 40x24 grid; let it shrink rather than overflow. */
+.manage-preview {
+  margin-bottom: 0.75rem;
+  overflow-x: auto;
+}
+
+.manage-detail textarea,
+.manage-detail input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.manage-note {
+  font-size: 0.78rem;
+  color: #999;
+}
+
+.manage-note-error {
+  color: #f66;
+}
+
+.manage-published {
+  margin-top: 2rem;
+}
+
+.manage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.manage-table th,
+.manage-table td {
+  text-align: left;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid #333;
+  vertical-align: middle;
+}
+
+.manage-table th {
+  color: #999;
+  font-weight: normal;
 }

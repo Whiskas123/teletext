@@ -145,6 +145,9 @@ export function Landing() {
         <Link to="/moderator" className="landing-footer-link">
           Moderator
         </Link>
+        <Link to="/import" className="landing-footer-link">
+          Import a page
+        </Link>
       </footer>
     </div>
   );

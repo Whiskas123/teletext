@@ -13,7 +13,9 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
-    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    // `api/` holds the serverless routes and their auth/session logic, which is
+    // security-relevant and worth the same coverage as the domain modules.
+    include: ['src/**/*.{test,spec}.{ts,tsx}', 'api/**/*.{test,spec}.ts'],
     // No tests exist yet during initial setup; don't fail the run.
     passWithNoTests: true,
   },

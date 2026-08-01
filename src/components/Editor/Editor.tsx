@@ -7,6 +7,16 @@ import {
   type BrushHistoryState,
 } from "../../domain/brush";
 import {
+  IconBack,
+  IconBlink,
+  IconBlock,
+  IconDoubleHeight,
+  IconExport,
+  IconPixel,
+  IconTextCursor,
+  IconTrash,
+} from "./icons";
+import {
   brushColorsFromSlots,
   COLS,
   DEFAULT_SIXEL_COLORS,
@@ -22,6 +32,7 @@ import {
   sixelPartAt,
   resolveDoubleHeightCursor,
   slotColorsFromBrush,
+  TELETEXT_COLOR_HEX,
   TELETEXT_COLORS,
   TOTAL_CELLS,
   type Cell,
@@ -107,21 +118,9 @@ function defaultColorsForMotif(
   );
 }
 
-/** Hex values matching the teletext palette in styles/teletext.css, used to color remote cursors. */
-const TELETEXT_COLOR_HEX: Record<string, string> = {
-  black: "#000000",
-  red: "#ff0000",
-  green: "#00ff00",
-  yellow: "#ffff00",
-  blue: "#0000ff",
-  magenta: "#ff00ff",
-  cyan: "#00ffff",
-  white: "#ffffff",
-};
-
 /** Resolve a remote-cursor color (a teletext color name or a raw CSS color) to a CSS color value. */
 function resolveCursorColor(color: string): string {
-  return TELETEXT_COLOR_HEX[color] ?? color;
+  return (TELETEXT_COLOR_HEX as Record<string, string | undefined>)[color] ?? color;
 }
 
 /** A default empty cell value, matching createEmptyPage()'s cell shape. */
@@ -837,7 +836,7 @@ export function Editor({
               </div>
             </div>
             <div
-              className={`text-preview-cell teletext-fg-${fg} teletext-bg-${bg}`}
+              className={`text-preview-cell teletext-fg-${fg} teletext-bg-${bg} ${doubleHeightOn ? "text-preview-cell-double-height" : ""}`}
               aria-hidden
             />
           </div>
@@ -848,7 +847,8 @@ export function Editor({
             aria-pressed={doubleHeightOn}
             title="Typed characters render at twice the row height. Not available on the last row."
           >
-            Double height
+            <IconDoubleHeight className="sidebar-toggle-icon" />
+            <span>Double height</span>
           </button>
         </section>
 
@@ -859,15 +859,19 @@ export function Editor({
               type="button"
               className={`sidebar-toggle ${brushMode === "off" ? "active" : ""}`}
               onClick={() => setBrushMode("off")}
+              title="Type text"
             >
-              Off
+              <IconTextCursor className="sidebar-toggle-icon" />
+              <span>Off</span>
             </button>
             <button
               type="button"
               className={`sidebar-toggle ${brushMode === "block" ? "active" : ""}`}
               onClick={() => setBrushMode("block")}
+              title="Paint whole mosaic cells with a motif"
             >
-              Block
+              <IconBlock className="sidebar-toggle-icon" />
+              <span>Block</span>
             </button>
             <button
               type="button"
@@ -875,7 +879,8 @@ export function Editor({
               onClick={() => setBrushMode("pixel")}
               title="Paint a single sixth of a cell. Alt+click to erase it."
             >
-              Pixel
+              <IconPixel className="sidebar-toggle-icon" />
+              <span>Pixel</span>
             </button>
             <button
               type="button"
@@ -883,7 +888,8 @@ export function Editor({
               onClick={() => setBrushMode("blink")}
               title="Paint blink on cells. Alt+click to remove blink."
             >
-              Blink
+              <IconBlink className="sidebar-toggle-icon" />
+              <span>Blink</span>
             </button>
           </div>
           {brushMode === "block" && (
@@ -1134,7 +1140,8 @@ export function Editor({
                 void onBackToGrid();
               }}
             >
-              Back to grid
+              <IconBack className="sidebar-toggle-icon" />
+              <span>Back to grid</span>
             </button>
           )}
           <button
@@ -1144,7 +1151,8 @@ export function Editor({
               exportPageAsPng(page, "teletext.png", pageNumber ?? 100)
             }
           >
-            Export PNG
+            <IconExport className="sidebar-toggle-icon" />
+            <span>Export PNG</span>
           </button>
           {clearConfirmShown ? (
             <div className="clear-confirm">
@@ -1175,7 +1183,8 @@ export function Editor({
               className="sidebar-action-btn sidebar-action-btn-clear"
               onClick={() => setClearConfirmShown(true)}
             >
-              Clear page
+              <IconTrash className="sidebar-toggle-icon" />
+              <span>Clear page</span>
             </button>
           )}
         </section>

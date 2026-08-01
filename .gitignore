@@ -24,3 +24,12 @@ dist-ssr
 *.sw?
 .vercel
 .teletext-pages
+
+# The archive corpora (~27MB of GIF/PNG). Source material, not build input:
+# `bun run db:import-corpus` decodes them locally and stores the result in the
+# database, so nothing at deploy time ever reads them. Keep them out of git
+# history — committing them is easy and undoing it is not.
+archive-corpus-rtp/
+archive-corpus-sic/
+archive-samples/
+.env*

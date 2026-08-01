@@ -1,16 +1,14 @@
 import type { SixelColors, TeletextPage } from '../types/teletext';
-import { isDoubleHeightShadow, isEffectiveDoubleHeight, sixelBit } from '../types/teletext';
+import {
+  isDoubleHeightShadow,
+  isEffectiveDoubleHeight,
+  sixelBit,
+  TELETEXT_COLOR_HEX,
+} from '../types/teletext';
 
-const COLOR_HEX: Record<string, string> = {
-  black: '#000000',
-  red: '#ff0000',
-  green: '#00ff00',
-  yellow: '#ffff00',
-  blue: '#0000ff',
-  magenta: '#ff00ff',
-  cyan: '#00ffff',
-  white: '#ffffff',
-};
+// Widened to a plain string index so callers here (which look colors up by
+// plain `string`, not the narrower `TeletextColor`) can index it directly.
+const COLOR_HEX = TELETEXT_COLOR_HEX as Record<string, string | undefined>;
 
 const COLS = 40;
 const ROWS = 24;

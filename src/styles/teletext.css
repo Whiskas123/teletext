@@ -185,6 +185,7 @@
   outline-offset: -1px;
 }
 
+
 /* Blinking blocks/cells: synchronized 1s on, 1s off (visibility driven by JS) */
 .teletext-cell.teletext-blink.teletext-blink-hidden {
   opacity: 0;
@@ -392,6 +393,10 @@
   gap: 0.5rem;
   width: 100%;
   min-width: 0;
+  /* Reserve room for the double-height preview (2 × 1.35em @ 28px font-size,
+     plus its 2px×2 border ≈ 79.6px) up front, so toggling "Double height" only
+     resizes the cell within this row instead of reflowing the whole sidebar. */
+  min-height: 5rem;
 }
 
 .text-preview-col {
@@ -455,6 +460,17 @@
   line-height: 1;
 }
 
+/* Mirrors the grid's double-height rendering: the box doubles in height and
+   the glyph stretches to fill it, so the preview shows what typing will
+   actually look like while "Double height" is on. */
+.text-preview-cell.text-preview-cell-double-height {
+  height: calc(1.35em * 2);
+}
+
+.text-preview-cell.text-preview-cell-double-height::before {
+  transform: scale(1.15) scaleY(2);
+}
+
 .color-swatch-mini {
   width: 1rem;
   height: 1rem;
@@ -467,10 +483,14 @@
   gap: 0.35rem;
 }
 
+/* Four buttons across is tight for icon + label side by side, so stack icon
+   above a smaller label here instead of the row layout the base rule uses. */
 .brush-mode-toggles .sidebar-toggle {
   flex: 1;
-  padding: 0.5rem 0.4rem;
-  font-size: 0.8rem;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.45rem 0.2rem;
+  font-size: 0.68rem;
 }
 
 .brush-options {
@@ -762,6 +782,241 @@
   overflow: auto;
 }
 
+/* /import: source image + grid overlay on the left, converted preview on the right */
+.import-dual-pane {
+  display: flex;
+  flex-direction: row;
+  gap: 1.5rem;
+  width: 100%;
+  height: 100%;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.import-pane {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.import-pane-label {
+  color: #888;
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* Shown at its true size: the render's pixel grid is what the importer reads,
+   so any smoothing here would misrepresent what it is working from. */
+.import-source-image {
+  display: block;
+  max-width: 100%;
+  image-rendering: pixelated;
+}
+
+/* /import contact sheet: one card per dropped render, page number on top. */
+.import-sheet {
+  display: block;
+  align-items: stretch;
+  overflow: auto;
+}
+
+.import-sheet-drag {
+  outline: 2px dashed #ffff00;
+  outline-offset: -8px;
+}
+
+.import-empty {
+  color: #888;
+  text-align: center;
+  line-height: 1.8;
+  margin-top: 4rem;
+}
+
+.import-card-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.import-card {
+  border: 1px solid #444;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+/* Red is "can't import this", amber "will import, but look at it". */
+.import-card-blocked {
+  border-color: #ff4040;
+}
+.import-card-warn {
+  border-color: #ffff00;
+}
+
+.import-card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* The page number reads as a teletext page number, because that is what it is. */
+.import-card-page {
+  width: 3.6em;
+  padding: 0.15rem 0.3rem;
+  background: #000;
+  border: 1px solid #444;
+  color: #ffff00;
+  font: inherit;
+  font-size: 1.3rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.import-card-derived {
+  color: #666;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.import-card-remove {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.2rem;
+}
+.import-card-remove:hover {
+  color: #ff4040;
+}
+
+.import-card-thumb {
+  display: block;
+  padding: 0;
+  border: none;
+  background: #000;
+  cursor: pointer;
+  line-height: 0;
+}
+
+.import-card-thumb img {
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+}
+
+.import-card-thumb-failed {
+  display: block;
+  padding: 2.5rem 0;
+  color: #ff4040;
+  text-align: center;
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.import-card-name,
+.import-card-status {
+  font-size: 0.7rem;
+  color: #888;
+  overflow-wrap: anywhere;
+}
+
+.import-card-blocked .import-card-status {
+  color: #ff6060;
+}
+.import-card-warn .import-card-status {
+  color: #ffff00;
+}
+
+.import-inspect-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.import-inspect-bar .sidebar-action-btn {
+  width: auto;
+}
+
+.import-inspect-title {
+  max-width: 18rem;
+}
+
+.import-inspect-panes {
+  display: flex;
+  flex-direction: row;
+  gap: 1.5rem;
+  width: 100%;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.import-renumber-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.import-renumber-row .sidebar-action-btn {
+  width: auto;
+}
+
+.import-renumber-input {
+  width: 4rem;
+}
+
+/* /import: one row per unrecognised stencil, drawn large with a box to name it. */
+.import-glyph-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.import-glyph-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.import-glyph-stencil {
+  flex: none;
+  width: 39px;
+  height: 48px;
+  border: 1px solid #444;
+}
+
+.import-glyph-fields {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.import-glyph-input {
+  width: 3rem;
+  flex: none;
+  text-align: center;
+}
+
 /* Hidden input for accented/IME input; receives focus so composition works */
 .editor-hidden-input {
   position: absolute;
@@ -833,6 +1088,10 @@
 
 .sidebar-toggle {
   width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
   padding: 0.6rem 0.75rem;
   font-size: 0.85rem;
   font-weight: 500;
@@ -842,6 +1101,11 @@
   color: #ddd;
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+/* Icon that precedes a button's label (brush modes, Double height, actions). */
+.sidebar-toggle-icon {
+  flex-shrink: 0;
 }
 
 .sidebar-toggle:hover {
@@ -857,6 +1121,10 @@
 
 .sidebar-action-btn {
   width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
   padding: 0.65rem 0.85rem;
   font-size: 0.85rem;
   font-weight: 500;
@@ -924,4 +1192,14 @@
   grid-template-columns: repeat(2, 1fr);
   gap: 0.35rem;
   min-width: 0;
+}
+
+/* /import: the "this folder repeats itself" question, asked before decoding. */
+.import-pending {
+  border: 1px solid #ffff00;
+  padding: 0.75rem;
+}
+
+.import-pending .sidebar-action-btn {
+  margin-top: 0.4rem;
 }

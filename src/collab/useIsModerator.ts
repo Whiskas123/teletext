@@ -1,27 +1,43 @@
 /**
- * useIsModerator — reactive read of the moderator flag (`collab/moderator.ts`).
+ * useIsModerator — reactive read of admin status (`collab/adminSession.ts`).
  *
- * Plain `localStorage` reads don't re-render anything on their own. This hook
- * re-checks the flag whenever it changes: `storage` events cover other tabs on
- * the same origin, and the module's own custom event covers this tab (the
- * `storage` event famously never fires in the tab that made the write).
+ * Keeps the boolean shape its call sites already expect, so gating archive
+ * edits reads the same as before; what changed is where the answer comes from.
+ * It used to be a `localStorage` flag any visitor could set. It is now the
+ * server's answer about an `HttpOnly` session cookie.
+ *
+ * `useSyncExternalStore` is the right primitive here: the status is external,
+ * module-level, shared by every screen that asks, and changes outside React.
  */
 
-import { useEffect, useState } from 'react';
-import { isModerator, MODERATOR_EVENT } from './moderator';
+import { useEffect, useSyncExternalStore } from 'react';
 
-export function useIsModerator(): boolean {
-  const [moderator, setModeratorFlag] = useState(isModerator);
+import {
+  getAdminStatus,
+  refreshAdminStatus,
+  subscribeAdminStatus,
+  type AdminStatus,
+} from './adminSession';
+
+/** The full status, for screens that need to distinguish "not yet known". */
+export function useAdminStatus(): AdminStatus {
+  const status = useSyncExternalStore(subscribeAdminStatus, getAdminStatus);
 
   useEffect(() => {
-    const handler = () => setModeratorFlag(isModerator());
-    window.addEventListener(MODERATOR_EVENT, handler);
-    window.addEventListener('storage', handler);
-    return () => {
-      window.removeEventListener(MODERATOR_EVENT, handler);
-      window.removeEventListener('storage', handler);
-    };
-  }, []);
+    // Only asks once per page load: concurrent callers share one request and
+    // the answer is cached module-wide.
+    if (status.loading) void refreshAdminStatus();
+  }, [status.loading]);
 
-  return moderator;
+  return status;
+}
+
+/**
+ * Whether this browser is recognised as the moderator.
+ *
+ * `false` while the first check is in flight, so archive pages stay read-only
+ * until the server says otherwise rather than the other way round.
+ */
+export function useIsModerator(): boolean {
+  return useAdminStatus().admin;
 }
