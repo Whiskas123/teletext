@@ -25,7 +25,9 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
+import { applyMenu, type MenuItem } from '../src/domain/menu';
 import { pageToArray, pageToCellMap } from '../src/domain/pageEncoding';
+import { shiftPageDown } from '../src/domain/pageTransform';
 import { describeRejection, validatePublication } from '../src/domain/publication';
 import { db } from './_lib/db';
 import { isAdmin } from './_lib/auth';
@@ -42,10 +44,13 @@ export default async function handler(
       const rows = await db()`
         select
           p.page_number, p.title, p.description, p.published_at, p.capture_id,
+          p.shift_down, p.menu_id,
           c.source, c.original_page, c.sub, c.topic, c.scheme,
-          c.first_seen, c.manifest_title
+          c.first_seen, c.manifest_title, c.thumbnail,
+          m.name as menu_name
         from published_pages p
         join archive_captures c on c.id = p.capture_id
+        left join custom_menus m on m.id = p.menu_id
         order by p.page_number
       `;
       json(res, 200, { published: rows });
@@ -84,15 +89,40 @@ export default async function handler(
 
     const { pageNumber, title, description } = validated.value;
 
+    // The transforms, in the order they have to happen: shifting moves the
+    // capture's own bottom row off the page, and only then is there a clean
+    // last row for the menu to occupy. Doing it the other way round would
+    // write the menu and immediately shift it away.
+    const shiftDown = body.shiftDown === true;
+    const menuId = Number(body.menuId);
+    const useMenu = Number.isInteger(menuId) && menuId > 0;
+
+    const menuRows = useMenu
+      ? await db()`select id, items from custom_menus where id = ${menuId}`
+      : [];
+    if (useMenu && menuRows.length === 0) {
+      fail(res, 400, 'That menu no longer exists.');
+      return;
+    }
+
+    let page = pageToArray(capture.cells);
+    if (shiftDown) page = shiftPageDown(page);
+    if (menuRows.length > 0) {
+      page = applyMenu(page, { items: menuRows[0].items as MenuItem[] });
+    }
+
     await db()`
       insert into published_pages
-        (page_number, capture_id, title, description, published_at)
+        (page_number, capture_id, title, description, shift_down, menu_id, published_at)
       values
-        (${pageNumber}, ${captureId}, ${title}, ${description}, now())
+        (${pageNumber}, ${captureId}, ${title}, ${description},
+         ${shiftDown}, ${useMenu ? menuId : null}, now())
       on conflict (page_number) do update
         set capture_id   = excluded.capture_id,
             title        = excluded.title,
             description  = excluded.description,
+            shift_down   = excluded.shift_down,
+            menu_id      = excluded.menu_id,
             published_at = excluded.published_at
     `;
 
@@ -100,8 +130,10 @@ export default async function handler(
       pageNumber,
       title,
       description,
+      shiftDown,
+      menuId: useMenu ? menuId : null,
       // playhtml's index-keyed shape, so the client can write it straight in.
-      cells: pageToCellMap(pageToArray(capture.cells)),
+      cells: pageToCellMap(page),
     });
   } catch (error) {
     serverError(res, 'published', error);

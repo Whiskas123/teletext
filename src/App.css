@@ -1230,12 +1230,11 @@
 
 /* --- Manage archive (/manage): choosing what the site shows --- */
 /*
- * A working screen rather than a designed one: dense, monospaced, and close to
- * the terminal aesthetic of the rest of the app. Two columns on a wide window
- * (results | selected capture), stacked below 900px.
+ * A working screen rather than a designed one: dense, monospaced, close to the
+ * terminal look of the rest of the app.
  */
 .manage {
-  max-width: 1400px;
+  max-width: 1600px;
   margin: 0 auto;
   padding: 1rem;
   font-family: monospace;
@@ -1275,47 +1274,63 @@
   gap: 0.4rem;
   font-size: 0.8rem;
   cursor: pointer;
+  margin: 0.5rem 0;
 }
 
 .manage-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 620px);
   gap: 1.5rem;
   align-items: start;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .manage-body {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
-/* The result list scrolls on its own so the preview stays put while browsing. */
-.manage-results {
-  max-height: 70vh;
-  overflow-y: auto;
+/* --- Thumbnails -------------------------------------------------------- */
+/*
+ * One canvas pixel per teletext cell (40x24), scaled up by CSS. `pixelated`
+ * keeps the cell edges hard instead of smearing them, which is what makes a
+ * 40x24 image still read as a page layout.
+ */
+.teletext-thumb {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 40 / 24;
+  image-rendering: pixelated;
+  background: #000;
+  border: 1px solid #333;
 }
 
-.manage-capture-list {
+.manage-results {
+  max-height: 78vh;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.manage-capture-grid {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.35rem;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 0.6rem;
 }
 
 .manage-capture {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
+  display: block;
   width: 100%;
   text-align: left;
   background: #111;
   border: 1px solid #333;
   color: #ddd;
   font-family: monospace;
-  font-size: 0.78rem;
-  padding: 0.45rem 0.6rem;
+  font-size: 0.72rem;
+  padding: 0.35rem;
   cursor: pointer;
 }
 
@@ -1328,51 +1343,206 @@
   background: #1a1a00;
 }
 
-.manage-capture-title {
-  color: #999;
-  flex-basis: 100%;
+.manage-capture-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin-top: 0.3rem;
 }
 
-/* The preview is a real 40x24 grid; let it shrink rather than overflow. */
+/* --- Previews ----------------------------------------------------------- */
+/*
+ * The grid is laid out in `em` (40 columns of 1em), so its width is exactly
+ * 40em and setting a font-size scales the whole page. Container query units
+ * make that automatic: at 2.5cqw the grid is 100cqw, i.e. exactly the width of
+ * this box, whatever that turns out to be.
+ *
+ * This is why the preview is no longer cropped — it is scaled to fit rather
+ * than clipped, and a teletext page only means anything whole.
+ */
 .manage-preview {
+  container-type: inline-size;
+  background: #000;
+  border: 1px solid #333;
+  overflow: hidden;
+}
+
+.manage-preview .teletext-screen,
+.manage-preview .teletext-grid,
+.manage-preview .teletext-screen-compact {
+  font-size: 2.5cqw;
+}
+
+/* Older engines without container units: a fixed size that still fits the
+   narrower of the two preview columns rather than overflowing it. */
+@supports not (width: 1cqw) {
+  .manage-preview .teletext-screen,
+  .manage-preview .teletext-grid {
+    font-size: 7px;
+  }
+}
+
+.manage-preview-empty {
+  opacity: 0.35;
+}
+
+/* The menu strip preview only needs its last row, but rendering the whole page
+   keeps it honest about where the strip actually sits. */
+.manage-preview-strip {
+  margin: 0.5rem 0;
+}
+
+.manage-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
   margin-bottom: 0.75rem;
-  overflow-x: auto;
+}
+
+@media (max-width: 700px) {
+  .manage-compare {
+    grid-template-columns: 1fr;
+  }
+}
+
+.manage-compare-title {
+  font-size: 0.75rem;
+  font-weight: normal;
+  color: #999;
+  margin: 0 0 0.25rem;
 }
 
 .manage-detail textarea,
-.manage-detail input {
+.manage-detail input[type='number'],
+.manage-detail input[type='text'] {
   width: 100%;
   box-sizing: border-box;
 }
 
 .manage-note {
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   color: #999;
+  margin: 0.35rem 0;
 }
 
 .manage-note-error {
   color: #f66;
 }
 
+.manage-mini-btn {
+  background: #222;
+  color: #ddd;
+  border: 1px solid #444;
+  font-family: monospace;
+  font-size: 0.72rem;
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+}
+
+.manage-mini-btn:hover {
+  border-color: #4cf;
+}
+
+.manage-mini-btn-danger:hover {
+  border-color: #f66;
+  color: #f66;
+}
+
+/* --- Menu editor -------------------------------------------------------- */
+.menu-editor {
+  border: 1px solid #333;
+  padding: 0.6rem;
+  margin: 0.75rem 0;
+}
+
+.menu-editor-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.menu-editor-head select {
+  background: #111;
+  color: #ddd;
+  border: 1px solid #444;
+  font-family: monospace;
+  padding: 0.25rem 0.4rem;
+  flex: 1 1 12rem;
+}
+
+.menu-editor-form {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.menu-editor-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.menu-editor-slot {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.menu-editor-slot input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.menu-editor-page {
+  flex: 0 0 5.5rem;
+}
+
+/* The fastext colours, so a slot is identifiable without reading its label. */
+.menu-swatch {
+  width: 0.9rem;
+  height: 0.9rem;
+  flex: 0 0 auto;
+  border: 1px solid #444;
+}
+
+.menu-swatch-red { background: #f00; }
+.menu-swatch-green { background: #0f0; }
+.menu-swatch-yellow { background: #ff0; }
+.menu-swatch-cyan { background: #0ff; }
+
+.menu-editor-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* --- Published list ----------------------------------------------------- */
 .manage-published {
   margin-top: 2rem;
 }
 
-.manage-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.8rem;
+.manage-published-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 0.75rem;
 }
 
-.manage-table th,
-.manage-table td {
-  text-align: left;
-  padding: 0.35rem 0.5rem;
-  border-bottom: 1px solid #333;
-  vertical-align: middle;
+.manage-published-card {
+  background: #111;
+  border: 1px solid #333;
+  padding: 0.4rem;
+  font-size: 0.72rem;
 }
 
-.manage-table th {
-  color: #999;
-  font-weight: normal;
+.manage-published-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-top: 0.3rem;
+  align-items: flex-start;
 }

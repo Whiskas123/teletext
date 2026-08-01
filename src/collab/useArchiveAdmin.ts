@@ -12,12 +12,16 @@
  * never has to remember that publishing is two writes.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { usePageData } from '@playhtml/react';
 
+import { applyMenu, type CustomMenu, type MenuDraft } from '../domain/menu';
 import { pageToArray } from '../domain/pageEncoding';
+import { shiftPageDown } from '../domain/pageTransform';
 import { useGuide } from './useGuide';
 import { useImportPages } from './useImportPages';
-import type { TeletextPage } from './types';
+import { PAGES_CHANNEL } from './useEditPage';
+import type { PagesData, TeletextPage } from './types';
 
 /** A capture as the list endpoint returns it — metadata only, no cells. */
 export interface CaptureSummary {
@@ -43,6 +47,8 @@ export interface CaptureSummary {
   snapped_pixels: number;
   unknown_glyphs: number;
   corpus_file: string;
+  /** 960 palette digits for the browser's postage-stamp preview. */
+  thumbnail: string | null;
 }
 
 /** One published slot, joined with the capture behind it. */
@@ -59,6 +65,19 @@ export interface PublishedEntry {
   scheme: string | null;
   first_seen: string | null;
   manifest_title: string | null;
+  thumbnail: string | null;
+  /** Transforms this page was published with, so they can be re-applied. */
+  shift_down: boolean;
+  menu_id: number | null;
+  menu_name: string | null;
+}
+
+/** What a publication does to a capture on its way to the page. */
+export interface PublishTransforms {
+  /** Move every row down one, dropping the last. */
+  shiftDown: boolean;
+  /** Saved menu to write over the last row, or `null` to keep the capture's. */
+  menuId: number | null;
 }
 
 export interface CaptureFilters {
@@ -102,21 +121,38 @@ export interface ArchiveAdminApi {
   captures: CaptureSummary[];
   total: number;
   published: PublishedEntry[];
+  menus: CustomMenu[];
   loading: boolean;
   error: string | null;
   /** Re-run the capture query with new filters. */
   search(filters: CaptureFilters, offset?: number): void;
   /** Fetch one capture's cells, for previewing. */
   loadPage(captureId: number): Promise<TeletextPage | null>;
+  /**
+   * What is on `pageNumber` right now, read from the live document — not from
+   * the database, so it reflects any collaborative edits since publication.
+   * `null` when the page is empty.
+   */
+  livePage(pageNumber: number): TeletextPage | null;
+  /**
+   * Apply the publish-time transforms to a page, exactly as the server will.
+   * Lets the screen preview the real outcome before anything is written.
+   */
+  transform(page: TeletextPage, transforms: PublishTransforms): TeletextPage;
   /** Record the assignment, then write the cells into playhtml. */
   publish(input: {
     pageNumber: number;
     captureId: number;
     title: string;
     description: string;
+    transforms: PublishTransforms;
   }): Promise<{ ok: true } | { ok: false; error: string }>;
   /** Clear the record and blank the page in playhtml. */
   unpublish(pageNumber: number): Promise<{ ok: true } | { ok: false; error: string }>;
+  /** Create or update a saved menu. */
+  saveMenu(draft: MenuDraft & { id?: number }): Promise<{ ok: true } | { ok: false; error: string }>;
+  /** Remove a saved menu. Published pages keep their cells. */
+  deleteMenu(id: number): Promise<{ ok: true } | { ok: false; error: string }>;
 }
 
 const PAGE_SIZE = 60;
@@ -126,6 +162,10 @@ export function useArchiveAdmin(): ArchiveAdminApi {
   const { setTitle } = useGuide();
 
   const [published, setPublished] = useState<PublishedEntry[]>([]);
+  const [menus, setMenus] = useState<CustomMenu[]>([]);
+  // The live document, so the screen can show what is on a page right now
+  // rather than what the database says was published to it.
+  const [livePages] = usePageData<PagesData>(PAGES_CHANNEL, {});
   const [query, setQuery] = useState<{ filters: CaptureFilters; offset: number }>({
     filters: {},
     offset: 0,
@@ -191,9 +231,51 @@ export function useArchiveAdmin(): ArchiveAdminApi {
 
   useEffect(reloadPublished, [reloadPublished]);
 
+  const reloadMenus = useCallback(() => {
+    getJson<{ menus: CustomMenu[] }>('/api/menus')
+      .then((body) => setMenus(body.menus))
+      .catch(() => setMenus([]));
+  }, []);
+
+  useEffect(reloadMenus, [reloadMenus]);
+
   const search = useCallback((filters: CaptureFilters, offset = 0) => {
     setQuery({ filters, offset });
   }, []);
+
+  /** Menus by id, so a publication's transforms can be resolved cheaply. */
+  const menusById = useMemo(
+    () => new Map(menus.map((menu) => [menu.id, menu])),
+    [menus],
+  );
+
+  const livePage = useCallback(
+    (pageNumber: number): TeletextPage | null => {
+      const stored = livePages?.[pageNumber];
+      if (stored == null) return null;
+      const page = pageToArray(stored);
+      // An entry that normalises to nothing is an empty slot, not content.
+      return page.some((cell) => cell.char !== ' ' || cell.graphics != null)
+        ? page
+        : null;
+    },
+    [livePages],
+  );
+
+  /**
+   * Mirror of what `api/published.ts` does on publish, in the same order and
+   * from the same domain functions — shift first so the menu lands on a row
+   * the shift will not then move away.
+   */
+  const transform = useCallback(
+    (page: TeletextPage, { shiftDown, menuId }: PublishTransforms): TeletextPage => {
+      let result = shiftDown ? shiftPageDown(page) : page;
+      const menu = menuId == null ? undefined : menusById.get(menuId);
+      if (menu != null) result = applyMenu(result, menu);
+      return result;
+    },
+    [menusById],
+  );
 
   const loadPage = useCallback(async (captureId: number): Promise<TeletextPage | null> => {
     try {
@@ -205,13 +287,22 @@ export function useArchiveAdmin(): ArchiveAdminApi {
   }, []);
 
   const publish = useCallback<ArchiveAdminApi['publish']>(
-    async ({ pageNumber, captureId, title, description }) => {
+    async ({ pageNumber, captureId, title, description, transforms }) => {
       try {
         const response = await fetch('/api/published', {
           method: 'PUT',
           credentials: 'same-origin',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ pageNumber, captureId, title, description }),
+          body: JSON.stringify({
+            pageNumber,
+            captureId,
+            title,
+            description,
+            // The server re-applies these rather than trusting cells from the
+            // client, so what is stored and what is shown cannot diverge.
+            shiftDown: transforms.shiftDown,
+            menuId: transforms.menuId,
+          }),
         });
         const body = (await response.json()) as { error?: string; cells?: unknown };
 
@@ -269,15 +360,62 @@ export function useArchiveAdmin(): ArchiveAdminApi {
     [importPages, setTitle, reloadPublished],
   );
 
+  const saveMenu = useCallback<ArchiveAdminApi['saveMenu']>(
+    async (draft) => {
+      try {
+        const response = await fetch('/api/menus', {
+          method: 'PUT',
+          credentials: 'same-origin',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(draft),
+        });
+        if (!response.ok) {
+          const body = (await response.json().catch(() => ({}))) as { error?: string };
+          return { ok: false, error: body.error ?? `Save failed (${response.status}).` };
+        }
+        reloadMenus();
+        return { ok: true };
+      } catch {
+        return { ok: false, error: 'Could not reach the server.' };
+      }
+    },
+    [reloadMenus],
+  );
+
+  const deleteMenu = useCallback<ArchiveAdminApi['deleteMenu']>(
+    async (id) => {
+      try {
+        const response = await fetch(`/api/menus?id=${id}`, {
+          method: 'DELETE',
+          credentials: 'same-origin',
+        });
+        if (!response.ok) {
+          const body = (await response.json().catch(() => ({}))) as { error?: string };
+          return { ok: false, error: body.error ?? `Delete failed (${response.status}).` };
+        }
+        reloadMenus();
+        return { ok: true };
+      } catch {
+        return { ok: false, error: 'Could not reach the server.' };
+      }
+    },
+    [reloadMenus],
+  );
+
   return {
     captures,
     total,
     published,
+    menus,
     loading,
     error,
     search,
     loadPage,
+    livePage,
+    transform,
     publish,
     unpublish,
+    saveMenu,
+    deleteMenu,
   };
 }

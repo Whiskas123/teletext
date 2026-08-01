@@ -40,6 +40,7 @@ import {
   type ArchiveSource,
   type CaptureRecord,
 } from '../src/domain/archiveManifest';
+import { encodeThumbnail } from '../src/domain/thumbnail';
 import { loadImageNode } from './lib/loadImageNode';
 import { withPool } from './lib/pool';
 
@@ -180,6 +181,9 @@ function rowValues(decoded: DecodedCapture): unknown[] {
     result?.droppedRowHadContent ?? false,
     result?.snappedPixels ?? 0,
     result?.unknownGlyphs.length ?? 0,
+    // One palette digit per cell, so the archive browser can draw sixty
+    // captures without fetching sixty full pages.
+    result == null ? null : encodeThumbnail(result.page),
   ];
 }
 
@@ -189,7 +193,7 @@ const COLUMNS = [
   'topic_decided_by', 'topic_source', 'scheme', 'first_seen', 'last_seen', 'capture_count',
   'tier', 'bucket', 'manifest_title', 'decode_status', 'decode_detail',
   'profile', 'width', 'height', 'cells', 'dropped_row', 'dropped_had_content',
-  'snapped_pixels', 'unknown_glyphs',
+  'snapped_pixels', 'unknown_glyphs', 'thumbnail',
 ] as const;
 
 /** `insert ... on conflict (source, digest) do update ...` for `count` rows. */

@@ -101,9 +101,30 @@ bun run db:import-corpus       # decode and catalogue both corpora (~10 min)
 bun run db:import-seed         # preserve the hand-authored seed pages
 ```
 
+If you imported before thumbnails existed, backfill them from the stored cells
+rather than re-decoding the corpus:
+
+```bash
+bun run db:migrate             # applies 002_menus_and_thumbnails.sql
+bun run db:backfill-thumbnails
+```
+
 `db:import-corpus` accepts `--dry-run` (decode and report, write nothing), `--source rtp|sic`, and `--limit N`.
 
 Then sign in at `/moderator` and use `/manage` to assign captures to page numbers.
+
+### The management screen
+
+Captures are browsed by **topic** and era, as a grid of thumbnails — a page is recognisable by its layout and colour long before it's readable, and a thumbnail is 960 bytes against the ~59 KB of a real page, so sixty of them cost a kilobyte each instead of three and a half megabytes.
+
+Selecting one shows two previews side by side, both scaled to fit rather than cropped: what will be published, and what is on the target page **right now**. That second preview reads the live playhtml document, not the database, so it includes any collaborative edits since publication — publishing overwrites it, so it's worth seeing what goes.
+
+Two adjustments can be applied on the way out:
+
+- **Shift down one row** — moves every row down and drops the last. Removes a duplicate four-colour menu strip, and re-aligns captures sitting a row higher than the rest.
+- **A custom menu** — replaces the bottom four-colour fastext strip. Menus are named, saved and reused, since the same strip goes on dozens of pages; the editor previews through the same function that publishes, so what you see is what lands.
+
+Both are recorded on the publication rather than baked only into the cells, so a menu can be edited and re-applied, and any page can be explained later.
 
 ### Backups
 
