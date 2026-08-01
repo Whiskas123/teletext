@@ -40,8 +40,7 @@ import {
   type ArchiveSource,
   type CaptureRecord,
 } from '../src/domain/archiveManifest';
-import { encodeThumbnail } from '../src/domain/thumbnail';
-import { loadImageNode } from './lib/loadImageNode';
+import { loadImageNode, encodeCaptureImage } from './lib/loadImageNode';
 import { withPool } from './lib/pool';
 
 const ROOT = join(import.meta.dirname, '..');
@@ -115,6 +114,8 @@ interface DecodedCapture {
   status: 'ok' | 'unsupported-profile' | 'failed';
   detail: string | null;
   result: ImportResult | null;
+  /** The render itself, re-encoded as lossless WebP for the admin browser. */
+  image: Buffer | null;
 }
 
 /**
@@ -130,17 +131,28 @@ async function decode(
   record: CaptureRecord,
 ): Promise<DecodedCapture> {
   const path = join(ROOT, `archive-corpus-${source}`, record.corpusFile);
+
+  // The image is stored whether or not the decode succeeds: a capture with no
+  // render profile yet is still worth looking at in the browser, and that is
+  // how you would work out what profile it needs.
+  let image: Buffer | null = null;
+  try {
+    image = await encodeCaptureImage(path);
+  } catch {
+    image = null;
+  }
+
   try {
     const pixels = await loadImageNode(path);
     const result = importArchiveImage(pixels);
-    return { record, status: 'ok', detail: null, result };
+    return { record, status: 'ok', detail: null, result, image };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const status =
       error instanceof ArchiveImportError && message.includes('Expected an archive render')
         ? 'unsupported-profile'
         : 'failed';
-    return { record, status, detail: message, result: null };
+    return { record, status, detail: message, result: null, image };
   }
 }
 
@@ -181,9 +193,7 @@ function rowValues(decoded: DecodedCapture): unknown[] {
     result?.droppedRowHadContent ?? false,
     result?.snappedPixels ?? 0,
     result?.unknownGlyphs.length ?? 0,
-    // One palette digit per cell, so the archive browser can draw sixty
-    // captures without fetching sixty full pages.
-    result == null ? null : encodeThumbnail(result.page),
+    decoded.image,
   ];
 }
 
@@ -193,7 +203,7 @@ const COLUMNS = [
   'topic_decided_by', 'topic_source', 'scheme', 'first_seen', 'last_seen', 'capture_count',
   'tier', 'bucket', 'manifest_title', 'decode_status', 'decode_detail',
   'profile', 'width', 'height', 'cells', 'dropped_row', 'dropped_had_content',
-  'snapped_pixels', 'unknown_glyphs', 'thumbnail',
+  'snapped_pixels', 'unknown_glyphs', 'image',
 ] as const;
 
 /** `insert ... on conflict (source, digest) do update ...` for `count` rows. */
@@ -206,6 +216,8 @@ function buildInsert(count: number): string {
     // `cells` arrives as a JSON string and has to be told it is jsonb.
     const cellsAt = COLUMNS.indexOf('cells');
     params[cellsAt] = `${params[cellsAt]}::jsonb`;
+    const imageAt = COLUMNS.indexOf('image');
+    params[imageAt] = `${params[imageAt]}::bytea`;
     tuples.push(`(${params.join(', ')})`);
   }
 

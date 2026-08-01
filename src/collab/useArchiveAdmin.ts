@@ -47,8 +47,8 @@ export interface CaptureSummary {
   snapped_pixels: number;
   unknown_glyphs: number;
   corpus_file: string;
-  /** 960 palette digits for the browser's postage-stamp preview. */
-  thumbnail: string | null;
+  /** Whether the archive holds a render for this capture, for the browser. */
+  has_image: boolean;
 }
 
 /** One published slot, joined with the capture behind it. */
@@ -65,7 +65,6 @@ export interface PublishedEntry {
   scheme: string | null;
   first_seen: string | null;
   manifest_title: string | null;
-  thumbnail: string | null;
   /** Transforms this page was published with, so they can be re-applied. */
   shift_down: boolean;
   menu_id: number | null;

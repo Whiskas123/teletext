@@ -13,7 +13,7 @@
     "db:migrate": "bun run --env-file=.env.local scripts/migrate.ts",
     "db:import-corpus": "bun run --env-file=.env.local scripts/importCorpus.ts",
     "db:import-seed": "bun run --env-file=.env.local scripts/importSeedPages.ts",
-    "db:backfill-thumbnails": "bun run --env-file=.env.local scripts/backfillThumbnails.ts",
+    "db:backfill-images": "bun run --env-file=.env.local scripts/backfillImages.ts",
     "db:restore": "bun run --env-file=.env.local scripts/restoreFromSnapshot.ts",
     "db:verify-decoder": "bun run scripts/verifyDecoder.ts"
   },

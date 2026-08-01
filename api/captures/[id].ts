@@ -3,6 +3,12 @@
  *
  * Separate from the list route precisely because of the cells: ~59 KB each,
  * fine for the one page being looked at, ruinous for sixty rows of results.
+ *
+ * `?format=image` returns the stored render instead — the actual GIF or PNG the
+ * archive holds, re-encoded as lossless WebP. This is what the browser's
+ * thumbnails are. It shares this route rather than taking one of its own
+ * because Vercel's Hobby plan caps how many functions a deployment may have,
+ * and an image endpoint is not worth one of them.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -30,6 +36,31 @@ export default async function handler(
   }
 
   try {
+    if (queryValue(req, 'format') === 'image') {
+      const rows = await db()`
+        select image, image_type from archive_captures where id = ${id}
+      `;
+      const stored = rows[0];
+      if (stored?.image == null) {
+        fail(res, 404, 'No image stored for that capture.');
+        return;
+      }
+
+      // Neon returns bytea as a `\x…` hex string over the HTTP driver.
+      const raw: unknown = stored.image;
+      const buffer = Buffer.isBuffer(raw)
+        ? raw
+        : Buffer.from(String(raw).replace(/^\\x/, ''), 'hex');
+
+      res.setHeader('Content-Type', String(stored.image_type ?? 'image/webp'));
+      // A capture's render never changes once imported, so this can be cached
+      // hard. `private` because the browser is admin-only: a shared cache must
+      // not hold archive images for someone who is not signed in.
+      res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+      res.status(200).send(buffer);
+      return;
+    }
+
     const rows = await db()`
       select
         id, source, original_page, sub, sub_index, topic, topic_group,

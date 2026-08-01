@@ -101,12 +101,12 @@ bun run db:import-corpus       # decode and catalogue both corpora (~10 min)
 bun run db:import-seed         # preserve the hand-authored seed pages
 ```
 
-If you imported before thumbnails existed, backfill them from the stored cells
-rather than re-decoding the corpus:
+If you imported before capture images were stored, backfill them without
+re-decoding the corpus:
 
 ```bash
-bun run db:migrate             # applies 002_menus_and_thumbnails.sql
-bun run db:backfill-thumbnails
+bun run db:migrate           # applies 002-004
+bun run db:backfill-images
 ```
 
 `db:import-corpus` accepts `--dry-run` (decode and report, write nothing), `--source rtp|sic`, and `--limit N`.
@@ -115,7 +115,9 @@ Then sign in at `/moderator` and use `/manage` to assign captures to page number
 
 ### The management screen
 
-Captures are browsed by **topic** and era, as a grid of thumbnails — a page is recognisable by its layout and colour long before it's readable, and a thumbnail is 960 bytes against the ~59 KB of a real page, so sixty of them cost a kilobyte each instead of three and a half megabytes.
+Captures are browsed by **topic** and era, as a grid of their actual renders — choosing between four captures of page 220 means reading what's on them. Each is the original GIF or PNG re-encoded as lossless WebP: ~2.2 KB, *smaller* than the source file, and they load lazily as you scroll and cache for a year.
+
+(An earlier version sent one palette colour per cell — 960 bytes drawn to a 40×24 canvas — on the theory that a page is recognisable by layout and colour before it's readable. That's true of a graphics-heavy page and false of almost every page here, because teletext is mostly text: reducing a cell to one colour throws the glyph away, and the result was a smear of dots. Lossy WebP was measured too and is *three times larger* than lossless at this content — photographic compression has nothing to work with on flat colour and hard edges.)
 
 Selecting one shows two previews side by side, both scaled to fit rather than cropped: what will be published, and what is on the target page **right now**. That second preview reads the live playhtml document, not the database, so it includes any collaborative edits since publication — publishing overwrites it, so it's worth seeing what goes.
 

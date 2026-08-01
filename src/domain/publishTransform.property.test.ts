@@ -1,11 +1,10 @@
 /**
- * Tests for the transforms applied when publishing: the row shift, the custom
- * menu strip, and the thumbnail reduction.
+ * Tests for the transforms applied when publishing: the row shift and the
+ * custom menu strip.
  *
- * These decide what actually lands on a page, so the properties that matter are
- * about not losing or inventing content: a shift moves rows and drops exactly
- * one, a menu replaces exactly one row, and a thumbnail is always the same
- * length whatever it is handed.
+ * These decide what actually lands on a page, so the properties that matter
+ * are about not losing or inventing content: a shift moves every row and drops
+ * exactly one, a menu replaces exactly one row and leaves the rest untouched.
  */
 
 import fc from 'fast-check';
@@ -24,7 +23,6 @@ import {
   validateMenu,
 } from './menu';
 import { lastRowHasContent, shiftPageDown } from './pageTransform';
-import { decodeThumbnail, encodeThumbnail, isThumbnail } from './thumbnail';
 import {
   COLS,
   ROWS,
@@ -199,47 +197,5 @@ describe('menu rendering', () => {
         ],
       }),
     ).toEqual([200, 300]);
-  });
-});
-
-describe('thumbnails', () => {
-  it('is always exactly one digit per cell', () => {
-    fc.assert(
-      fc.property(
-        fc.oneof(arbPage, fc.constant(undefined), fc.constant(null), fc.constant({})),
-        (page) => {
-          const thumb = encodeThumbnail(page);
-          expect(thumb).toHaveLength(TOTAL_CELLS);
-          expect(isThumbnail(thumb)).toBe(true);
-        },
-      ),
-    );
-  });
-
-  it('round-trips to palette indices', () => {
-    fc.assert(
-      fc.property(arbPage, (page) => {
-        const decoded = decodeThumbnail(encodeThumbnail(page));
-        expect(decoded).not.toBeNull();
-        expect(decoded).toHaveLength(TOTAL_CELLS);
-        expect([...(decoded ?? [])].every((i) => i >= 0 && i < TELETEXT_COLORS.length)).toBe(true);
-      }),
-    );
-  });
-
-  it('takes a text cell’s foreground and a blank cell’s background', () => {
-    const page = createEmptyPage();
-    page[0] = { char: 'A', fg: 'yellow', bg: 'blue', graphics: null };
-    page[1] = { char: ' ', fg: 'yellow', bg: 'blue', graphics: null };
-    const thumb = encodeThumbnail(page);
-    expect(thumb[0]).toBe(String(TELETEXT_COLORS.indexOf('yellow')));
-    expect(thumb[1]).toBe(String(TELETEXT_COLORS.indexOf('blue')));
-  });
-
-  it('refuses anything that is not a thumbnail', () => {
-    expect(decodeThumbnail('')).toBeNull();
-    expect(decodeThumbnail('9'.repeat(TOTAL_CELLS))).toBeNull();
-    expect(decodeThumbnail('0'.repeat(TOTAL_CELLS - 1))).toBeNull();
-    expect(decodeThumbnail(null)).toBeNull();
   });
 });

@@ -8,8 +8,9 @@
  * Page numbers were reused for unrelated content over the years, so the
  * captures sharing a number are usually different pages rather than versions of
  * one — which is why the browser is organised by **topic** (the on-disk folder
- * division) and era, and why every capture shows a thumbnail: at this scale you
- * recognise a page by its layout and colour long before you can read it.
+ * division) and era, and why every capture shows its actual render rather than
+ * a summary of it: choosing between four captures of page 220 means reading
+ * what is on them.
  *
  * ## Three previews, because publishing replaces something
  *
@@ -36,7 +37,7 @@ import { lastRowHasContent } from '../../domain/pageTransform';
 import { MAX_DESCRIPTION_LENGTH, MAX_TITLE_LENGTH } from '../../domain/publication';
 import { createEmptyPage, type TeletextPage } from '../../types/teletext';
 import { TeletextGrid } from '../TeletextGrid/TeletextGrid';
-import { TeletextThumb } from '../TeletextGrid/TeletextThumb';
+import { CaptureImage } from '../TeletextGrid/CaptureImage';
 import { MenuEditor } from './MenuEditor';
 
 /** Topic folders, as the corpus is filed. */
@@ -274,8 +275,9 @@ export function ManageArchivePage() {
                       className={`manage-capture${selected?.id === capture.id ? ' manage-capture-selected' : ''}`}
                       onClick={() => void choose(capture)}
                     >
-                      <TeletextThumb
-                        thumbnail={capture.thumbnail}
+                      <CaptureImage
+                        captureId={capture.id}
+                        hasImage={capture.has_image}
                         label={`${capture.source.toUpperCase()} page ${capture.original_page}`}
                       />
                       <span className="manage-capture-meta">
@@ -426,7 +428,10 @@ export function ManageArchivePage() {
           <ul className="manage-published-grid">
             {published.map((entry) => (
               <li key={entry.page_number} className="manage-published-card">
-                <TeletextThumb thumbnail={entry.thumbnail} label={`Page ${entry.page_number}`} />
+                <CaptureImage
+                  captureId={entry.capture_id}
+                  label={`Page ${entry.page_number}`}
+                />
                 <div className="manage-published-meta">
                   <strong>{entry.page_number}</strong>
                   <span>{entry.title || <em>untitled</em>}</span>

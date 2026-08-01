@@ -7,13 +7,15 @@
  * curatorial act, and the filters here are the ones that support it: topic (the
  * on-disk folder division), era, source, and page number.
  *
- * ## Cells are never in the list; thumbnails are
+ * ## Neither cells nor images are in the list
  *
  * A page's cells are ~59 KB, so returning them for sixty results would be three
- * and a half megabytes to draw sixty postage stamps. Each row instead carries a
- * `thumbnail`: one palette digit per cell, 960 bytes, which the client draws to
- * a 40x24 canvas. `GET /api/captures/[id]` fetches the real cells for the one
- * capture actually being previewed.
+ * and a half megabytes. The rendered images are far smaller (~2.2 KB) but are
+ * still fetched one by one, as lazily-loaded `<img>` elements pointing at
+ * `GET /api/captures/[id]?format=image` — that way the browser only downloads
+ * what actually scrolls into view, and caches each one. The list carries
+ * `has_image` so a capture with nothing stored can be shown as such rather
+ * than as a broken image.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -64,7 +66,8 @@ export default async function handler(
         id, source, original_page, sub, sub_index, topic, topic_group,
         topic_source, scheme, first_seen, last_seen, capture_count,
         tier, bucket, manifest_title, decode_status, profile,
-        width, height, snapped_pixels, unknown_glyphs, corpus_file, thumbnail
+        width, height, snapped_pixels, unknown_glyphs, corpus_file,
+        (image is not null) as has_image
       from archive_captures
       where (${source ?? null}::text is null or source = ${source ?? null})
         and (${topic ?? null}::text is null or topic = ${topic ?? null})

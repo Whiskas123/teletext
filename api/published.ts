@@ -46,7 +46,7 @@ export default async function handler(
           p.page_number, p.title, p.description, p.published_at, p.capture_id,
           p.shift_down, p.menu_id,
           c.source, c.original_page, c.sub, c.topic, c.scheme,
-          c.first_seen, c.manifest_title, c.thumbnail,
+          c.first_seen, c.manifest_title,
           m.name as menu_name
         from published_pages p
         join archive_captures c on c.id = p.capture_id

@@ -1290,20 +1290,30 @@
   }
 }
 
-/* --- Thumbnails -------------------------------------------------------- */
+/* --- Capture images ----------------------------------------------------- */
 /*
- * One canvas pixel per teletext cell (40x24), scaled up by CSS. `pixelated`
- * keeps the cell edges hard instead of smearing them, which is what makes a
- * 40x24 image still read as a page layout.
+ * The archive's real renders, not a reconstruction. `pixelated` because these
+ * are small bitmaps being scaled: smooth interpolation blurs exactly the glyph
+ * edges that make a page readable, which is the whole reason these replaced a
+ * one-colour-per-cell thumbnail.
  */
-.teletext-thumb {
+.capture-image {
   display: block;
   width: 100%;
   height: auto;
-  aspect-ratio: 40 / 24;
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
   image-rendering: pixelated;
   background: #000;
   border: 1px solid #333;
+}
+
+.capture-image-missing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  font-size: 0.7rem;
 }
 
 .manage-results {
@@ -1317,7 +1327,7 @@
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 0.6rem;
 }
 
@@ -1528,7 +1538,7 @@
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 0.75rem;
 }
 
