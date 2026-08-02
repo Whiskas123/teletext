@@ -55,6 +55,7 @@ The playhtml channels:
 |---|---|---|
 | `pages` | global | `{ [pageNumber]: { [cellIndex]: Cell } }` — one Yjs key per cell, so concurrent edits to different cells merge and edits to the same cell converge last-writer-wins |
 | `titles` | global | page titles for the yellow pages directory |
+| `page-kinds` | global | whether each page is a category, subcategory or ordinary page — the directory's shape |
 | `room-sync:<roomId>` | per room | the page the room is watching |
 | `chat:<roomId>` | per room | the room's messages |
 | `vote:<roomId>` | per room | the active change request and its votes |
@@ -129,6 +130,14 @@ Two adjustments can be applied on the way out:
 - **A custom menu** — replaces the bottom four-colour fastext strip. Menus are named, saved and reused, since the same strip goes on dozens of pages; the editor previews through the same function that publishes, so what you see is what lands.
 
 Both are recorded on the publication rather than baked only into the cells, so a menu can be edited and re-applied, and any page can be explained later.
+
+### Categories in the Yellow Pages
+
+The directory is a tree: sections, sub-sections, and the pages beneath them. Each page is marked **category**, **subcategory** or **page** from the picker on its card in `/manage`, and the nesting is read off page-number order — a heading owns everything that follows it until the next heading at the same level or above.
+
+The tree is derived, never stored, which is the point: nothing can be orphaned or point at a missing parent, and **moving a block moves a whole section intact**, because the tree is only ever a reading of the order. A subcategory with no category above it is promoted rather than hidden, and so is a page before the first heading — a page missing from the index would be invisible with nothing to show it had happened.
+
+Kinds live in playhtml alongside titles, not in Postgres. The directory is a public read path shown to every visitor, and nothing else about ordinary browsing touches the database; kinds also apply to hand-made pages, which exist only in the live document. They move with a page when it is renumbered, and they are carried by the snapshot and restore.
 
 ### Moving pages around
 

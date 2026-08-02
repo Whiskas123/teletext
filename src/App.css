@@ -1606,3 +1606,53 @@
   align-items: center;
   margin-top: 0.2rem;
 }
+
+/* --- Directory roles --------------------------------------------------- */
+.manage-kind select {
+  background: #111;
+  color: #ddd;
+  border: 1px solid #444;
+  font-family: monospace;
+  font-size: 0.7rem;
+  padding: 0.1rem 0.2rem;
+  margin-top: 0.2rem;
+}
+
+/* Visually hidden but announced — the picker's own value reads as a bare
+   word without it, which is meaningless out of context. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- Yellow Pages hierarchy -------------------------------------------- */
+/*
+ * Headings are set apart by weight and colour rather than by nesting the
+ * lists: the directory flows down one column and into the next, and a nested
+ * <ul> would be a single grid item that could not break across them.
+ */
+.yellow-pages-entry-category .yellow-pages-name {
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.yellow-pages-entry-category {
+  margin-top: 0.35rem;
+}
+
+.yellow-pages-entry-subcategory .yellow-pages-name {
+  font-weight: 700;
+  font-style: italic;
+}
+
+.yellow-pages-entry-page .yellow-pages-name {
+  font-weight: 400;
+}

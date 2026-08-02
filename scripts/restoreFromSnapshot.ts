@@ -29,6 +29,7 @@ interface LivePageRow {
   page_number: number;
   cells: unknown;
   title: string;
+  kind: string;
   updated_at: Date;
 }
 
@@ -47,7 +48,7 @@ async function main(): Promise<void> {
 
   await withPool(async (pool) => {
     const { rows } = await pool.query<LivePageRow>(
-      'select page_number, cells, title, updated_at from live_pages order by page_number',
+      'select page_number, cells, title, kind, updated_at from live_pages order by page_number',
     );
 
     if (rows.length === 0) {
@@ -79,12 +80,16 @@ async function main(): Promise<void> {
 
     const pages: Record<number, unknown> = {};
     const titles: Record<number, string> = {};
+    // Only headings are written: 'page' is the default, so storing it would
+    // just be noise the import has to skip.
+    const kinds: Record<number, string> = {};
     for (const row of rows) {
       pages[row.page_number] = pageToCellMap(row.cells);
       if (row.title.length > 0) titles[row.page_number] = row.title;
+      if (row.kind !== 'page') kinds[row.page_number] = row.kind;
     }
 
-    await writeFile(out, JSON.stringify({ pages, titles }, null, 2), 'utf8');
+    await writeFile(out, JSON.stringify({ pages, titles, kinds }, null, 2), 'utf8');
     console.log(`\nWrote ${out} — load it from the app's import screen as admin.`);
   });
 }

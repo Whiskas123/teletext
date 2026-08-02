@@ -9,9 +9,11 @@
  * and its page number.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 
 import { useGuide } from '../../collab/useGuide';
+import { usePageKinds } from '../../collab/usePageKinds';
+import { buildDirectory, type DirectoryNode } from '../../domain/directory';
 
 export interface YellowPagesProps {
   /** Called with a listing's Page_Number when it is selected (routes to voting). */
@@ -25,8 +27,69 @@ function formatPageNumber(n: number): string {
   return String(n).padStart(3, '0');
 }
 
+/**
+ * One listing and everything filed beneath it.
+ *
+ * Depth is passed down rather than derived from nesting the lists, because the
+ * directory is laid out in two columns that flow top-to-bottom: a nested `<ul>`
+ * would be one grid item and could not break across them. Indenting a flat run
+ * of rows keeps the reading order and the column flow intact.
+ */
+function Listing({
+  node,
+  depth,
+  onPick,
+}: {
+  node: DirectoryNode;
+  depth: number;
+  onPick: (pageNumber: number) => void;
+}) {
+  const heading = node.kind === 'category' || node.kind === 'subcategory';
+  return (
+    <>
+      <li
+        className={`yellow-pages-entry yellow-pages-entry-${node.kind}`}
+        style={depth > 0 ? { paddingLeft: `${depth * 0.9}rem` } : undefined}
+      >
+        <button
+          type="button"
+          className="yellow-pages-entry-btn"
+          onClick={() => onPick(node.pageNumber)}
+        >
+          <span className="yellow-pages-name">
+            {node.title.trim().length > 0 ? node.title : 'Untitled listing'}
+          </span>
+          <span className="yellow-pages-leader" aria-hidden="true" />
+          <span className="yellow-pages-number">
+            {formatPageNumber(node.pageNumber)}
+          </span>
+        </button>
+      </li>
+      {heading &&
+        node.children.map((child) => (
+          <Listing key={child.pageNumber} node={child} depth={depth + 1} onPick={onPick} />
+        ))}
+    </>
+  );
+}
+
 export function YellowPages({ onSelect, onClose }: YellowPagesProps) {
   const { entries } = useGuide();
+  const { kinds } = usePageKinds();
+
+  // The directory's shape is read off page order and each page's kind, so it
+  // needs no structure of its own — see `domain/directory.ts`.
+  const tree = useMemo(
+    () =>
+      buildDirectory(
+        entries.map((entry) => ({
+          pageNumber: entry.pageNumber,
+          title: entry.title,
+          kind: kinds[entry.pageNumber],
+        })),
+      ),
+    [entries, kinds],
+  );
 
   // Close on Escape.
   useEffect(() => {
@@ -82,27 +145,16 @@ export function YellowPages({ onSelect, onClose }: YellowPagesProps) {
             // state on the DOM-adjacent entry at the top of the next column).
             style={{ gridTemplateRows: `repeat(${Math.max(1, Math.ceil(entries.length / 2))}, auto)` }}
           >
-            {entries.map((entry) => (
-              <li key={entry.pageNumber} className="yellow-pages-entry">
-                <button
-                  type="button"
-                  className="yellow-pages-entry-btn"
-                  onClick={() => {
-                    onSelect(entry.pageNumber);
-                    onClose();
-                  }}
-                >
-                  <span className="yellow-pages-name">
-                    {entry.title.trim().length > 0
-                      ? entry.title
-                      : 'Untitled listing'}
-                  </span>
-                  <span className="yellow-pages-leader" aria-hidden="true" />
-                  <span className="yellow-pages-number">
-                    {formatPageNumber(entry.pageNumber)}
-                  </span>
-                </button>
-              </li>
+            {tree.map((node) => (
+              <Listing
+                key={node.pageNumber}
+                node={node}
+                depth={0}
+                onPick={(pageNumber) => {
+                  onSelect(pageNumber);
+                  onClose();
+                }}
+              />
             ))}
           </ul>
         )}

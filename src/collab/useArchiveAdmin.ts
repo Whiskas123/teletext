@@ -23,6 +23,8 @@ import { useGuide } from './useGuide';
 import { useImportPages } from './useImportPages';
 import { PAGES_CHANNEL } from './useEditPage';
 import { TITLES_CHANNEL } from './useGuide';
+import { PAGE_KINDS_CHANNEL } from './usePageKinds';
+import type { PageKinds } from '../domain/directory';
 import type { PagesData, TeletextPage, TitlesData } from './types';
 
 /** A capture as the list endpoint returns it — metadata only, no cells. */
@@ -190,6 +192,7 @@ export function useArchiveAdmin(): ArchiveAdminApi {
   // renumbering can move the content, not just the records.
   const [livePages, setPages] = usePageData<PagesData>(PAGES_CHANNEL, {});
   const [, setTitles] = usePageData<TitlesData>(TITLES_CHANNEL, {});
+  const [, setKinds] = usePageData<PageKinds>(PAGE_KINDS_CHANNEL, {});
   const [query, setQuery] = useState<{ filters: CaptureFilters; offset: number }>({
     filters: {},
     offset: 0,
@@ -495,8 +498,12 @@ export function useArchiveAdmin(): ArchiveAdminApi {
 
       setPages((draft) => replayInto(draft));
       setTitles((draft) => replayInto(draft));
+      // Kinds are keyed by page number like titles, so a heading that moves
+      // stays a heading — otherwise a renumbering would quietly flatten the
+      // directory.
+      setKinds((draft) => replayInto(draft));
     },
-    [setPages, setTitles],
+    [setPages, setTitles, setKinds],
   );
 
   const reorder = useCallback(

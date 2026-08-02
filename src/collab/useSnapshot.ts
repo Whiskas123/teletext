@@ -27,6 +27,8 @@ import { usePageData } from '@playhtml/react';
 
 import { PAGES_CHANNEL } from './useEditPage';
 import { TITLES_CHANNEL } from './useGuide';
+import { PAGE_KINDS_CHANNEL } from './usePageKinds';
+import type { PageKinds } from '../domain/directory';
 import type { PagesData, TitlesData } from './types';
 
 export interface SnapshotOutcome {
@@ -55,6 +57,7 @@ export interface SnapshotApi {
 export function useSnapshot(): SnapshotApi {
   const [pages] = usePageData<PagesData>(PAGES_CHANNEL, {});
   const [titles] = usePageData<TitlesData>(TITLES_CHANNEL, {});
+  const [kinds] = usePageData<PageKinds>(PAGE_KINDS_CHANNEL, {});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<SnapshotOutcome | null>(null);
@@ -74,7 +77,11 @@ export function useSnapshot(): SnapshotApi {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ pages: pages ?? {}, titles: titles ?? {} }),
+        body: JSON.stringify({
+          pages: pages ?? {},
+          titles: titles ?? {},
+          kinds: kinds ?? {},
+        }),
       });
 
       if (response.status === 401) {
@@ -99,7 +106,7 @@ export function useSnapshot(): SnapshotApi {
     } finally {
       setSaving(false);
     }
-  }, [pages, titles, pageCount]);
+  }, [pages, titles, kinds, pageCount]);
 
   return { snapshot, saving, error, lastResult, pageCount };
 }

@@ -44,6 +44,7 @@ interface Accepted {
   pageNumber: number;
   cells: unknown;
   title: string;
+  kind: string;
 }
 
 /**
@@ -70,6 +71,16 @@ function acceptable(body: Record<string, unknown>): {
     return typeof value === 'string' ? value.slice(0, 60) : '';
   };
 
+  // The page's role in the Yellow Pages directory. Anything unrecognised is
+  // stored as an ordinary page rather than rejected: a bad kind should cost the
+  // directory a heading, not cost the backup a page.
+  const kinds = body.kinds;
+  const kindFor = (pageNumber: number): string => {
+    if (kinds == null || typeof kinds !== 'object') return 'page';
+    const value = (kinds as Record<string, unknown>)[pageNumber];
+    return value === 'category' || value === 'subcategory' ? value : 'page';
+  };
+
   const accepted: Accepted[] = [];
   let rejected = 0;
 
@@ -86,7 +97,12 @@ function acceptable(body: Record<string, unknown>): {
       rejected += 1;
       continue;
     }
-    accepted.push({ pageNumber, cells, title: titleFor(pageNumber) });
+    accepted.push({
+      pageNumber,
+      cells,
+      title: titleFor(pageNumber),
+      kind: kindFor(pageNumber),
+    });
   }
 
   return { accepted, rejected };
@@ -141,17 +157,20 @@ export default async function handler(
     const numbers = accepted.map((page) => page.pageNumber);
     const cells = accepted.map((page) => JSON.stringify(page.cells));
     const titles = accepted.map((page) => page.title);
+    const kindValues = accepted.map((page) => page.kind);
 
     await db()`
-      insert into live_pages (page_number, cells, title, updated_at)
+      insert into live_pages (page_number, cells, title, kind, updated_at)
       select * from unnest(
         ${numbers}::int[],
         ${cells}::jsonb[],
-        ${titles}::text[]
-      ) as t(page_number, cells, title), lateral (select now()) as u(updated_at)
+        ${titles}::text[],
+        ${kindValues}::text[]
+      ) as t(page_number, cells, title, kind), lateral (select now()) as u(updated_at)
       on conflict (page_number) do update
         set cells = excluded.cells,
             title = excluded.title,
+            kind = excluded.kind,
             updated_at = excluded.updated_at
     `;
 

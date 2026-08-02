@@ -32,8 +32,10 @@ import {
   type CaptureSummary,
 } from '../../collab/useArchiveAdmin';
 import { useSnapshot } from '../../collab/useSnapshot';
+import { usePageKinds } from '../../collab/usePageKinds';
 import { useAdminStatus } from '../../collab/useIsModerator';
 import { PLAYGROUND_MIN_PAGE } from '../../domain/access';
+import { PAGE_KINDS, type PageKind } from '../../domain/directory';
 import { lastRowHasContent } from '../../domain/pageTransform';
 import { MAX_DESCRIPTION_LENGTH, MAX_TITLE_LENGTH } from '../../domain/publication';
 import { createEmptyPage, type TeletextPage } from '../../types/teletext';
@@ -77,6 +79,7 @@ export function ManageArchivePage() {
     shiftPages, moveBlock, occupiedPages, handMadePages,
   } = admin_;
   const snapshot = useSnapshot();
+  const { kindOf, setKind } = usePageKinds();
 
   const [filters, setFilters] = useState<CaptureFilters>({});
   const [offset, setOffset] = useState(0);
@@ -655,6 +658,23 @@ export function ManageArchivePage() {
                       the archive
                     </span>
                   )}
+                  {/* What this page is in the Yellow Pages directory. Stored
+                      per page in playhtml, so it covers hand-made pages too,
+                      and the tree is read off page order — see
+                      `domain/directory.ts`. */}
+                  <label className="manage-kind">
+                    <span className="sr-only">Directory role for page {pageNumber}</span>
+                    <select
+                      value={kindOf(pageNumber)}
+                      onChange={(e) => setKind(pageNumber, e.target.value as PageKind)}
+                    >
+                      {PAGE_KINDS.map((kind) => (
+                        <option key={kind} value={kind}>
+                          {kind === 'page' ? 'page' : kind}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <div className="manage-card-actions">
                     <button
                       type="button"
