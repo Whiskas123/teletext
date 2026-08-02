@@ -36,12 +36,14 @@ import ChatSidebar from './ChatSidebar';
 import PresenceList from './PresenceList';
 import VotePanel from './VotePanel';
 import YellowPages from './YellowPages';
+import PageSearch from './PageSearch';
 import { usePageRoll } from './usePageRoll';
 import remoteControlImg from '../../assets/remote_control.png';
 import yellowPagesImg from '../../assets/yellow_pages.png';
+import magnifyingGlassImg from '../../assets/magnifying_glass.png';
 
 /** Which object popup is currently open. */
-type OpenObject = 'remote' | 'guide' | null;
+type OpenObject = 'remote' | 'guide' | 'search' | null;
 
 export interface RoomViewerProps {
   /**
@@ -117,6 +119,13 @@ function RoomViewerContent({
   const toggleGuide = useCallback(() => {
     setOpenObject((o) => (o === 'guide' ? null : 'guide'));
   }, []);
+
+  // A toggle for the same reason as the directory: its backdrop covers the
+  // whole screen, so a second click on the icon would otherwise hit the
+  // backdrop and read as nothing happening.
+  const toggleSearch = useCallback(() => {
+    setOpenObject((o) => (o === 'search' ? null : 'search'));
+  }, []);
   const closeObject = useCallback(() => setOpenObject(null), []);
 
   return (
@@ -191,11 +200,27 @@ function RoomViewerContent({
               <span className="object-caption">Yellow pages</span>
             </button>
           </div>
+
+          <div className="object-slot">
+            <button
+              type="button"
+              className={`object-item${openObject === 'search' ? ' object-item-active' : ''}`}
+              onClick={toggleSearch}
+              aria-label="Search pages"
+            >
+              <img src={magnifyingGlassImg} alt="" className="object-img" />
+              <span className="object-caption">Search</span>
+            </button>
+          </div>
         </div>
       </div>
 
       {openObject === 'guide' && (
         <YellowPages onSelect={handleRequestPage} onClose={closeObject} />
+      )}
+
+      {openObject === 'search' && (
+        <PageSearch onSelect={handleRequestPage} onClose={closeObject} />
       )}
     </RoomLayout>
   );

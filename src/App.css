@@ -1656,3 +1656,77 @@
 .yellow-pages-entry-page .yellow-pages-name {
   font-weight: 400;
 }
+
+/* --- Page search -------------------------------------------------------- */
+/*
+ * Shares the Yellow Pages "book" chrome: it is the same directory with a
+ * different index, and giving it a look of its own would suggest otherwise.
+ */
+.page-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0.5rem 0 0.25rem;
+  padding: 0.45rem 0.6rem;
+  font-family: inherit;
+  font-size: 1rem;
+  color: #141007;
+  background: #fff8dc;
+  border: 1px solid #b8940f;
+  border-radius: 3px;
+}
+
+.page-search-input:focus {
+  outline: 2px solid #141007;
+  outline-offset: -1px;
+}
+
+/* One column, unlike the directory: a result is two lines, so the
+   top-to-bottom-then-next-column flow would be hard to follow. */
+.page-search-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: block;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.page-search-result {
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+
+.page-search-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  width: 100%;
+}
+
+.page-search-snippet {
+  display: block;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: #4a3d12;
+  /* The page's own text, so a monospace face keeps its spacing recognisable. */
+  font-family: 'Courier New', Courier, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.page-search-row {
+  display: inline-block;
+  margin-right: 0.4rem;
+  padding: 0 0.25rem;
+  font-size: 0.7rem;
+  color: #6b5a1e;
+  border: 1px solid #d9bf5a;
+  border-radius: 2px;
+}
+
+.page-search-mark {
+  background: #141007;
+  color: #ffcf1f;
+  padding: 0 0.1em;
+}

@@ -10,7 +10,7 @@ Teletext was a text-based information system broadcast in the vertical blanking 
 
 From the landing page:
 
-- **Watch solo** (`/watch`) — the TV on your own. The remote control changes the page immediately, the yellow pages list what's out there, and three-digit page numbers in the content are clickable links. No chat, no vote, no name needed.
+- **Watch solo** (`/watch`) — the TV on your own. The remote control changes the page immediately, the yellow pages list what's out there, the magnifying glass searches every page by text, and three-digit page numbers in the content are clickable links. No chat, no vote, no name needed.
 - **Watch together** (`/room/:roomId`) — join one of six fixed "house" rooms (living room, bedrooms, kitchen, garage, dining room). Everyone in a room sees the same page, chats in the sidebar, and changing the page goes to a **vote**: a request stands for 60 s and needs a majority of the members present when it was raised. You join as `Guest-XXXX` and can rename yourself from the room sidebar.
 - **Create / edit pages** (`/edit`, `/edit/:pageNumber`) — the editor. Edits are per-cell and shared, so a page being edited updates live wherever it's being watched. Pages 100–699 are a curated **archive** (only the moderator can edit them); 700–999 are the open **playground** — see [Archive vs. playground](#archive-vs-playground) below.
 
@@ -130,6 +130,12 @@ Two adjustments can be applied on the way out:
 - **A custom menu** — replaces the bottom four-colour fastext strip. Menus are named, saved and reused, since the same strip goes on dozens of pages; the editor previews through the same function that publishes, so what you see is what lands.
 
 Both are recorded on the publication rather than baked only into the cells, so a menu can be edited and re-applied, and any page can be explained later.
+
+### Searching
+
+The magnifying glass beside the Yellow Pages searches every page's **title and text**, case- and accent-insensitively — the archive is Portuguese, and nobody looking for `eleicoes` should have to type `eleições`. Results show the page number and the line the match is on, with the hit highlighted; choosing one requests that page the same way a directory listing does (straight away when watching solo, through the room vote when watching together).
+
+Reading text back out of a 40×24 grid has a few catches that decide whether the search is any use, so it lives in [`src/domain/pageSearch.ts`](src/domain/pageSearch.ts) with its own tests: a block-graphics cell keeps whatever character was last typed there and must read as a gap rather than splicing noise into a word, and teletext lays pages out with padding, so runs of blanks collapse to a single space or a row reads as one long line.
 
 ### Categories in the Yellow Pages
 

@@ -17,15 +17,17 @@ import { useSoloView } from '../../collab/useSoloView';
 import { TeletextGrid } from '../TeletextGrid/TeletextGrid';
 import RoomLayout from './RoomLayout';
 import YellowPages from './YellowPages';
+import PageSearch from './PageSearch';
 import { usePageRoll } from './usePageRoll';
 import remoteControlImg from '../../assets/remote_control.png';
 import yellowPagesImg from '../../assets/yellow_pages.png';
+import magnifyingGlassImg from '../../assets/magnifying_glass.png';
 
 /** Heading for the solo remote-control popover. */
 export const SOLO_REMOTE_HEADING = 'Change page';
 
 /** Which object popup is currently open. */
-type OpenObject = 'remote' | 'guide' | null;
+type OpenObject = 'remote' | 'guide' | 'search' | null;
 
 export interface SoloViewerProps {
   /**
@@ -183,6 +185,13 @@ export function SoloViewer({ pageNumber: pageNumberProp }: SoloViewerProps) {
   const toggleGuide = useCallback(() => {
     setOpenObject((o) => (o === 'guide' ? null : 'guide'));
   }, []);
+
+  // A toggle for the same reason as the directory: its backdrop covers the
+  // whole screen, so a second click on the icon would otherwise hit the
+  // backdrop and read as nothing happening.
+  const toggleSearch = useCallback(() => {
+    setOpenObject((o) => (o === 'search' ? null : 'search'));
+  }, []);
   const closeObject = useCallback(() => setOpenObject(null), []);
 
   return (
@@ -247,11 +256,27 @@ export function SoloViewer({ pageNumber: pageNumberProp }: SoloViewerProps) {
               <span className="object-caption">Yellow pages</span>
             </button>
           </div>
+
+          <div className="object-slot">
+            <button
+              type="button"
+              className={`object-item${openObject === 'search' ? ' object-item-active' : ''}`}
+              onClick={toggleSearch}
+              aria-label="Search pages"
+            >
+              <img src={magnifyingGlassImg} alt="" className="object-img" />
+              <span className="object-caption">Search</span>
+            </button>
+          </div>
         </div>
       </div>
 
       {openObject === 'guide' && (
         <YellowPages onSelect={handleSelectPage} onClose={closeObject} />
+      )}
+
+      {openObject === 'search' && (
+        <PageSearch onSelect={handleSelectPage} onClose={closeObject} />
       )}
     </RoomLayout>
   );
