@@ -41,7 +41,12 @@ export function YellowPages({ onSelect, onClose }: YellowPagesProps) {
     <div
       className="yellow-pages-overlay"
       role="dialog"
-      aria-modal="true"
+      /*
+       * Not `aria-modal`: the object bar stays above this backdrop and stays
+       * usable, so claiming everything outside is inert would be untrue — and
+       * it is deliberate. The yellow book icon is what opens the directory, so
+       * it has to remain clickable to close it again.
+       */
       aria-label="Yellow Pages"
       onClick={onClose}
     >

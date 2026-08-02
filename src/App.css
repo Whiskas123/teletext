@@ -972,6 +972,11 @@
   gap: 3rem;
   position: relative;
   flex-wrap: wrap;
+  /* Above the Yellow Pages backdrop (z-index 200). These objects are the
+     controls, not content the directory should cover: with the bar underneath,
+     a click aimed at the yellow book hit the backdrop and closed the directory
+     instead, so the icon could never close what it opened. */
+  z-index: 300;
 }
 
 .object-slot {

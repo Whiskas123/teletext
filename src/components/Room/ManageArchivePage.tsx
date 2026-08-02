@@ -82,7 +82,10 @@ export function ManageArchivePage() {
   const [pageNumber, setPageNumber] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [shiftDown, setShiftDown] = useState(false);
+  // On by default: most captures carry a menu strip on their bottom row that
+  // the published page replaces anyway, so shifting is the common case and
+  // leaving it off meant remembering to tick it every time.
+  const [shiftDown, setShiftDown] = useState(true);
   const [menuId, setMenuId] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -104,7 +107,7 @@ export function ManageArchivePage() {
       setTitle(capture.manifest_title?.slice(0, MAX_TITLE_LENGTH) ?? '');
       setDescription('');
       setPageNumber(String(capture.original_page));
-      setShiftDown(false);
+      setShiftDown(true);
       setMenuId(null);
       setSourcePage(await loadPage(capture.id));
     },

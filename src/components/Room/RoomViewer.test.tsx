@@ -150,4 +150,31 @@ describe('RoomViewer', () => {
       within(dialog).getByRole('button', { name: /request/i }),
     ).toBeInTheDocument();
   });
+
+  it('closes the yellow pages directory when its own icon is clicked again', async () => {
+    // The icon used to only ever open. Because the directory's backdrop covers
+    // the whole screen, the icon was underneath it, so a second click landed on
+    // the backdrop instead — a double-click opened and closed the directory
+    // (looking like nothing happened), and two deliberate clicks made it flash.
+    // It is now a toggle, and the object bar sits above the backdrop so the
+    // click reaches it.
+    const user = userEvent.setup();
+    setRoomSync(100);
+    renderViewer();
+
+    const icon = screen.getByRole('button', { name: 'Yellow pages' });
+    expect(icon).toHaveAttribute('aria-expanded', 'false');
+
+    await user.click(icon);
+    expect(screen.getByRole('dialog', { name: 'Yellow Pages' })).toBeInTheDocument();
+    expect(icon).toHaveAttribute('aria-expanded', 'true');
+
+    await user.click(icon);
+    expect(screen.queryByRole('dialog', { name: 'Yellow Pages' })).not.toBeInTheDocument();
+    expect(icon).toHaveAttribute('aria-expanded', 'false');
+
+    // And it still opens again afterwards.
+    await user.click(icon);
+    expect(screen.getByRole('dialog', { name: 'Yellow Pages' })).toBeInTheDocument();
+  });
 });

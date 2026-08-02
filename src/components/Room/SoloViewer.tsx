@@ -175,7 +175,14 @@ export function SoloViewer({ pageNumber: pageNumberProp }: SoloViewerProps) {
     setOpenObject((o) => (o === 'remote' ? null : 'remote'));
   }, []);
 
-  const openGuide = useCallback(() => setOpenObject('guide'), []);
+  // A toggle, like the remote. It used to only ever open, which meant the
+  // icon could not close what it had opened — and because the directory's
+  // backdrop covers the whole screen, a second click on the icon landed on
+  // the backdrop instead. So a double-click opened and closed it (looking
+  // like nothing happened) and two deliberate clicks made it flash.
+  const toggleGuide = useCallback(() => {
+    setOpenObject((o) => (o === 'guide' ? null : 'guide'));
+  }, []);
   const closeObject = useCallback(() => setOpenObject(null), []);
 
   return (
@@ -232,7 +239,8 @@ export function SoloViewer({ pageNumber: pageNumberProp }: SoloViewerProps) {
             <button
               type="button"
               className={`object-item${openObject === 'guide' ? ' object-item-active' : ''}`}
-              onClick={openGuide}
+              onClick={toggleGuide}
+              aria-expanded={openObject === 'guide'}
               aria-label="Yellow pages"
             >
               <img src={yellowPagesImg} alt="" className="object-img" />

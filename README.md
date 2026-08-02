@@ -123,7 +123,7 @@ Selecting one shows two previews side by side, both scaled to fit rather than cr
 
 Two adjustments can be applied on the way out:
 
-- **Shift down one row** — moves every row down and drops the last. Removes a duplicate four-colour menu strip, and re-aligns captures sitting a row higher than the rest.
+- **Shift down one row** — moves every row down and drops the last. Removes a duplicate four-colour menu strip, and re-aligns captures sitting a row higher than the rest. **On by default**, since most captures need it; untick it per page when they don't.
 - **A custom menu** — replaces the bottom four-colour fastext strip. Menus are named, saved and reused, since the same strip goes on dozens of pages; the editor previews through the same function that publishes, so what you see is what lands.
 
 Both are recorded on the publication rather than baked only into the cells, so a menu can be edited and re-applied, and any page can be explained later.
