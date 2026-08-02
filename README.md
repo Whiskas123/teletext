@@ -132,11 +132,17 @@ Both are recorded on the publication rather than baked only into the cells, so a
 
 ### Moving pages around
 
-Page numbers are positions, not names — 200 is where the news starts because that is where it was put — so slotting something in *before* an existing run is normal. Doing it by hand means republishing every page above it, each one overwriting a live page on the way past.
+Page numbers are positions, not names — 200 is where the news starts because that is where it was put — so slotting something in *before* an existing run, or relocating a whole section, is ordinary editing. Doing it by hand means republishing every page above, each one overwriting a live page on the way past.
 
-Instead, **Make room at page N** pushes N and everything above it up (or down) by one, and the **← →** buttons on a published card slide one page along, closing the gap behind it. Both renumber the records *and* move the content.
+- **Make room at N for k pages** pushes N and everything above it up by k (or pulls it back down).
+- **Move pages a–b so they start at c** relocates a whole run, sliding whatever it passes over to close the gap behind it. The destination does not need to be free: the block's span of numbers travels, and the pages it crosses move the other way by exactly that span — the same set of numbers, reordered.
+- **← →** on a card nudge one page along. A block of one.
 
-The ordering is the whole problem: moving 200→201 while 201 exists destroys 201. `src/domain/reorder.ts` plans the moves so each destination is free when written — descending when shifting up, ascending when shifting down. A reposition among consecutive pages is a *rotation*, where every destination is occupied and no move is safe first, so the plan lifts one page's content out, slides the rest, and drops it back. The same ordered plan is replayed against Postgres and against playhtml, which is why it is a pure, property-tested module rather than a query.
+All of them renumber the records *and* carry the content.
+
+**Occupancy is every page, not every published page.** The plan is made against the union of the archive publications in Postgres and everything in the live playhtml document — seeded pages, pages people made by hand, the playground. Planning from the publication records alone was a real bug: a hand-made page at 201 is invisible there, so shifting 200 up silently overwrote it. Only a connected browser can see the live document, so the client sends those page numbers with the request. Archive pages are still refused entry to the playground (700+), where anyone could edit them.
+
+Ordering is the whole difficulty: moving 200→201 while 201 exists destroys 201. [`src/domain/reorder.ts`](src/domain/reorder.ts) emits an ordered plan in which every destination is free when written, and where that is impossible — a rotation, where every destination is occupied and nothing can go first — it lifts content out, slides the rest, and puts it back. The identical plan is replayed against both stores, which is why it is a pure, property-tested module rather than a query. Its tests simulate a store and fail the moment a step would clobber a page.
 
 ### Backups
 

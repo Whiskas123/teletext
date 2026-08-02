@@ -3,11 +3,23 @@
  *
  * Two operations, both from `src/domain/reorder.ts`:
  *
- * - `{ action: 'shift', fromPage, delta }` — make room. Pushes every published
- *   page at or above `fromPage` up (or down) by `delta`, so something can be
- *   slotted in before an existing run without republishing each page by hand.
- * - `{ action: 'move', fromPage, toPage }` — reposition one page, sliding the
- *   pages between it and its destination to close the gap.
+ * - `{ action: 'shift', fromPage, delta }` — make room. Pushes every occupied
+ *   page at or above `fromPage` by `delta`, so a run of new pages can be
+ *   slotted in without touching any of them by hand.
+ * - `{ action: 'move', blockStart, blockEnd, destination }` — move a run of
+ *   pages elsewhere, sliding what it passes over to close the gap behind it.
+ *
+ * ## Occupancy comes from both stores
+ *
+ * The caller sends `livePages`: every page number holding content in the
+ * playhtml document. Only a connected browser can see that, and planning
+ * without it was a real bug — a hand-made page at 201 does not appear in
+ * `published_pages`, so shifting 200 up overwrote it. The two lists are unioned
+ * here, so the plan accounts for every page that exists rather than only the
+ * ones the archive knows about.
+ *
+ * A signed-in admin could of course understate that list, but the only document
+ * they would damage is their own, and they can already edit it directly.
  *
  * ## The plan is returned, not just applied
  *
@@ -31,8 +43,9 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 import { toInteger } from '../src/domain/coerce';
 import {
+  PLAYGROUND_MIN_PAGE,
   describeReorderRejection,
-  planMove,
+  planMoveBlock,
   planShift,
   type PlanResult,
 } from '../src/domain/reorder';
@@ -56,68 +69,100 @@ export default async function handler(
     const rows = await db()`select page_number from published_pages order by page_number`;
     const published = rows.map((row) => Number(row.page_number));
 
+    // Everything holding content, from both stores. A page in one and not the
+    // other is still a page, and moving onto it would destroy it.
+    const live = Array.isArray(body.livePages)
+      ? body.livePages.map((page) => toInteger(page)).filter((p): p is number => p != null)
+      : [];
+    const occupied = [...new Set([...published, ...live])];
+
     let plan: PlanResult;
     if (body.action === 'shift') {
-      plan = planShift(published, toInteger(body.fromPage) ?? NaN, toInteger(body.delta) ?? 0);
+      plan = planShift(occupied, toInteger(body.fromPage) ?? NaN, toInteger(body.delta) ?? 0);
     } else if (body.action === 'move') {
-      plan = planMove(published, toInteger(body.fromPage) ?? NaN, toInteger(body.toPage) ?? NaN);
+      plan = planMoveBlock(
+        occupied,
+        toInteger(body.blockStart) ?? NaN,
+        toInteger(body.blockEnd) ?? NaN,
+        toInteger(body.destination) ?? NaN,
+      );
     } else {
       fail(res, 400, "action must be 'shift' or 'move'.");
       return;
     }
 
     if (!plan.ok) {
-      fail(res, 400, describeReorderRejection(plan.reason));
+      fail(res, 400, describeReorderRejection(plan.reason, plan.blocking));
       return;
     }
 
-    // The lifted row is read out and re-inserted rather than parked at a spare
-    // page number: `page_number` is CHECKed to 100..699, so there is no spare
-    // number to park at, and widening that check to make room for a temporary
-    // value would weaken a constraint that exists for a good reason.
-    const lifted =
-      plan.lift == null
-        ? null
-        : (
-            await db()`
-              select capture_id, title, description, shift_down, menu_id
-              from published_pages where page_number = ${plan.lift}
-            `
-          )[0];
-
-    if (plan.lift != null && lifted == null) {
-      fail(res, 409, 'That page stopped being published while this was in flight.');
+    // A published page may not land in the playground. 700..999 is open to
+    // every visitor (`src/domain/access.ts`), so curated content there could be
+    // edited by anyone — which is why `published_pages.page_number` is CHECKed
+    // to 100..699. Caught here rather than left to the constraint so the
+    // operator gets a reason instead of a failed transaction, and so the live
+    // document is not moved for a renumbering the records will refuse.
+    const publishedSet = new Set(published);
+    const strays = [...plan.moves, ...plan.drops]
+      .filter(({ from, to }) => publishedSet.has(from) && to >= PLAYGROUND_MIN_PAGE)
+      .map(({ to }) => to);
+    if (strays.length > 0) {
+      fail(
+        res,
+        400,
+        `That would move archive pages to ${strays.slice(0, 5).join(', ')}, which is ` +
+          `the open playground (${PLAYGROUND_MIN_PAGE}+) where anyone may edit them.`,
+      );
       return;
+    }
+
+    // Lifted rows are read out and re-inserted rather than parked at spare page
+    // numbers: `page_number` is CHECKed to 100..699, so there are no spare
+    // numbers to park at, and widening that check to make room for temporary
+    // values would weaken a constraint that exists for a good reason.
+    //
+    // Only pages the archive published have a row at all. A lifted page that is
+    // purely a live one simply has nothing to carry here, and the client moves
+    // its content on its own.
+    const lifted = new Map<number, Record<string, unknown>>();
+    for (const page of plan.lifts) {
+      const found = await db()`
+        select capture_id, title, description, shift_down, menu_id
+        from published_pages where page_number = ${page}
+      `;
+      if (found[0] != null) lifted.set(page, found[0]);
     }
 
     // Replayed in the same order the client will replay it, inside one
-    // transaction so a failure part-way leaves the lifted row where it was.
+    // transaction so a failure part-way leaves the records as they were.
     await transaction((sql) => {
       const statements = [];
-      if (plan.lift != null) {
-        statements.push(sql`delete from published_pages where page_number = ${plan.lift}`);
+      for (const page of plan.lifts) {
+        statements.push(sql`delete from published_pages where page_number = ${page}`);
       }
       for (const { from, to } of plan.moves) {
         statements.push(
           sql`update published_pages set page_number = ${to} where page_number = ${from}`,
         );
       }
-      if (plan.drop != null && lifted != null) {
+      for (const { from, to } of plan.drops) {
+        const row = lifted.get(from);
+        if (row == null) continue;
         statements.push(sql`
           insert into published_pages
             (page_number, capture_id, title, description, shift_down, menu_id, published_at)
           values
-            (${plan.drop}, ${lifted.capture_id}, ${lifted.title}, ${lifted.description},
-             ${lifted.shift_down}, ${lifted.menu_id}, now())
+            (${to}, ${row.capture_id}, ${row.title}, ${row.description},
+             ${row.shift_down}, ${row.menu_id}, now())
         `);
       }
       return statements;
     });
 
     json(res, 200, {
-      lift: plan.lift,
+      lifts: plan.lifts,
       moves: plan.moves,
-      drop: plan.drop,
+      drops: plan.drops,
     });
   } catch (error) {
     serverError(res, 'reorder', error);

@@ -33,6 +33,7 @@ import {
 } from '../../collab/useArchiveAdmin';
 import { useSnapshot } from '../../collab/useSnapshot';
 import { useAdminStatus } from '../../collab/useIsModerator';
+import { PLAYGROUND_MIN_PAGE } from '../../domain/access';
 import { lastRowHasContent } from '../../domain/pageTransform';
 import { MAX_DESCRIPTION_LENGTH, MAX_TITLE_LENGTH } from '../../domain/publication';
 import { createEmptyPage, type TeletextPage } from '../../types/teletext';
@@ -73,7 +74,7 @@ export function ManageArchivePage() {
   const {
     captures, total, published, menus, loading, error, pageSize,
     search, loadPage, livePage, transform, publish, unpublish, saveMenu, deleteMenu,
-    shiftPages, movePage,
+    shiftPages, moveBlock, occupiedPages, handMadePages,
   } = admin_;
   const snapshot = useSnapshot();
 
@@ -92,6 +93,10 @@ export function ManageArchivePage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [roomAt, setRoomAt] = useState('');
+  const [roomCount, setRoomCount] = useState('1');
+  const [blockStart, setBlockStart] = useState('');
+  const [blockEnd, setBlockEnd] = useState('');
+  const [blockTo, setBlockTo] = useState('');
 
   useEffect(() => {
     search(filters, offset);
@@ -173,13 +178,19 @@ export function ManageArchivePage() {
   );
 
   const handleMove = useCallback(
-    async (fromPage: number, toPage: number) => {
+    async (start: number, end: number, destination: number) => {
       setBusy(true);
-      const result = await movePage(fromPage, toPage);
+      const result = await moveBlock(start, end, destination);
       setBusy(false);
-      setNotice(result.ok ? `Page ${fromPage} is now ${toPage}.` : result.error);
+      setNotice(
+        result.ok
+          ? start === end
+            ? `Page ${start} is now ${destination}.`
+            : `Pages ${start}–${end} now start at ${destination}.`
+          : result.error,
+      );
     },
-    [movePage],
+    [moveBlock],
   );
 
   const handleUnpublish = useCallback(
@@ -496,16 +507,26 @@ export function ManageArchivePage() {
         </section>
       </div>
 
-      <section className="manage-published" aria-label="Published pages">
-        <h2 className="landing-section-title">Published</h2>
-        {published.length > 0 && (
+      <section className="manage-published" aria-label="Live pages">
+        <h2 className="landing-section-title">
+          Pages on air ({occupiedPages.length})
+        </h2>
+        {occupiedPages.length > 0 && (
           <p className="manage-note">
-            Page numbers are positions. Use <strong>Make room</strong> to open a gap
-            before a run, or the arrows on a card to slide one page along — both
-            renumber every affected page and move its content with it.
+            Every page holding content, from the archive or made by hand. Page
+            numbers are positions: <strong>Make room</strong> opens a gap before a
+            run, <strong>Move block</strong> relocates a whole section, and the
+            arrows nudge one page along. All of them renumber every page they
+            affect and carry its content with it —{' '}
+            {handMadePages.length > 0
+              ? `including the ${handMadePages.length} page${
+                  handMadePages.length === 1 ? '' : 's'
+                } nobody published from the archive.`
+              : 'archive pages and hand-made ones alike.'}
           </p>
         )}
-        {published.length > 0 && (
+        {occupiedPages.length > 0 && (
+          <>
           <div className="manage-reorder">
             <label className="sidebar-field-label" htmlFor="manage-room-at">
               Make room at page
@@ -518,46 +539,120 @@ export function ManageArchivePage() {
               value={roomAt}
               onChange={(e) => setRoomAt(e.target.value)}
             />
+            <span className="manage-note">for</span>
+            <input
+              aria-label="How many pages of room"
+              type="number"
+              min={1}
+              max={100}
+              value={roomCount}
+              onChange={(e) => setRoomCount(e.target.value)}
+            />
             <button
               type="button"
               className="manage-mini-btn"
-              disabled={busy || roomAt === ''}
-              onClick={() => void handleShift(Number(roomAt), 1)}
+              disabled={busy || roomAt === '' || roomCount === ''}
+              onClick={() => void handleShift(Number(roomAt), Number(roomCount))}
             >
-              Push up 1
+              Make room
             </button>
             <button
               type="button"
               className="manage-mini-btn"
-              disabled={busy || roomAt === ''}
-              onClick={() => void handleShift(Number(roomAt), -1)}
+              disabled={busy || roomAt === '' || roomCount === ''}
+              onClick={() => void handleShift(Number(roomAt), -Number(roomCount))}
             >
-              Pull down 1
+              Close gap
             </button>
           </div>
+
+          <div className="manage-reorder">
+            <label className="sidebar-field-label" htmlFor="manage-block-start">
+              Move pages
+            </label>
+            <input
+              id="manage-block-start"
+              type="number"
+              min={100}
+              max={999}
+              placeholder="from"
+              value={blockStart}
+              onChange={(e) => setBlockStart(e.target.value)}
+            />
+            <span className="manage-note">to</span>
+            <input
+              aria-label="Last page of the block"
+              type="number"
+              min={100}
+              max={999}
+              placeholder="to"
+              value={blockEnd}
+              onChange={(e) => setBlockEnd(e.target.value)}
+            />
+            <span className="manage-note">so they start at</span>
+            <input
+              aria-label="Destination page"
+              type="number"
+              min={100}
+              max={999}
+              placeholder="page"
+              value={blockTo}
+              onChange={(e) => setBlockTo(e.target.value)}
+            />
+            <button
+              type="button"
+              className="manage-mini-btn"
+              disabled={busy || blockStart === '' || blockEnd === '' || blockTo === ''}
+              onClick={() =>
+                void handleMove(Number(blockStart), Number(blockEnd), Number(blockTo))
+              }
+            >
+              Move block
+            </button>
+          </div>
+          </>
         )}
-        {published.length === 0 ? (
-          <p className="landing-section-description">Nothing published yet.</p>
+        {occupiedPages.length === 0 ? (
+          <p className="landing-section-description">No pages have any content yet.</p>
         ) : (
           <ul className="manage-published-grid">
-            {published.map((entry) => (
-              <li key={entry.page_number} className="manage-published-card">
-                <CaptureImage
-                  captureId={entry.capture_id}
-                  label={`Page ${entry.page_number}`}
-                />
+            {occupiedPages.map((pageNumber) => {
+              const entry = takenPages.get(pageNumber);
+              return (
+              <li key={pageNumber} className="manage-published-card">
+                {/* An archive page shows its capture; a hand-made one has no
+                    capture to show, so it gets its live content instead. */}
+                {entry != null ? (
+                  <CaptureImage
+                    captureId={entry.capture_id}
+                    label={`Page ${pageNumber}`}
+                  />
+                ) : (
+                  <div className="manage-preview">
+                    <TeletextGrid page={livePage(pageNumber) ?? createEmptyPage()} readOnly />
+                  </div>
+                )}
                 <div className="manage-published-meta">
-                  <strong>{entry.page_number}</strong>
-                  <span>{entry.title || <em>untitled</em>}</span>
-                  <span>
-                    {entry.source.toUpperCase()} {entry.original_page}
-                    {entry.topic != null && ` · ${entry.topic}`}
-                  </span>
-                  {(entry.shift_down || entry.menu_name != null) && (
+                  <strong>{pageNumber}</strong>
+                  {entry != null ? (
+                    <>
+                      <span>{entry.title || <em>untitled</em>}</span>
+                      <span>
+                        {entry.source.toUpperCase()} {entry.original_page}
+                        {entry.topic != null && ` · ${entry.topic}`}
+                      </span>
+                      {(entry.shift_down || entry.menu_name != null) && (
+                        <span className="manage-note">
+                          {entry.shift_down ? 'shifted' : ''}
+                          {entry.shift_down && entry.menu_name != null ? ' · ' : ''}
+                          {entry.menu_name != null ? `menu: ${entry.menu_name}` : ''}
+                        </span>
+                      )}
+                    </>
+                  ) : (
                     <span className="manage-note">
-                      {entry.shift_down ? 'shifted' : ''}
-                      {entry.shift_down && entry.menu_name != null ? ' · ' : ''}
-                      {entry.menu_name != null ? `menu: ${entry.menu_name}` : ''}
+                      {pageNumber >= 700 ? 'playground' : 'made by hand'} — not from
+                      the archive
                     </span>
                   )}
                   <div className="manage-card-actions">
@@ -565,8 +660,8 @@ export function ManageArchivePage() {
                       type="button"
                       className="manage-mini-btn"
                       title="Move one page earlier"
-                      disabled={busy || entry.page_number <= 100}
-                      onClick={() => void handleMove(entry.page_number, entry.page_number - 1)}
+                      disabled={busy || pageNumber <= 100}
+                      onClick={() => void handleMove(pageNumber, pageNumber, pageNumber - 1)}
                     >
                       ←
                     </button>
@@ -574,23 +669,32 @@ export function ManageArchivePage() {
                       type="button"
                       className="manage-mini-btn"
                       title="Move one page later"
-                      disabled={busy || entry.page_number >= 699}
-                      onClick={() => void handleMove(entry.page_number, entry.page_number + 1)}
+                      // An archive page may not cross into the playground,
+                      // where anyone could edit it; a hand-made page may.
+                      disabled={
+                        busy ||
+                        pageNumber >= 999 ||
+                        (entry != null && pageNumber + 1 >= PLAYGROUND_MIN_PAGE)
+                      }
+                      onClick={() => void handleMove(pageNumber, pageNumber, pageNumber + 1)}
                     >
                       →
                     </button>
-                    <button
-                      type="button"
-                      className="manage-mini-btn"
-                      disabled={busy}
-                      onClick={() => void handleUnpublish(entry.page_number)}
-                    >
-                      Unpublish
-                    </button>
+                    {entry != null && (
+                      <button
+                        type="button"
+                        className="manage-mini-btn"
+                        disabled={busy}
+                        onClick={() => void handleUnpublish(pageNumber)}
+                      >
+                        Unpublish
+                      </button>
+                    )}
                   </div>
                 </div>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </section>

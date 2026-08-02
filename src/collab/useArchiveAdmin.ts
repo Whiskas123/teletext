@@ -161,8 +161,20 @@ export interface ArchiveAdminApi {
    * Renumbers the records and replays the same moves on the live document.
    */
   shiftPages(fromPage: number, delta: number): Promise<{ ok: true } | { ok: false; error: string }>;
-  /** Move one published page to another number, sliding the pages between. */
-  movePage(fromPage: number, toPage: number): Promise<{ ok: true } | { ok: false; error: string }>;
+  /**
+   * Move the run of pages in `[blockStart, blockEnd]` so it begins at
+   * `destination`, sliding whatever it passes over to close the gap. A single
+   * page is a block of one.
+   */
+  moveBlock(
+    blockStart: number,
+    blockEnd: number,
+    destination: number,
+  ): Promise<{ ok: true } | { ok: false; error: string }>;
+  /** Every page holding content, from either store, ascending. */
+  occupiedPages: number[];
+  /** Live pages that hold content but were not published from the archive. */
+  handMadePages: number[];
 }
 
 const PAGE_SIZE = 60;
@@ -260,6 +272,36 @@ export function useArchiveAdmin(): ArchiveAdminApi {
     () => new Map(menus.map((menu) => [menu.id, menu])),
     [menus],
   );
+
+  /**
+   * Every page number holding content in the live document.
+   *
+   * Read from playhtml rather than from the publication records, because those
+   * two sets are not the same: the seeded pages, anything edited by hand and
+   * the whole playground exist here and nowhere else. Reordering has to know
+   * about them or it will move a page onto one and destroy it.
+   *
+   * An entry that normalises to an empty page is an empty slot, not content —
+   * clearing a page leaves the key behind.
+   */
+  const occupiedPages = useMemo(() => {
+    const pages: number[] = [];
+    for (const [key, stored] of Object.entries(livePages ?? {})) {
+      const pageNumber = Number(key);
+      if (!Number.isInteger(pageNumber)) continue;
+      const page = pageToArray(stored);
+      if (page.some((cell) => cell.char !== ' ' || cell.graphics != null)) {
+        pages.push(pageNumber);
+      }
+    }
+    return pages.sort((a, b) => a - b);
+  }, [livePages]);
+
+  /** Live pages with no publication record — someone's own work. */
+  const handMadePages = useMemo(() => {
+    const fromArchive = new Set(published.map((entry) => entry.page_number));
+    return occupiedPages.filter((page) => !fromArchive.has(page));
+  }, [occupiedPages, published]);
 
   const livePage = useCallback(
     (pageNumber: number): TeletextPage | null => {
@@ -428,25 +470,31 @@ export function useArchiveAdmin(): ArchiveAdminApi {
    */
   const replayPlan = useCallback(
     (plan: ReorderPlan) => {
-      setPages((draft) => {
-        const held = plan.lift == null ? undefined : draft[plan.lift];
-        if (plan.lift != null) delete draft[plan.lift];
-        for (const { from, to } of plan.moves) {
-          draft[to] = draft[from];
-          delete draft[from];
+      /**
+       * Replay one channel. Written once and applied to both because pages and
+       * titles are keyed the same way and must move together — a page whose
+       * title stayed behind would be mislabelled.
+       */
+      const replayInto = <T,>(draft: Record<number, T>) => {
+        const held = new Map<number, T | undefined>();
+        for (const page of plan.lifts) {
+          held.set(page, draft[page]);
+          delete draft[page];
         }
-        if (plan.drop != null && held !== undefined) draft[plan.drop] = held;
-      });
-      setTitles((draft) => {
-        const held = plan.lift == null ? undefined : draft[plan.lift];
-        if (plan.lift != null) delete draft[plan.lift];
         for (const { from, to } of plan.moves) {
           if (draft[from] === undefined) delete draft[to];
           else draft[to] = draft[from];
           delete draft[from];
         }
-        if (plan.drop != null && held !== undefined) draft[plan.drop] = held;
-      });
+        for (const { from, to } of plan.drops) {
+          const value = held.get(from);
+          if (value === undefined) delete draft[to];
+          else draft[to] = value;
+        }
+      };
+
+      setPages((draft) => replayInto(draft));
+      setTitles((draft) => replayInto(draft));
     },
     [setPages, setTitles],
   );
@@ -458,20 +506,23 @@ export function useArchiveAdmin(): ArchiveAdminApi {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(payload),
+          // The live page numbers go with the request: the server cannot see
+          // the playhtml document, and planning without them would let a shift
+          // overwrite a page nobody published.
+          body: JSON.stringify({ ...payload, livePages: occupiedPages }),
         });
         const body = (await response.json()) as { error?: string } & ReorderPlan;
         if (!response.ok) {
           return { ok: false as const, error: body.error ?? `Failed (${response.status}).` };
         }
-        replayPlan({ lift: body.lift, moves: body.moves, drop: body.drop });
+        replayPlan({ lifts: body.lifts, moves: body.moves, drops: body.drops });
         reloadPublished();
         return { ok: true as const };
       } catch {
         return { ok: false as const, error: 'Could not reach the server.' };
       }
     },
-    [replayPlan, reloadPublished],
+    [replayPlan, reloadPublished, occupiedPages],
   );
 
   const shiftPages = useCallback<ArchiveAdminApi['shiftPages']>(
@@ -479,8 +530,9 @@ export function useArchiveAdmin(): ArchiveAdminApi {
     [reorder],
   );
 
-  const movePage = useCallback<ArchiveAdminApi['movePage']>(
-    (fromPage, toPage) => reorder({ action: 'move', fromPage, toPage }),
+  const moveBlock = useCallback<ArchiveAdminApi['moveBlock']>(
+    (blockStart, blockEnd, destination) =>
+      reorder({ action: 'move', blockStart, blockEnd, destination }),
     [reorder],
   );
 
@@ -501,6 +553,8 @@ export function useArchiveAdmin(): ArchiveAdminApi {
     saveMenu,
     deleteMenu,
     shiftPages,
-    movePage,
+    moveBlock,
+    occupiedPages,
+    handMadePages,
   };
 }
