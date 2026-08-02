@@ -1092,7 +1092,18 @@
   font-family: 'Univers Condensed', 'UniversNextW10-Cond', 'Helvetica Neue',
     'Roboto Condensed', 'Arial Narrow', Arial, sans-serif;
   font-stretch: condensed;
-  width: min(28rem, 92vw);
+  /*
+   * Sized to its contents rather than fixed. A directory of six listings and a
+   * directory of two hundred are different objects, and a fixed width clipped
+   * the longer ones — page numbers were being cut off the right edge.
+   *
+   * `fit-content` grows with the widest listing, bounded so it can neither
+   * collapse to nothing nor run off the screen. Height still stops at 85vh and
+   * scrolls; a phone book is expected to be long.
+   */
+  width: fit-content;
+  min-width: min(24rem, 92vw);
+  max-width: min(44rem, 92vw);
   max-height: 85vh;
   overflow-y: auto;
   background: #ffcf1f;
@@ -1149,17 +1160,23 @@
   font-size: 1rem;
 }
 
-/* CSS Grid (not `columns`/multicol) so each entry is a genuinely separate,
-   correctly hit-tested box — see the comment in YellowPages.tsx on why
-   multicol was replaced. `grid-auto-flow: column` + the row count set inline
-   there fills column 1 top-to-bottom, then column 2, same as before. */
+/*
+ * One column, flowing straight down.
+ *
+ * It used to fill two columns top-to-bottom, which was right for a flat list
+ * and became wrong once listings could nest: a category and the pages indented
+ * beneath it would be split down the middle, with the children in one column
+ * and the next category stranded in the other. A tree only reads in one order.
+ *
+ * Still CSS Grid rather than `columns`/multicol, so each entry is a genuinely
+ * separate, correctly hit-tested box — see the note in YellowPages.tsx.
+ */
 .yellow-pages-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  grid-auto-flow: column;
-  column-gap: 1.5rem;
+  grid-auto-flow: row;
 }
 
 .yellow-pages-entry {

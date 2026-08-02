@@ -135,16 +135,10 @@ export function YellowPages({ onSelect, onClose }: YellowPagesProps) {
             No listings yet. Create a page in the editor to have it appear here.
           </p>
         ) : (
-          <ul
-            className="yellow-pages-list"
-            // Explicit row count so `grid-auto-flow: column` fills column 1
-            // top-to-bottom then continues into column 2 — the same reading
-            // order the old `columns: 2` produced, but as real independently
-            // hit-tested grid items (CSS multicol had a rendering bug where
-            // hovering the last entry of one column could show the hover
-            // state on the DOM-adjacent entry at the top of the next column).
-            style={{ gridTemplateRows: `repeat(${Math.max(1, Math.ceil(entries.length / 2))}, auto)` }}
-          >
+          // One column, flowing down: the listing is a tree and nesting only
+          // reads in one order. Still Grid rather than multicol so each entry
+          // is its own hit-tested box — see `.yellow-pages-list` in App.css.
+          <ul className="yellow-pages-list">
             {tree.map((node) => (
               <Listing
                 key={node.pageNumber}
