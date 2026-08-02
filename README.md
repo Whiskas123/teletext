@@ -115,6 +115,8 @@ Then sign in at `/moderator` and use `/manage` to assign captures to page number
 
 ### The management screen
 
+Results are paginated — without that the browser only ever showed the first 60 captures by page number, which are all `indice`, so "all topics" looked broken when it was really the first page of an ordered list.
+
 Captures are browsed by **topic** and era, as a grid of their actual renders — choosing between four captures of page 220 means reading what's on them. Each is the original GIF or PNG re-encoded as lossless WebP: ~2.2 KB, *smaller* than the source file, and they load lazily as you scroll and cache for a year.
 
 (An earlier version sent one palette colour per cell — 960 bytes drawn to a 40×24 canvas — on the theory that a page is recognisable by layout and colour before it's readable. That's true of a graphics-heavy page and false of almost every page here, because teletext is mostly text: reducing a cell to one colour throws the glyph away, and the result was a smear of dots. Lossy WebP was measured too and is *three times larger* than lossless at this content — photographic compression has nothing to work with on flat colour and hard edges.)
@@ -127,6 +129,14 @@ Two adjustments can be applied on the way out:
 - **A custom menu** — replaces the bottom four-colour fastext strip. Menus are named, saved and reused, since the same strip goes on dozens of pages; the editor previews through the same function that publishes, so what you see is what lands.
 
 Both are recorded on the publication rather than baked only into the cells, so a menu can be edited and re-applied, and any page can be explained later.
+
+### Moving pages around
+
+Page numbers are positions, not names — 200 is where the news starts because that is where it was put — so slotting something in *before* an existing run is normal. Doing it by hand means republishing every page above it, each one overwriting a live page on the way past.
+
+Instead, **Make room at page N** pushes N and everything above it up (or down) by one, and the **← →** buttons on a published card slide one page along, closing the gap behind it. Both renumber the records *and* move the content.
+
+The ordering is the whole problem: moving 200→201 while 201 exists destroys 201. `src/domain/reorder.ts` plans the moves so each destination is free when written — descending when shifting up, ascending when shifting down. A reposition among consecutive pages is a *rotation*, where every destination is occupied and no move is safe first, so the plan lifts one page's content out, slides the rest, and drops it back. The same ordered plan is replayed against Postgres and against playhtml, which is why it is a pure, property-tested module rather than a query.
 
 ### Backups
 

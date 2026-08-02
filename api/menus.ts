@@ -13,6 +13,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
+import { toInteger } from '../src/domain/coerce';
 import { describeMenuRejection, validateMenu } from '../src/domain/menu';
 import { db } from './_lib/db';
 import { isAdmin } from './_lib/auth';
@@ -73,8 +74,8 @@ export default async function handler(
     // An id means "update that one"; without it this is a new menu. Names are
     // unique, so re-saving under an existing name updates rather than failing —
     // the alternative is a duplicate-name error for what is obviously an edit.
-    const id = Number(body.id);
-    const rows = Number.isInteger(id) && id > 0
+    const id = toInteger(body.id);
+    const rows = id != null && id > 0
       ? await db()`
           update custom_menus
           set name = ${name}, items = ${JSON.stringify(items)}::jsonb, updated_at = now()

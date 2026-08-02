@@ -25,6 +25,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
+import { toInteger } from '../src/domain/coerce';
 import { applyMenu, type MenuItem } from '../src/domain/menu';
 import { pageToArray, pageToCellMap } from '../src/domain/pageEncoding';
 import { shiftPageDown } from '../src/domain/pageTransform';
@@ -63,12 +64,12 @@ export default async function handler(
     }
 
     const body = bodyObject(req);
-    const captureId = Number(body.captureId);
+    const captureId = toInteger(body.captureId);
 
     // Look the capture up first: validation needs to know whether it exists and
     // whether it was decoded, and neither is something the client can be
     // trusted to assert.
-    const found = Number.isInteger(captureId)
+    const found = captureId != null
       ? await db()`
           select id, decode_status, cells
           from archive_captures
@@ -94,8 +95,8 @@ export default async function handler(
     // last row for the menu to occupy. Doing it the other way round would
     // write the menu and immediately shift it away.
     const shiftDown = body.shiftDown === true;
-    const menuId = Number(body.menuId);
-    const useMenu = Number.isInteger(menuId) && menuId > 0;
+    const menuId = toInteger(body.menuId);
+    const useMenu = menuId != null && menuId > 0;
 
     const menuRows = useMenu
       ? await db()`select id, items from custom_menus where id = ${menuId}`

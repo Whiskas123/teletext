@@ -18,10 +18,12 @@ import { usePageData } from '@playhtml/react';
 import { applyMenu, type CustomMenu, type MenuDraft } from '../domain/menu';
 import { pageToArray } from '../domain/pageEncoding';
 import { shiftPageDown } from '../domain/pageTransform';
+import type { ReorderPlan } from '../domain/reorder';
 import { useGuide } from './useGuide';
 import { useImportPages } from './useImportPages';
 import { PAGES_CHANNEL } from './useEditPage';
-import type { PagesData, TeletextPage } from './types';
+import { TITLES_CHANNEL } from './useGuide';
+import type { PagesData, TeletextPage, TitlesData } from './types';
 
 /** A capture as the list endpoint returns it — metadata only, no cells. */
 export interface CaptureSummary {
@@ -123,6 +125,8 @@ export interface ArchiveAdminApi {
   menus: CustomMenu[];
   loading: boolean;
   error: string | null;
+  /** How many captures one page of results holds. */
+  pageSize: number;
   /** Re-run the capture query with new filters. */
   search(filters: CaptureFilters, offset?: number): void;
   /** Fetch one capture's cells, for previewing. */
@@ -152,6 +156,13 @@ export interface ArchiveAdminApi {
   saveMenu(draft: MenuDraft & { id?: number }): Promise<{ ok: true } | { ok: false; error: string }>;
   /** Remove a saved menu. Published pages keep their cells. */
   deleteMenu(id: number): Promise<{ ok: true } | { ok: false; error: string }>;
+  /**
+   * Make room at `fromPage` by pushing it and everything above it by `delta`.
+   * Renumbers the records and replays the same moves on the live document.
+   */
+  shiftPages(fromPage: number, delta: number): Promise<{ ok: true } | { ok: false; error: string }>;
+  /** Move one published page to another number, sliding the pages between. */
+  movePage(fromPage: number, toPage: number): Promise<{ ok: true } | { ok: false; error: string }>;
 }
 
 const PAGE_SIZE = 60;
@@ -163,8 +174,10 @@ export function useArchiveAdmin(): ArchiveAdminApi {
   const [published, setPublished] = useState<PublishedEntry[]>([]);
   const [menus, setMenus] = useState<CustomMenu[]>([]);
   // The live document, so the screen can show what is on a page right now
-  // rather than what the database says was published to it.
-  const [livePages] = usePageData<PagesData>(PAGES_CHANNEL, {});
+  // rather than what the database says was published to it — and so a
+  // renumbering can move the content, not just the records.
+  const [livePages, setPages] = usePageData<PagesData>(PAGES_CHANNEL, {});
+  const [, setTitles] = usePageData<TitlesData>(TITLES_CHANNEL, {});
   const [query, setQuery] = useState<{ filters: CaptureFilters; offset: number }>({
     filters: {},
     offset: 0,
@@ -401,6 +414,76 @@ export function useArchiveAdmin(): ArchiveAdminApi {
     [reloadMenus],
   );
 
+  /**
+   * Replay a renumbering plan against the live document.
+   *
+   * The server has already renumbered the records and returned the plan; this
+   * makes the identical moves on the `pages` and `titles` channels so the two
+   * stores stay in step. Order is not ours to choose — each destination is only
+   * free because the step before it vacated one — so this walks the plan
+   * exactly as given.
+   *
+   * The whole replay is a single playhtml mutation. Done as separate writes,
+   * a peer could observe the document mid-shuffle, with a page briefly missing.
+   */
+  const replayPlan = useCallback(
+    (plan: ReorderPlan) => {
+      setPages((draft) => {
+        const held = plan.lift == null ? undefined : draft[plan.lift];
+        if (plan.lift != null) delete draft[plan.lift];
+        for (const { from, to } of plan.moves) {
+          draft[to] = draft[from];
+          delete draft[from];
+        }
+        if (plan.drop != null && held !== undefined) draft[plan.drop] = held;
+      });
+      setTitles((draft) => {
+        const held = plan.lift == null ? undefined : draft[plan.lift];
+        if (plan.lift != null) delete draft[plan.lift];
+        for (const { from, to } of plan.moves) {
+          if (draft[from] === undefined) delete draft[to];
+          else draft[to] = draft[from];
+          delete draft[from];
+        }
+        if (plan.drop != null && held !== undefined) draft[plan.drop] = held;
+      });
+    },
+    [setPages, setTitles],
+  );
+
+  const reorder = useCallback(
+    async (payload: Record<string, unknown>) => {
+      try {
+        const response = await fetch('/api/reorder', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const body = (await response.json()) as { error?: string } & ReorderPlan;
+        if (!response.ok) {
+          return { ok: false as const, error: body.error ?? `Failed (${response.status}).` };
+        }
+        replayPlan({ lift: body.lift, moves: body.moves, drop: body.drop });
+        reloadPublished();
+        return { ok: true as const };
+      } catch {
+        return { ok: false as const, error: 'Could not reach the server.' };
+      }
+    },
+    [replayPlan, reloadPublished],
+  );
+
+  const shiftPages = useCallback<ArchiveAdminApi['shiftPages']>(
+    (fromPage, delta) => reorder({ action: 'shift', fromPage, delta }),
+    [reorder],
+  );
+
+  const movePage = useCallback<ArchiveAdminApi['movePage']>(
+    (fromPage, toPage) => reorder({ action: 'move', fromPage, toPage }),
+    [reorder],
+  );
+
   return {
     captures,
     total,
@@ -408,6 +491,7 @@ export function useArchiveAdmin(): ArchiveAdminApi {
     menus,
     loading,
     error,
+    pageSize: PAGE_SIZE,
     search,
     loadPage,
     livePage,
@@ -416,5 +500,7 @@ export function useArchiveAdmin(): ArchiveAdminApi {
     unpublish,
     saveMenu,
     deleteMenu,
+    shiftPages,
+    movePage,
   };
 }

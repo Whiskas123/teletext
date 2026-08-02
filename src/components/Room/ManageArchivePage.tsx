@@ -71,12 +71,14 @@ export function ManageArchivePage() {
   const { admin, loading: authLoading, configured } = useAdminStatus();
   const admin_ = useArchiveAdmin();
   const {
-    captures, total, published, menus, loading, error,
+    captures, total, published, menus, loading, error, pageSize,
     search, loadPage, livePage, transform, publish, unpublish, saveMenu, deleteMenu,
+    shiftPages, movePage,
   } = admin_;
   const snapshot = useSnapshot();
 
   const [filters, setFilters] = useState<CaptureFilters>({});
+  const [offset, setOffset] = useState(0);
   const [selected, setSelected] = useState<CaptureSummary | null>(null);
   const [sourcePage, setSourcePage] = useState<TeletextPage | null>(null);
   const [pageNumber, setPageNumber] = useState('');
@@ -89,10 +91,27 @@ export function ManageArchivePage() {
   const [menuId, setMenuId] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [roomAt, setRoomAt] = useState('');
 
   useEffect(() => {
-    search(filters);
-  }, [filters, search]);
+    search(filters, offset);
+  }, [filters, offset, search]);
+
+  /**
+   * Change a filter and go back to the first page of results.
+   *
+   * The reset belongs here rather than in an effect watching `filters`:
+   * staying on page 7 of the previous result set would show nothing and look
+   * like the filter had broken, and doing it as a follow-up effect would mean
+   * a render (and a fetch) against the stale offset first.
+   */
+  const changeFilters = useCallback(
+    (update: (current: CaptureFilters) => CaptureFilters) => {
+      setFilters(update);
+      setOffset(0);
+    },
+    [],
+  );
 
   const takenPages = useMemo(
     () => new Map(published.map((entry) => [entry.page_number, entry])),
@@ -138,6 +157,30 @@ export function ManageArchivePage() {
     setBusy(false);
     setNotice(result.ok ? `Published to page ${pageNumber}.` : result.error);
   }, [selected, pageNumber, title, description, shiftDown, menuId, publish]);
+
+  const handleShift = useCallback(
+    async (fromPage: number, delta: number) => {
+      setBusy(true);
+      const result = await shiftPages(fromPage, delta);
+      setBusy(false);
+      setNotice(
+        result.ok
+          ? `Pages from ${fromPage} moved by ${delta > 0 ? '+' : ''}${delta}.`
+          : result.error,
+      );
+    },
+    [shiftPages],
+  );
+
+  const handleMove = useCallback(
+    async (fromPage: number, toPage: number) => {
+      setBusy(true);
+      const result = await movePage(fromPage, toPage);
+      setBusy(false);
+      setNotice(result.ok ? `Page ${fromPage} is now ${toPage}.` : result.error);
+    },
+    [movePage],
+  );
 
   const handleUnpublish = useCallback(
     async (page: number) => {
@@ -210,7 +253,7 @@ export function ManageArchivePage() {
         <select
           id="manage-topic"
           value={filters.topicGroup ?? ''}
-          onChange={(e) => setFilters((f) => ({ ...f, topicGroup: e.target.value || undefined }))}
+          onChange={(e) => changeFilters((f) => ({ ...f, topicGroup: e.target.value || undefined }))}
         >
           <option value="">All topics</option>
           {TOPIC_GROUPS.map((topic) => <option key={topic} value={topic}>{topic}</option>)}
@@ -220,7 +263,7 @@ export function ManageArchivePage() {
         <select
           id="manage-source"
           value={filters.source ?? ''}
-          onChange={(e) => setFilters((f) => ({ ...f, source: e.target.value || undefined }))}
+          onChange={(e) => changeFilters((f) => ({ ...f, source: e.target.value || undefined }))}
         >
           <option value="">RTP and SIC</option>
           <option value="rtp">RTP</option>
@@ -231,7 +274,7 @@ export function ManageArchivePage() {
         <select
           id="manage-scheme"
           value={filters.scheme ?? ''}
-          onChange={(e) => setFilters((f) => ({ ...f, scheme: e.target.value || undefined }))}
+          onChange={(e) => changeFilters((f) => ({ ...f, scheme: e.target.value || undefined }))}
         >
           <option value="">All years</option>
           {SCHEMES.map((scheme) => <option key={scheme} value={scheme}>{scheme}</option>)}
@@ -245,7 +288,7 @@ export function ManageArchivePage() {
           max={999}
           value={filters.page ?? ''}
           onChange={(e) =>
-            setFilters((f) => ({ ...f, page: e.target.value ? Number(e.target.value) : undefined }))
+            changeFilters((f) => ({ ...f, page: e.target.value ? Number(e.target.value) : undefined }))
           }
         />
 
@@ -253,7 +296,7 @@ export function ManageArchivePage() {
           <input
             type="checkbox"
             checked={filters.undecoded ?? false}
-            onChange={(e) => setFilters((f) => ({ ...f, undecoded: e.target.checked || undefined }))}
+            onChange={(e) => changeFilters((f) => ({ ...f, undecoded: e.target.checked || undefined }))}
           />
           Include captures that cannot be decoded
         </label>
@@ -301,6 +344,36 @@ export function ManageArchivePage() {
                 );
               })}
             </ul>
+          )}
+
+          {total > pageSize && (
+            /*
+             * Without this the browser only ever showed the first 60 captures
+             * by page number — which are all `indice`, because that is what
+             * pages 100-102 are. "All topics" looked broken when it was really
+             * just the first page of an ordered list.
+             */
+            <nav className="manage-pager" aria-label="Result pages">
+              <button
+                type="button"
+                className="manage-mini-btn"
+                disabled={offset === 0}
+                onClick={() => setOffset((o) => Math.max(0, o - pageSize))}
+              >
+                ‹ Previous
+              </button>
+              <span className="manage-note">
+                {offset + 1}–{Math.min(offset + pageSize, total)} of {total}
+              </span>
+              <button
+                type="button"
+                className="manage-mini-btn"
+                disabled={offset + pageSize >= total}
+                onClick={() => setOffset((o) => o + pageSize)}
+              >
+                Next ›
+              </button>
+            </nav>
           )}
         </section>
 
@@ -425,6 +498,44 @@ export function ManageArchivePage() {
 
       <section className="manage-published" aria-label="Published pages">
         <h2 className="landing-section-title">Published</h2>
+        {published.length > 0 && (
+          <p className="manage-note">
+            Page numbers are positions. Use <strong>Make room</strong> to open a gap
+            before a run, or the arrows on a card to slide one page along — both
+            renumber every affected page and move its content with it.
+          </p>
+        )}
+        {published.length > 0 && (
+          <div className="manage-reorder">
+            <label className="sidebar-field-label" htmlFor="manage-room-at">
+              Make room at page
+            </label>
+            <input
+              id="manage-room-at"
+              type="number"
+              min={100}
+              max={699}
+              value={roomAt}
+              onChange={(e) => setRoomAt(e.target.value)}
+            />
+            <button
+              type="button"
+              className="manage-mini-btn"
+              disabled={busy || roomAt === ''}
+              onClick={() => void handleShift(Number(roomAt), 1)}
+            >
+              Push up 1
+            </button>
+            <button
+              type="button"
+              className="manage-mini-btn"
+              disabled={busy || roomAt === ''}
+              onClick={() => void handleShift(Number(roomAt), -1)}
+            >
+              Pull down 1
+            </button>
+          </div>
+        )}
         {published.length === 0 ? (
           <p className="landing-section-description">Nothing published yet.</p>
         ) : (
@@ -449,14 +560,34 @@ export function ManageArchivePage() {
                       {entry.menu_name != null ? `menu: ${entry.menu_name}` : ''}
                     </span>
                   )}
-                  <button
-                    type="button"
-                    className="manage-mini-btn"
-                    disabled={busy}
-                    onClick={() => void handleUnpublish(entry.page_number)}
-                  >
-                    Unpublish
-                  </button>
+                  <div className="manage-card-actions">
+                    <button
+                      type="button"
+                      className="manage-mini-btn"
+                      title="Move one page earlier"
+                      disabled={busy || entry.page_number <= 100}
+                      onClick={() => void handleMove(entry.page_number, entry.page_number - 1)}
+                    >
+                      ←
+                    </button>
+                    <button
+                      type="button"
+                      className="manage-mini-btn"
+                      title="Move one page later"
+                      disabled={busy || entry.page_number >= 699}
+                      onClick={() => void handleMove(entry.page_number, entry.page_number + 1)}
+                    >
+                      →
+                    </button>
+                    <button
+                      type="button"
+                      className="manage-mini-btn"
+                      disabled={busy}
+                      onClick={() => void handleUnpublish(entry.page_number)}
+                    >
+                      Unpublish
+                    </button>
+                  </div>
                 </div>
               </li>
             ))}

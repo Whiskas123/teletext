@@ -25,6 +25,7 @@ import {
 } from '../types/teletext';
 import { normalizePage } from './pageOps';
 import { inPageRange } from './pageOps';
+import { toInteger } from './coerce';
 
 /** The four fastext colours, in the order they appear across the row. */
 export const MENU_COLORS: readonly TeletextColor[] = ['red', 'green', 'yellow', 'cyan'];
@@ -128,8 +129,10 @@ export function validateMenu(draft: {
 
     let pageNumber: number | null = null;
     if (raw.pageNumber != null && raw.pageNumber !== '') {
-      const parsed = Number(raw.pageNumber);
-      if (!inPageRange(parsed)) return { ok: false, reason: 'page-out-of-range' };
+      const parsed = toInteger(raw.pageNumber);
+      if (parsed == null || !inPageRange(parsed)) {
+        return { ok: false, reason: 'page-out-of-range' };
+      }
       pageNumber = parsed;
     }
 

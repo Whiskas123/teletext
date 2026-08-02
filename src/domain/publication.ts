@@ -21,6 +21,7 @@
  */
 
 import { isArchivePage } from './access';
+import { toInteger } from './coerce';
 import { MAX_TITLE_LENGTH, validateTitle } from './titles';
 
 /** Longest description accepted for a published page. */
@@ -79,13 +80,13 @@ export function validatePublication(
   input: Readonly<Record<string, unknown>>,
   capture: { exists: boolean; decoded: boolean },
 ): ValidatePublicationResult {
-  const pageNumber = Number(input.pageNumber);
-  if (!isPublishablePage(pageNumber)) {
+  const pageNumber = toInteger(input.pageNumber);
+  if (pageNumber == null || !isPublishablePage(pageNumber)) {
     return { ok: false, reason: 'page-out-of-range' };
   }
 
-  const captureId = Number(input.captureId);
-  if (!Number.isInteger(captureId) || captureId <= 0 || !capture.exists) {
+  const captureId = toInteger(input.captureId);
+  if (captureId == null || captureId <= 0 || !capture.exists) {
     return { ok: false, reason: 'capture-missing' };
   }
   if (!capture.decoded) {
