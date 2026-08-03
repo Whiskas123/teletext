@@ -71,6 +71,9 @@ export interface OnAirPageCardProps {
   occupied: ReadonlySet<number>;
   draft: OnAirCardDraft | null;
   editorOpen: boolean;
+  /** Whether this page is ticked for a bulk transform change. */
+  selected: boolean;
+  onToggleSelected(): void;
   /** The destination being typed, or null when this card is not being moved. */
   destination: string | null;
   /** What sending this page to `destination` would do. */
@@ -92,6 +95,8 @@ export function OnAirPageCard({
   occupied,
   draft,
   editorOpen,
+  selected,
+  onToggleSelected,
   destination,
   movePreview,
   busy,
@@ -157,7 +162,24 @@ export function OnAirPageCard({
       )}
 
       <div className="manage-published-meta">
-        <strong className="manage-card-number">{pageNumber}</strong>
+        <span className="manage-card-head">
+          {/* Only a published page can be re-published, so only a published page
+              can join a bulk transform change. */}
+          {entry != null && (
+            <label className="manage-card-pick">
+              <input
+                type="checkbox"
+                checked={selected}
+                disabled={disabled}
+                onChange={onToggleSelected}
+              />
+              <span className="sr-only">
+                Select page {pageNumber} for a bulk change
+              </span>
+            </label>
+          )}
+          <strong className="manage-card-number">{pageNumber}</strong>
+        </span>
         <span className="manage-card-title">
           {stored.title || <em>untitled</em>}
           {unsaved && (

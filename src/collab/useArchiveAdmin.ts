@@ -366,12 +366,15 @@ export function useArchiveAdmin({
 
   useEffect(reloadPublished, [reloadPublished]);
 
+  // Loaded for both tabs, unlike the corpus: the on-air side offers a bulk change
+  // of the menu strip, so it needs the list of saved menus to offer. It is a
+  // handful of rows, not three thousand captures.
   const reloadMenus = useCallback(() => {
-    if (!(admin && archiveEnabled)) return;
+    if (!admin) return;
     getJson<{ menus: CustomMenu[] }>('/api/menus')
       .then((body) => setMenus(body.menus))
       .catch(() => setMenus([]));
-  }, [admin, archiveEnabled]);
+  }, [admin]);
 
   useEffect(reloadMenus, [reloadMenus]);
 

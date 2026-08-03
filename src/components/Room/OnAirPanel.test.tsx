@@ -65,6 +65,9 @@ function Harness(overrides: Partial<OnAirPanelProps> = {}) {
       onShift={vi.fn().mockResolvedValue({ ok: true })}
       onMove={vi.fn().mockResolvedValue({ ok: true })}
       onNotice={vi.fn()}
+      menus={[]}
+      publishBusy={false}
+      onApplyTransforms={vi.fn()}
       {...overrides}
     />
   );

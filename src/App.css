@@ -51,13 +51,38 @@
   white-space: nowrap;
 }
 
+/*
+ * The rename disclosure. Reads as a line of the sidebar rather than a button,
+ * because it opens a form rather than doing something.
+ */
+.presence-rename-toggle {
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.5rem 0;
+  background: none;
+  border: 0;
+  border-top: 1px solid #2a2a2a;
+  color: #bbb;
+  font: inherit;
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.presence-rename-toggle:hover {
+  color: #fff;
+}
+
+.presence-rename-toggle:focus-visible {
+  outline: 2px solid #ffff00;
+  outline-offset: -2px;
+}
+
 .presence-rename {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  margin-top: 0.5rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid #2a2a2a;
+  padding-bottom: 0.25rem;
 }
 
 .presence-name-input {
@@ -2123,8 +2148,63 @@
   border: 1px solid #444;
 }
 
+.manage-card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.manage-card-pick {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
 .manage-card-number {
   font-size: 1rem;
+}
+
+/* --- Bulk transform change on the pages on air --------------------------- */
+/*
+ * Above the groups rather than inside them: it applies to a selection that can
+ * span both ranges, and the ticks it acts on are on the cards below.
+ */
+.manage-bulk {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.75rem;
+  background: #001a1a;
+  border: 1px solid #4cf;
+  font-size: 0.75rem;
+}
+
+.manage-bulk-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+}
+
+.manage-bulk-controls {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  margin-top: 0.6rem;
+}
+
+.manage-bulk-controls select {
+  min-height: 44px;
+  box-sizing: border-box;
+  background: #111;
+  color: #ddd;
+  border: 1px solid #444;
+  font-family: monospace;
+  padding: 0.25rem 0.4rem;
+}
+
+.manage-bulk-controls .manage-note {
+  flex: 1 1 100%;
+  margin: 0;
 }
 
 .manage-card-title {

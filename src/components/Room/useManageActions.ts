@@ -36,6 +36,7 @@ import {
   publishSucceeded,
   roleChanged,
   textTooLong,
+  transformsApplied,
   type ConfirmRequest,
   type Notice,
 } from '../../domain/manageMessages';
@@ -95,6 +96,8 @@ export interface ManageActionsApi {
   publish(input: PublishInput): void;
   /** Publish a run of captures onto consecutive pages from `startPage`. */
   publishBatch(items: readonly BatchItem[], startPage: number): void;
+  /** Re-publish pages that already have records, to change their transforms. */
+  republish(items: readonly PublishInput[]): void;
 }
 
 export function useManageActions({
@@ -337,6 +340,47 @@ export function useManageActions({
     [runAction, data],
   );
 
+  /**
+   * Re-publish pages whose transforms changed.
+   *
+   * The same sequential loop as a batch publish, for the same reasons — one
+   * database write plus one playhtml write each, and a partial failure that names
+   * the pages it left alone.
+   */
+  const republish = useCallback(
+    (items: readonly PublishInput[]) => {
+      if (items.length === 0) return;
+
+      runAction(
+        { kind: 'publish' },
+        async () => {
+          const failed: number[] = [];
+          let lastError = '';
+
+          for (const item of items) {
+            const result = await data.publish(item);
+            if (!result.ok) {
+              failed.push(item.pageNumber);
+              lastError = result.error;
+            }
+          }
+
+          return failed.length === 0
+            ? { ok: true as const }
+            : {
+                ok: false as const,
+                error: `${failed.length} of ${items.length} did not re-publish (${failed.join(', ')}). ${lastError}`,
+              };
+        },
+        (outcome) =>
+          outcome.ok
+            ? transformsApplied(items.map((item) => item.pageNumber))
+            : { tone: 'alert', text: outcome.error },
+      );
+    },
+    [runAction, data],
+  );
+
   const askConfirm = useCallback((request: ConfirmRequest) => {
     confirmOpener.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -379,5 +423,6 @@ export function useManageActions({
     saveText,
     publish,
     publishBatch,
+    republish,
   };
 }

@@ -138,6 +138,15 @@ export function batchPublished(count: number, startPage: number): Notice {
   );
 }
 
+/** New transforms re-applied to a run of pages already on air. */
+export function transformsApplied(pageNumbers: readonly number[]): Notice {
+  return status(
+    pageNumbers.length === 1
+      ? `Page ${pageNumbers[0]} re-published with the new transforms.`
+      : `${pageNumbers.length} pages re-published with the new transforms.`,
+  );
+}
+
 /** A publish target outside the curated range. Reuses the domain's own prose. */
 export function publishTargetOutOfRange(): Notice {
   return alert(describeRejection('page-out-of-range'));

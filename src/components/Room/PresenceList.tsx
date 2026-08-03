@@ -50,17 +50,21 @@ export function PresenceList({ allowRename = true }: PresenceListProps) {
 
   const [draftName, setDraftName] = useState('');
   const [nameError, setNameError] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
 
   const handleRename = (event: FormEvent) => {
     event.preventDefault();
     const result = setDisplayName(draftName);
     if (result === 'invalid') {
       // Reject and retain the previous name; surface an inline error (Req 2.5).
+      // The form stays open, or the error would have nowhere to appear.
       setNameError(true);
       return;
     }
     setNameError(false);
     setDraftName('');
+    // The job is done, so it folds away again.
+    setRenameOpen(false);
   };
 
   return (
@@ -92,10 +96,30 @@ export function PresenceList({ allowRename = true }: PresenceListProps) {
         </ul>
       )}
 
+      {/*
+        * Collapsed by default. Renaming is a once-per-visit thing, and the
+        * sidebar's job is to show who is here — a permanently open form pushed
+        * the list of viewers up the panel for a control almost nobody was about
+        * to use.
+        */}
       {allowRename && (
-        <form className="presence-rename" onSubmit={handleRename}>
+        <>
+          <button
+            type="button"
+            className="presence-rename-toggle"
+            aria-expanded={renameOpen}
+            aria-controls="presence-rename"
+            onClick={() => {
+              setRenameOpen((open) => !open);
+              setNameError(false);
+            }}
+          >
+            Change your name{renameOpen ? ' ▴' : ' ▾'}
+          </button>
+          {renameOpen && (
+        <form className="presence-rename" id="presence-rename" onSubmit={handleRename}>
           <label className="sidebar-field-label" htmlFor="presence-name-input">
-            Change your name
+            Your name
           </label>
           <input
             id="presence-name-input"
@@ -125,6 +149,8 @@ export function PresenceList({ allowRename = true }: PresenceListProps) {
             </p>
           )}
         </form>
+          )}
+        </>
       )}
     </section>
   );

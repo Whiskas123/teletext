@@ -38,17 +38,15 @@ export interface SoloViewerProps {
 }
 
 /**
- * The solo remote control: type a page number, or step through the pages that
- * have content. Every action applies immediately.
+ * The solo remote control: type a page number and go there. Applies immediately.
+ *
+ * Stepping lives on the TV's own knobs rather than here — that is where a set
+ * puts it, and it kept this panel to the one thing a remote is for.
  */
 function SoloRemote({
   onSelect,
-  onNext,
-  onPrev,
 }: {
   onSelect: (pageNumber: number) => 'out-of-range' | null;
-  onNext: () => 'ok' | 'none-available';
-  onPrev: () => 'ok' | 'none-available';
 }) {
   const [draftTarget, setDraftTarget] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -64,9 +62,7 @@ function SoloRemote({
     setDraftTarget('');
   };
 
-  const handleStep = (step: () => 'ok' | 'none-available') => {
-    setError(step() === 'none-available' ? 'No other pages have content yet' : null);
-  };
+  
 
   return (
     <section className="vote-panel" aria-label="Remote control">
@@ -102,22 +98,7 @@ function SoloRemote({
         )}
       </form>
 
-      <div className="vote-actions">
-        <button
-          type="button"
-          className="sidebar-action-btn"
-          onClick={() => handleStep(onPrev)}
-        >
-          Previous page
-        </button>
-        <button
-          type="button"
-          className="sidebar-action-btn"
-          onClick={() => handleStep(onNext)}
-        >
-          Next page
-        </button>
-      </div>
+
     </section>
   );
 }
@@ -266,11 +247,7 @@ export function SoloViewer({ pageNumber: pageNumberProp }: SoloViewerProps) {
                 role="dialog"
                 aria-label="Remote control"
               >
-                <SoloRemote
-                  onSelect={setDisplayedPage}
-                  onNext={stepNext}
-                  onPrev={stepPrev}
-                />
+                <SoloRemote onSelect={setDisplayedPage} />
               </div>
             )}
           </div>

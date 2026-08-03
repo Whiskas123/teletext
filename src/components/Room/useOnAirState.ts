@@ -50,6 +50,16 @@ export interface OnAirState {
   closeEditor(): void;
   editDraft(patch: Partial<OnAirCardDraft>): void;
   resetDraft(stored: OnAirCardDraft): void;
+  /**
+   * Published pages ticked for a bulk transform change.
+   *
+   * Only published pages can be in here: re-applying transforms means publishing
+   * the page's capture again, and a hand-made page has no capture.
+   */
+  selection: ReadonlySet<number>;
+  toggleSelected(pageNumber: number): void;
+  selectAll(pageNumbers: readonly number[]): void;
+  clearSelection(): void;
   /** The one page being sent to a chosen number, and where to. */
   mover: MoverState | null;
   openMover(pageNumber: number): void;
@@ -67,7 +77,22 @@ export function useOnAirState(): OnAirState {
   const [filter, setFilter] = useState<OnAirFilter>(EMPTY_ON_AIR_FILTER);
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [mover, setMover] = useState<MoverState | null>(null);
+  const [selection, setSelection] = useState<ReadonlySet<number>>(new Set());
   const [focusFilterRequest, setFocusFilterRequest] = useState(0);
+
+  const toggleSelected = useCallback((pageNumber: number) => {
+    setSelection((current) => {
+      const next = new Set(current);
+      if (!next.delete(pageNumber)) next.add(pageNumber);
+      return next;
+    });
+  }, []);
+
+  const selectAll = useCallback((pageNumbers: readonly number[]) => {
+    setSelection(new Set(pageNumbers));
+  }, []);
+
+  const clearSelection = useCallback(() => setSelection(new Set()), []);
 
   const setFilterText = useCallback((text: string) => {
     setFilter((current) => ({ ...current, text: clampFilterText(text) }));
@@ -127,6 +152,10 @@ export function useOnAirState(): OnAirState {
     closeEditor,
     editDraft,
     resetDraft,
+    selection,
+    toggleSelected,
+    selectAll,
+    clearSelection,
     mover,
     openMover,
     closeMover,

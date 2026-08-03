@@ -11,7 +11,7 @@
  * filter an operator typed survives a look at the archive tab.
  */
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { PublishedEntry } from '../../collab/useArchiveAdmin';
 import type { PageKind } from '../../domain/directory';
@@ -28,9 +28,22 @@ import {
 import type { InFlightView } from '../../domain/inFlight';
 import { previewMove } from '../../domain/pageMove';
 import type { TeletextPage } from '../../types/teletext';
+import type { CustomMenu } from '../../domain/menu';
 import { OnAirPageCard, type OnAirCardDraft } from './OnAirPageCard';
+import {
+  KEEP,
+  OnAirBulkBar,
+  type MenuChoice,
+  type ShiftChoice,
+} from './OnAirBulkBar';
 import { ReorderTools, type ReorderToolsProps } from './ReorderTools';
 import type { OnAirState } from './useOnAirState';
+
+/** What a bulk change sets, leaving anything it does not mention alone. */
+export interface TransformPatch {
+  shiftDown: boolean | null;
+  menuId: number | null | 'keep';
+}
 
 export interface OnAirPanelProps {
   state: OnAirState;
@@ -53,6 +66,10 @@ export interface OnAirPanelProps {
   onShift: ReorderToolsProps['onShift'];
   onMove: ReorderToolsProps['onMove'];
   onNotice(notice: Notice): void;
+  /** Saved menu strips, for the bulk transform controls. */
+  menus: readonly CustomMenu[];
+  publishBusy: boolean;
+  onApplyTransforms(pageNumbers: readonly number[], patch: TransformPatch): void;
 }
 
 export function OnAirPanel({
@@ -75,6 +92,9 @@ export function OnAirPanel({
   onShift,
   onMove,
   onNotice,
+  menus,
+  publishBusy,
+  onApplyTransforms,
 }: OnAirPanelProps) {
   const filterRef = useRef<HTMLInputElement>(null);
 
@@ -111,6 +131,25 @@ export function OnAirPanel({
 
   const filtering = isFiltering(state.filter);
 
+  // The bulk controls are the panel's own transient choice, not part of the state
+  // that has to survive a tab switch — an Apply left half-set is not work.
+  const [shift, setShift] = useState<ShiftChoice>(KEEP);
+  const [menu, setMenu] = useState<MenuChoice>(KEEP);
+
+  /** Published pages the filter is currently showing, which "select all" means. */
+  const shownPublishedPages = useMemo(
+    () =>
+      [...groups.curated, ...groups.playground]
+        .filter((row) => row.published)
+        .map((row) => row.pageNumber),
+    [groups],
+  );
+
+  const selectedPages = useMemo(
+    () => [...state.selection].sort((a, b) => a - b),
+    [state.selection],
+  );
+
   const renderCard = (row: OnAirRow) => {
     const stored: OnAirCardDraft = {
       title: row.title,
@@ -131,6 +170,8 @@ export function OnAirPanel({
         stored={stored}
         draft={editorOpen ? (state.editor?.draft ?? null) : null}
         editorOpen={editorOpen}
+        selected={state.selection.has(row.pageNumber)}
+        onToggleSelected={() => state.toggleSelected(row.pageNumber)}
         destination={destination}
         movePreview={
           destination == null
@@ -242,6 +283,31 @@ export function OnAirPanel({
           </>
         )}
       </div>
+
+      <OnAirBulkBar
+        selected={selectedPages}
+        selectablePages={shownPublishedPages}
+        onSelectAll={() => state.selectAll(shownPublishedPages)}
+        onClear={state.clearSelection}
+        shift={shift}
+        onShift={setShift}
+        menu={menu}
+        onMenu={setMenu}
+        menus={menus}
+        busy={publishBusy}
+        onApply={() => {
+          onApplyTransforms(selectedPages, {
+            shiftDown: shift === KEEP ? null : shift === 'on',
+            menuId:
+              menu === KEEP ? 'keep' : menu === 'none' ? null : Number(menu),
+          });
+          // The change has been asked for; the ticks and the controls go back to
+          // neutral so a second Apply cannot repeat it by accident.
+          state.clearSelection();
+          setShift(KEEP);
+          setMenu(KEEP);
+        }}
+      />
 
       {publicationsError != null ? (
         /*

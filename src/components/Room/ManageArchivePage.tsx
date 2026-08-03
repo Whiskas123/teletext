@@ -33,7 +33,7 @@ import type { TabKey } from '../../domain/manageTabs';
 import { ManageTabBar } from './ManageTabBar';
 import { NoticeArea } from './NoticeArea';
 import { ConfirmDialog } from './ConfirmDialog';
-import { OnAirPanel } from './OnAirPanel';
+import { OnAirPanel, type TransformPatch } from './OnAirPanel';
 import { ArchivePanel } from './ArchivePanel';
 import { useArchiveState } from './useArchiveState';
 import { useManageActions } from './useManageActions';
@@ -105,6 +105,38 @@ export function ManageArchivePage() {
       archive.clearBatch();
     },
     [actions, archive],
+  );
+
+  /**
+   * Re-publish a run of pages with new transforms.
+   *
+   * Each page's own capture, title and description go back in unchanged; only the
+   * shift and the menu move. The title comes from the live document rather than
+   * the record, so an edit made since publication is not reverted by a change to
+   * the menu strip.
+   */
+  const handleApplyTransforms = useCallback(
+    (pageNumbers: readonly number[], patch: TransformPatch) => {
+      const items = pageNumbers.flatMap((pageNumber) => {
+        const entry = data.publishedByPage.get(pageNumber);
+        if (entry == null) return [];
+        return [
+          {
+            pageNumber,
+            captureId: entry.capture_id,
+            title: data.titleOf(pageNumber) || entry.title,
+            description: data.descriptionOf(pageNumber) || entry.description,
+            transforms: {
+              shiftDown: patch.shiftDown ?? entry.shift_down,
+              menuId: patch.menuId === 'keep' ? entry.menu_id : patch.menuId,
+            },
+          },
+        ];
+      });
+
+      actions.republish(items);
+    },
+    [actions, data],
   );
 
   const onAirCounts = useMemo(() => {
@@ -220,6 +252,9 @@ export function ManageArchivePage() {
             onShift={data.shiftPages}
             onMove={data.moveBlock}
             onNotice={actions.setNotice}
+            menus={data.menus}
+            publishBusy={actions.inFlight.publishBusy}
+            onApplyTransforms={handleApplyTransforms}
           />
         ) : (
           <ArchivePanel
