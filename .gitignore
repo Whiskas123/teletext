@@ -33,3 +33,4 @@ archive-corpus-rtp/
 archive-corpus-sic/
 archive-samples/
 .env*
+.kiro

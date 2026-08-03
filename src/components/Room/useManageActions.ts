@@ -1,0 +1,290 @@
+/**
+ * Starting an action on `/manage`, and reporting how it went.
+ *
+ * There used to be one `busy` boolean and one `notice` string for the whole
+ * screen: a publish in flight disabled every nudge arrow, every reorder button,
+ * unpublish and delete on every card, and a failure was announced through the
+ * same `role="status"` as a success. Worse, any rejection left the flag stuck
+ * `true`, which disabled the button that would have retried.
+ *
+ * Everything here follows from `runAction` being the only way in. Admission, the
+ * disabled state, the notice, the per-card outcome and the confirmation are
+ * decided in one place, so a new action cannot forget one of them.
+ */
+
+import { useCallback, useMemo, useRef, useState } from 'react';
+
+import type { ArchiveAdminApi, PublishTransforms } from '../../collab/useArchiveAdmin';
+import type { PageKind } from '../../domain/directory';
+import {
+  EMPTY_REGISTRY,
+  beginAction,
+  inFlightView,
+  isRunning,
+  settleAction,
+  type ActionScope,
+  type InFlightRegistry,
+  type InFlightView,
+  type PageActionName,
+} from '../../domain/inFlight';
+import {
+  pageActionFailed,
+  pageActionSucceeded,
+  publishFailed,
+  publishSucceeded,
+  roleChanged,
+  textTooLong,
+  type ConfirmRequest,
+  type Notice,
+} from '../../domain/manageMessages';
+import { MAX_DESCRIPTION_LENGTH, MAX_TITLE_LENGTH } from '../../domain/publication';
+
+type Outcome = { ok: true } | { ok: false; error: string };
+
+export interface ManageActionsInput {
+  data: ArchiveAdminApi;
+  setKind(pageNumber: number, kind: PageKind): void;
+  /** Called once a page's text has been stored, so the editor can close. */
+  onTextSaved(pageNumber: number): void;
+  /**
+   * The notice line, for the case where a confirmation's opening control has gone
+   * with the page it deleted. Owned by the shell, which renders it — a ref handed
+   * back out of a hook makes every read of that hook's result look like a ref
+   * access, which is not what the rest of this object is.
+   */
+  noticeRef: React.RefObject<HTMLDivElement | null>;
+}
+
+export interface PublishInput {
+  pageNumber: number;
+  captureId: number;
+  title: string;
+  description: string;
+  transforms: PublishTransforms;
+}
+
+export interface ManageActionsApi {
+  notice: Notice | null;
+  setNotice(notice: Notice | null): void;
+  inFlight: InFlightView;
+  /** How each page's last settled action went. */
+  outcomes: ReadonlyMap<number, Notice>;
+  confirming: ConfirmRequest | null;
+  askConfirm(request: ConfirmRequest): void;
+  closeConfirm(): void;
+  confirmAction(): void;
+  nudge(pageNumber: number, delta: -1 | 1): void;
+  setRole(pageNumber: number, kind: PageKind): void;
+  saveText(pageNumber: number, title: string, description: string): void;
+  publish(input: PublishInput): void;
+}
+
+export function useManageActions({
+  data,
+  setKind,
+  onTextSaved,
+  noticeRef,
+}: ManageActionsInput): ManageActionsApi {
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [registry, setRegistry] = useState<InFlightRegistry>(EMPTY_REGISTRY);
+  const [outcomes, setOutcomes] = useState<ReadonlyMap<number, Notice>>(new Map());
+  const [confirming, setConfirming] = useState<ConfirmRequest | null>(null);
+
+  /** The control that opened the confirmation, so focus can go back to it. */
+  const confirmOpener = useRef<HTMLElement | null>(null);
+
+  /**
+   * The registry, also held in a ref.
+   *
+   * Admission has to be decided *now* — the click either starts an action or it
+   * does not — and a state updater does not run when it is called, it runs when
+   * React next renders. Reading the outcome of `beginAction` out of an updater's
+   * closure therefore always saw its initial value, and every action was
+   * refused. The ref is the value; the state is how it reaches the screen.
+   */
+  const registryRef = useRef<InFlightRegistry>(EMPTY_REGISTRY);
+  const commitRegistry = useCallback((next: InFlightRegistry) => {
+    registryRef.current = next;
+    setRegistry(next);
+  }, []);
+
+  const inFlight = useMemo(() => inFlightView(registry), [registry]);
+
+  const runAction = useCallback(
+    (
+      scope: ActionScope,
+      run: () => Promise<Outcome>,
+      describe: (outcome: Outcome) => Notice,
+    ) => {
+      const { registry: next, admitted } = beginAction(
+        registryRef.current,
+        scope,
+        Date.now(),
+      );
+
+      // Refused because this page already has something in flight. The running
+      // action is left alone and no second one starts.
+      if (!admitted) return;
+      commitRegistry(next);
+
+      const finish = (outcome: Outcome) => {
+        // A late answer to an action that is no longer registered is dropped
+        // rather than reported over whatever has happened since.
+        if (!isRunning(registryRef.current, scope)) return;
+        commitRegistry(settleAction(registryRef.current, scope));
+
+        const message = describe(outcome);
+        setNotice(message);
+        if (scope.kind === 'page') {
+          setOutcomes((current) => {
+            const map = new Map(current);
+            map.set(scope.pageNumber, message);
+            return map;
+          });
+        }
+      };
+
+      void run()
+        .then(finish)
+        .catch((error: unknown) =>
+          finish({
+            ok: false,
+            error: error instanceof Error ? error.message : 'Something went wrong.',
+          }),
+        );
+    },
+    [commitRegistry],
+  );
+
+  /** Start a page action, naming it so the card and the notice agree. */
+  const runPageAction = useCallback(
+    (pageNumber: number, action: PageActionName, run: () => Promise<Outcome>) => {
+      runAction({ kind: 'page', pageNumber, action }, run, (outcome) =>
+        outcome.ok
+          ? pageActionSucceeded(action, pageNumber)
+          : pageActionFailed(action, pageNumber, outcome.error),
+      );
+    },
+    [runAction],
+  );
+
+  const nudge = useCallback(
+    (pageNumber: number, delta: -1 | 1) => {
+      runPageAction(
+        pageNumber,
+        delta < 0 ? 'nudge-lower' : 'nudge-higher',
+        // A nudge is a block move of one page, which slides whatever it passes
+        // over. The card says so before it is pressed.
+        () => data.moveBlock(pageNumber, pageNumber, pageNumber + delta),
+      );
+    },
+    [runPageAction, data],
+  );
+
+  const setRole = useCallback(
+    (pageNumber: number, kind: PageKind) => {
+      runAction(
+        { kind: 'page', pageNumber, action: 'set-role' },
+        async () => {
+          setKind(pageNumber, kind);
+          return { ok: true as const };
+        },
+        (outcome) =>
+          outcome.ok
+            ? roleChanged(pageNumber, kind)
+            : pageActionFailed('set-role', pageNumber, outcome.error),
+      );
+    },
+    [runAction, setKind],
+  );
+
+  const saveText = useCallback(
+    (pageNumber: number, title: string, description: string) => {
+      runAction(
+        { kind: 'page', pageNumber, action: 'save-text' },
+        async () => {
+          const result = data.savePageText(pageNumber, title, description);
+          // Refused before either store was written, so nothing is half-saved and
+          // the draft is left in place for a correction.
+          return result.ok
+            ? { ok: true as const }
+            : {
+                ok: false as const,
+                error: textTooLong(
+                  result.field,
+                  result.field === 'title' ? MAX_TITLE_LENGTH : MAX_DESCRIPTION_LENGTH,
+                ).text,
+              };
+        },
+        (outcome) => {
+          if (outcome.ok) onTextSaved(pageNumber);
+          return outcome.ok
+            ? pageActionSucceeded('save-text', pageNumber)
+            : pageActionFailed('save-text', pageNumber, outcome.error);
+        },
+      );
+    },
+    [runAction, data, onTextSaved],
+  );
+
+  const publish = useCallback(
+    ({ pageNumber, captureId, title, description, transforms }: PublishInput) => {
+      runAction(
+        { kind: 'publish' },
+        () => data.publish({ pageNumber, captureId, title, description, transforms }),
+        (outcome) =>
+          outcome.ok
+            ? publishSucceeded(pageNumber)
+            : publishFailed(pageNumber, outcome.error),
+      );
+    },
+    [runAction, data],
+  );
+
+  const askConfirm = useCallback((request: ConfirmRequest) => {
+    confirmOpener.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setConfirming(request);
+  }, []);
+
+  const closeConfirm = useCallback(() => {
+    setConfirming(null);
+    const opener = confirmOpener.current;
+    confirmOpener.current = null;
+    // The control that opened it may have gone with the page it deleted, in which
+    // case focus goes to the line that says what happened.
+    if (opener != null && document.contains(opener)) opener.focus();
+    else noticeRef.current?.focus();
+  }, [noticeRef]);
+
+  const confirmAction = useCallback(() => {
+    const request = confirming;
+    closeConfirm();
+    if (request == null) return;
+
+    if (request.action === 'delete') {
+      runPageAction(request.pageNumber, 'delete', () =>
+        data.deletePage(request.pageNumber),
+      );
+    } else {
+      runPageAction(request.pageNumber, 'unpublish', () =>
+        data.unpublish(request.pageNumber),
+      );
+    }
+  }, [confirming, closeConfirm, runPageAction, data]);
+
+  return {
+    notice,
+    setNotice,
+    inFlight,
+    outcomes,
+    confirming,
+    askConfirm,
+    closeConfirm,
+    confirmAction,
+    nudge,
+    setRole,
+    saveText,
+    publish,
+  };
+}

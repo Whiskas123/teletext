@@ -10,6 +10,18 @@
  *
  * Keeping that sequence here, rather than in the component, means the screen
  * never has to remember that publishing is two writes.
+ *
+ * ## The queries are gated, not unconditional
+ *
+ * This used to fire `/api/captures`, `/api/published` and `/api/menus` on mount
+ * whatever the operator came to do — so opening `/manage` to nudge one page
+ * queried the whole corpus. The caller now says what is on screen, and only the
+ * publication records load for both tabs; the corpus and the saved menus wait
+ * until the archive tab has actually been opened.
+ *
+ * The capture query itself is driven by the caller's filters rather than by a
+ * `search()` call that set a second copy of them in here. One owner per value:
+ * the panel holds the filters, this hook holds the answer.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -18,6 +30,8 @@ import { usePageData } from '@playhtml/react';
 import { applyMenu, type CustomMenu, type MenuDraft } from '../domain/menu';
 import { pageToArray } from '../domain/pageEncoding';
 import { shiftPageDown } from '../domain/pageTransform';
+import { MAX_DESCRIPTION_LENGTH } from '../domain/publication';
+import { validateTitle } from '../domain/titles';
 import type { ReorderPlan } from '../domain/reorder';
 import { useGuide } from './useGuide';
 import { useImportPages } from './useImportPages';
@@ -95,6 +109,11 @@ export interface CaptureFilters {
   undecoded?: boolean;
 }
 
+/** Saving a page's text refuses before it writes anything. */
+export type SavePageTextResult =
+  | { ok: true }
+  | { ok: false; field: 'title' | 'description'; limit: number };
+
 async function getJson<T>(url: string): Promise<T> {
   const response = await fetch(url, {
     credentials: 'same-origin',
@@ -122,17 +141,45 @@ function queryString(filters: CaptureFilters, limit: number, offset: number): st
   return params.toString();
 }
 
+/** What the screen is showing, which decides what is worth fetching. */
+export interface ArchiveAdminInput {
+  /**
+   * Whether the visitor is a signed-in moderator. Nothing is fetched otherwise —
+   * every one of these endpoints would answer 401.
+   */
+  admin: boolean;
+  /**
+   * Whether the archive side has been opened at least once this load. Gates the
+   * corpus and the saved menus, which the on-air side never reads.
+   */
+  archiveEnabled: boolean;
+  /** The capture query. Debouncing belongs to the caller, not to the fetch. */
+  filters: CaptureFilters;
+  offset: number;
+}
+
 export interface ArchiveAdminApi {
   captures: CaptureSummary[];
   total: number;
   published: PublishedEntry[];
+  /** Publication records by page number, derived once for every reader. */
+  publishedByPage: ReadonlyMap<number, PublishedEntry>;
   menus: CustomMenu[];
   loading: boolean;
   error: string | null;
+  /**
+   * Why the publication records could not be loaded, or null. Separate from
+   * `error` because an empty list and a failed load are not the same thing:
+   * showing "no pages on air" when the request failed invites deleting pages
+   * that are perfectly fine.
+   */
+  publishedError: string | null;
   /** How many captures one page of results holds. */
   pageSize: number;
-  /** Re-run the capture query with new filters. */
-  search(filters: CaptureFilters, offset?: number): void;
+  /** Re-issue the current capture query unchanged, after a failure. */
+  retryCaptures(): void;
+  /** Re-issue the publication load, after a failure. */
+  reloadPublished(): void;
   /** Fetch one capture's cells, for previewing. */
   loadPage(captureId: number): Promise<TeletextPage | null>;
   /**
@@ -184,8 +231,16 @@ export interface ArchiveAdminApi {
   titleOf(pageNumber: number): string;
   /** The live description of a page. */
   descriptionOf(pageNumber: number): string;
-  /** Set a page's title and description in the live document. */
-  setPageText(pageNumber: number, title: string, description: string): void;
+  /**
+   * Set a page's title and description in the live document, refusing both if
+   * either is over its limit — a partial save would leave the operator unsure
+   * which half landed.
+   */
+  savePageText(
+    pageNumber: number,
+    title: string,
+    description: string,
+  ): SavePageTextResult;
   /** Every page holding content, from either store, ascending. */
   occupiedPages: number[];
   /** Live pages that hold content but were not published from the archive. */
@@ -194,11 +249,17 @@ export interface ArchiveAdminApi {
 
 const PAGE_SIZE = 60;
 
-export function useArchiveAdmin(): ArchiveAdminApi {
+export function useArchiveAdmin({
+  admin,
+  archiveEnabled,
+  filters,
+  offset,
+}: ArchiveAdminInput): ArchiveAdminApi {
   const { importPages } = useImportPages();
   const { setTitle } = useGuide();
 
   const [published, setPublished] = useState<PublishedEntry[]>([]);
+  const [publishedError, setPublishedError] = useState<string | null>(null);
   const [menus, setMenus] = useState<CustomMenu[]>([]);
   // The live document, so the screen can show what is on a page right now
   // rather than what the database says was published to it — and so a
@@ -212,13 +273,19 @@ export function useArchiveAdmin(): ArchiveAdminApi {
     DESCRIPTIONS_CHANNEL,
     {},
   );
-  const [query, setQuery] = useState<{ filters: CaptureFilters; offset: number }>({
-    filters: {},
-    offset: 0,
-  });
 
   /** The query as a string; also the identity of the result that answers it. */
-  const queryKey = queryString(query.filters, PAGE_SIZE, query.offset);
+  const queryKey = queryString(filters, PAGE_SIZE, offset);
+  const capturesEnabled = admin && archiveEnabled;
+
+  /**
+   * A retry counter, deliberately outside the query key.
+   *
+   * Retrying has to re-fetch the *same* URL, so it cannot be a query parameter;
+   * but it does have to make the screen look busy again, so the stored result
+   * carries the attempt it answered as well as the query.
+   */
+  const [attempt, setAttempt] = useState(0);
 
   /**
    * The last completed response, tagged with the query it answered.
@@ -230,17 +297,22 @@ export function useArchiveAdmin(): ArchiveAdminApi {
    */
   const [result, setResult] = useState<{
     key: string;
+    attempt: number;
     captures: CaptureSummary[];
     total: number;
     error: string | null;
   } | null>(null);
 
-  const loading = result?.key !== queryKey;
-  const captures = result?.key === queryKey ? result.captures : [];
-  const total = result?.key === queryKey ? result.total : 0;
-  const error = result?.key === queryKey ? result.error : null;
+  const answered = result?.key === queryKey && result.attempt === attempt;
+  // Nothing is loading while the query is switched off, or there would be a
+  // permanent spinner on a tab that never asked for anything.
+  const loading = capturesEnabled && !answered;
+  const captures = answered ? result.captures : [];
+  const total = answered ? result.total : 0;
+  const error = answered ? result.error : null;
 
   useEffect(() => {
+    if (!capturesEnabled) return;
     let cancelled = false;
 
     getJson<{ captures: CaptureSummary[]; total: number }>(`/api/captures?${queryKey}`)
@@ -248,6 +320,7 @@ export function useArchiveAdmin(): ArchiveAdminApi {
         if (cancelled) return;
         setResult({
           key: queryKey,
+          attempt,
           captures: body.captures,
           total: body.total,
           error: null,
@@ -257,6 +330,7 @@ export function useArchiveAdmin(): ArchiveAdminApi {
         if (cancelled) return;
         setResult({
           key: queryKey,
+          attempt,
           captures: [],
           total: 0,
           error:
@@ -267,32 +341,50 @@ export function useArchiveAdmin(): ArchiveAdminApi {
     return () => {
       cancelled = true;
     };
-  }, [queryKey]);
+  }, [queryKey, attempt, capturesEnabled]);
+
+  const retryCaptures = useCallback(() => setAttempt((n) => n + 1), []);
 
   const reloadPublished = useCallback(() => {
+    if (!admin) return;
     getJson<{ published: PublishedEntry[] }>('/api/published')
-      .then((body) => setPublished(body.published))
-      .catch(() => setPublished([]));
-  }, []);
+      .then((body) => {
+        setPublished(body.published);
+        setPublishedError(null);
+      })
+      .catch((cause: unknown) => {
+        // The last good list is kept rather than blanked: an empty pages list
+        // reads as "nothing is on air", which is a lie a failed request should
+        // not be allowed to tell.
+        setPublishedError(
+          cause instanceof Error
+            ? cause.message
+            : 'Could not load which pages are published.',
+        );
+      });
+  }, [admin]);
 
   useEffect(reloadPublished, [reloadPublished]);
 
   const reloadMenus = useCallback(() => {
+    if (!(admin && archiveEnabled)) return;
     getJson<{ menus: CustomMenu[] }>('/api/menus')
       .then((body) => setMenus(body.menus))
       .catch(() => setMenus([]));
-  }, []);
+  }, [admin, archiveEnabled]);
 
   useEffect(reloadMenus, [reloadMenus]);
-
-  const search = useCallback((filters: CaptureFilters, offset = 0) => {
-    setQuery({ filters, offset });
-  }, []);
 
   /** Menus by id, so a publication's transforms can be resolved cheaply. */
   const menusById = useMemo(
     () => new Map(menus.map((menu) => [menu.id, menu])),
     [menus],
+  );
+
+  /** Records by page number, derived once here rather than in each reader. */
+  const publishedByPage = useMemo(
+    () => new Map(published.map((entry) => [entry.page_number, entry])),
+    [published],
   );
 
   /**
@@ -309,10 +401,10 @@ export function useArchiveAdmin(): ArchiveAdminApi {
   const occupiedPages = useOccupiedPages();
 
   /** Live pages with no publication record — someone's own work. */
-  const handMadePages = useMemo(() => {
-    const fromArchive = new Set(published.map((entry) => entry.page_number));
-    return occupiedPages.filter((page) => !fromArchive.has(page));
-  }, [occupiedPages, published]);
+  const handMadePages = useMemo(
+    () => occupiedPages.filter((page) => !publishedByPage.has(page)),
+    [occupiedPages, publishedByPage],
+  );
 
   const livePage = useCallback(
     (pageNumber: number): TeletextPage | null => {
@@ -350,6 +442,35 @@ export function useArchiveAdmin(): ArchiveAdminApi {
       return null;
     }
   }, []);
+
+  /**
+   * Everything a page keeps in the live document, cleared together.
+   *
+   * Unpublishing used to blank the cells and the title and stop there, leaving
+   * the description and the directory role behind. A page marked `category`
+   * therefore stayed *occupied* — `useOccupiedPages` counts a heading as a claim
+   * — so it kept its slot in the pages list and in the Yellow Pages with no
+   * title and no content, and no control left on it to fix that. Delete already
+   * cleared all four; unpublish now does the same.
+   *
+   * Emptied, not deleted: playhtml's draft is a Proxy with no `deleteProperty`
+   * trap, so `delete` throws and aborts the whole mutation. Every reader treats
+   * a blank value and an absent key identically.
+   */
+  const clearPageText = useCallback(
+    (pageNumber: number) => {
+      setTitles((draft) => {
+        draft[pageNumber] = '';
+      });
+      setDescriptions((draft) => {
+        draft[pageNumber] = '';
+      });
+      setKinds((draft) => {
+        draft[pageNumber] = DEFAULT_PAGE_KIND;
+      });
+    },
+    [setTitles, setDescriptions, setKinds],
+  );
 
   const publish = useCallback<ArchiveAdminApi['publish']>(
     async ({ pageNumber, captureId, title, description, transforms }) => {
@@ -389,13 +510,16 @@ export function useArchiveAdmin(): ArchiveAdminApi {
         }
 
         setTitle(pageNumber, title);
+        setDescriptions((draft) => {
+          draft[pageNumber] = description.trim().slice(0, MAX_DESCRIPTION_LENGTH);
+        });
         reloadPublished();
         return { ok: true };
       } catch {
         return { ok: false, error: 'Could not reach the server.' };
       }
     },
-    [importPages, setTitle, reloadPublished],
+    [importPages, setTitle, setDescriptions, reloadPublished],
   );
 
   const unpublish = useCallback<ArchiveAdminApi['unpublish']>(
@@ -415,14 +539,14 @@ export function useArchiveAdmin(): ArchiveAdminApi {
 
         // Blank the live page too, so an unpublished slot stops showing content.
         importPages([{ pageNumber, page: pageToArray(undefined) }]);
-        setTitle(pageNumber, '');
+        clearPageText(pageNumber);
         reloadPublished();
         return { ok: true };
       } catch {
         return { ok: false, error: 'Could not reach the server.' };
       }
     },
-    [importPages, setTitle, reloadPublished],
+    [importPages, clearPageText, reloadPublished],
   );
 
   const saveMenu = useCallback<ArchiveAdminApi['saveMenu']>(
@@ -481,11 +605,6 @@ export function useArchiveAdmin(): ArchiveAdminApi {
    */
   const replayPlan = useCallback(
     (plan: ReorderPlan) => {
-      /**
-       * Replay one channel. Written once and applied to both because pages and
-       * titles are keyed the same way and must move together — a page whose
-       * title stayed behind would be mislabelled.
-       */
       /**
        * Take a value out of the draft as plain data.
        *
@@ -590,16 +709,28 @@ export function useArchiveAdmin(): ArchiveAdminApi {
     [liveDescriptions],
   );
 
-  const setPageText = useCallback(
-    (pageNumber: number, nextTitle: string, nextDescription: string) => {
+  const savePageText = useCallback<ArchiveAdminApi['savePageText']>(
+    (pageNumber, nextTitle, nextDescription) => {
+      // Validated before either write, so an over-length value reaches neither
+      // store and the operator is not left guessing which half saved.
+      const title = validateTitle(nextTitle);
+      if (!title.ok) {
+        return { ok: false, field: 'title', limit: 60 };
+      }
+      const description = nextDescription.trim();
+      if (description.length > MAX_DESCRIPTION_LENGTH) {
+        return { ok: false, field: 'description', limit: MAX_DESCRIPTION_LENGTH };
+      }
+
       // One key per page in each channel, so two people editing different
       // pages never collide — the same shape titles already had.
-      setTitle(pageNumber, nextTitle);
+      setTitle(pageNumber, title.value);
       setDescriptions((draft) => {
         // Empty string rather than removing the key: deleting throws on
         // playhtml's draft, and an empty description reads the same anyway.
-        draft[pageNumber] = nextDescription.trim().slice(0, 500);
+        draft[pageNumber] = description;
       });
+      return { ok: true };
     },
     [setTitle, setDescriptions],
   );
@@ -611,31 +742,17 @@ export function useArchiveAdmin(): ArchiveAdminApi {
         // this failed, the page would be gone but still listed as published —
         // whereas a record removed with content still live is visible and
         // fixable from this screen.
-        const isPublished = published.some((entry) => entry.page_number === pageNumber);
-        if (isPublished) {
+        if (publishedByPage.has(pageNumber)) {
           const result = await unpublish(pageNumber);
           if (!result.ok) return result;
         }
 
         // Every channel keyed by page number, so nothing is left behind to
-        // make the page look occupied afterwards. Readers already treat an
-        // absent page and a blank one identically (`normalizePage`,
-        // `guideEntries`), so removing the keys is the cleaner of the two.
-        // Emptied, not deleted — see `replayInto`. A blank page with no title
-        // reads as absent to the directory, the search and the occupancy
-        // check alike, and deleting the key throws on playhtml's draft.
+        // make the page look occupied afterwards.
         setPages((draft) => {
           draft[pageNumber] = {};
         });
-        setTitles((draft) => {
-          draft[pageNumber] = '';
-        });
-        setKinds((draft) => {
-          draft[pageNumber] = DEFAULT_PAGE_KIND;
-        });
-        setDescriptions((draft) => {
-          draft[pageNumber] = '';
-        });
+        clearPageText(pageNumber);
         return { ok: true };
       } catch (error) {
         // Returned rather than thrown: the caller clears its busy flag on a
@@ -650,18 +767,21 @@ export function useArchiveAdmin(): ArchiveAdminApi {
         };
       }
     },
-    [published, unpublish, setPages, setTitles, setKinds, setDescriptions],
+    [publishedByPage, unpublish, setPages, clearPageText],
   );
 
   return {
     captures,
     total,
     published,
+    publishedByPage,
     menus,
     loading,
     error,
+    publishedError,
     pageSize: PAGE_SIZE,
-    search,
+    retryCaptures,
+    reloadPublished,
     loadPage,
     livePage,
     transform,
@@ -674,7 +794,7 @@ export function useArchiveAdmin(): ArchiveAdminApi {
     deletePage,
     titleOf,
     descriptionOf,
-    setPageText,
+    savePageText,
     occupiedPages,
     handMadePages,
   };

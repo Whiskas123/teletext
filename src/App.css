@@ -1275,19 +1275,37 @@
 
 .manage-filters {
   display: flex;
-  align-items: center;
+  /* Bottom-aligned so a stacked label/field pair lines up with the buttons and
+     checkboxes beside it. */
+  align-items: flex-end;
   gap: 0.5rem 0.75rem;
   flex-wrap: wrap;
   margin-bottom: 1rem;
 }
 
 .manage-filters select,
-.manage-filters input[type='number'] {
+.manage-filters input {
   background: #111;
   color: #ddd;
   border: 1px solid #444;
   font-family: monospace;
   padding: 0.25rem 0.4rem;
+  min-height: 44px;
+  box-sizing: border-box;
+}
+
+.manage-filters input[type='search'] {
+  width: 14rem;
+  max-width: 100%;
+}
+
+.manage-filters input[type='checkbox'] {
+  min-height: 0;
+}
+
+.manage-on-air,
+.manage-reorder-tools {
+  min-width: 0;
 }
 
 .manage-checkbox {
@@ -1301,14 +1319,31 @@
 
 .manage-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 620px);
+  /* Both columns hold a 40-cell preview, so neither may be squeezed below a
+     width one is still readable at. */
+  grid-template-columns: minmax(320px, 1fr) minmax(320px, 620px);
   gap: 1.5rem;
   align-items: start;
+}
+
+.manage-detail-column {
+  min-width: 0;
 }
 
 @media (max-width: 1100px) {
   .manage-body {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  /*
+   * One column puts the publish panel *above* the results.
+   *
+   * Stacked the other way round, choosing a capture scrolled its own preview off
+   * the bottom of the screen — the operator picked something and then had to go
+   * looking for what they picked.
+   */
+  .manage-detail-column {
+    order: -1;
   }
 }
 
@@ -1338,10 +1373,17 @@
   font-size: 0.7rem;
 }
 
+/*
+ * The results scroll with the page, not inside a box of their own.
+ *
+ * This used to be `max-height: 78vh; overflow-y: auto` inside a page that also
+ * scrolls, which gave the screen two scrollbars and no way to tell which one
+ * would move. The pager was sticky to the *inner* box's bottom, so it floated in
+ * the middle of the viewport. Both are gone; the tab bar staying put is what
+ * makes a long list navigable.
+ */
 .manage-results {
-  max-height: 78vh;
-  overflow-y: auto;
-  padding-right: 0.25rem;
+  min-width: 0;
 }
 
 .manage-capture-grid {
@@ -1470,7 +1512,19 @@
   color: #f66;
 }
 
+/*
+ * Small type, but not a small target.
+ *
+ * These were roughly 20px tall, and the nudge arrows — the primary reordering
+ * control, and the one most likely to be used on a tablet — were the smallest
+ * things on the screen. The font size stays; the hit area does not.
+ */
 .manage-mini-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
   background: #222;
   color: #ddd;
   border: 1px solid #444;
@@ -1480,13 +1534,29 @@
   cursor: pointer;
 }
 
-.manage-mini-btn:hover {
+.manage-mini-btn:hover:not(:disabled) {
   border-color: #4cf;
 }
 
-.manage-mini-btn-danger:hover {
+.manage-mini-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.manage-mini-btn-danger:hover:not(:disabled) {
   border-color: #f66;
   color: #f66;
+}
+
+/* A nudge that will swap with an occupied neighbour rather than move into a
+   gap. The button's accessible name says so too. */
+.manage-swap-mark {
+  color: #4cf;
+}
+
+.manage-show-content {
+  width: 100%;
+  min-height: 44px;
 }
 
 /* --- Menu editor -------------------------------------------------------- */
@@ -1559,11 +1629,7 @@
   flex-wrap: wrap;
 }
 
-/* --- Published list ----------------------------------------------------- */
-.manage-published {
-  margin-top: 2rem;
-}
-
+/* --- The pages on air ---------------------------------------------------- */
 .manage-published-grid {
   list-style: none;
   margin: 0;
@@ -1595,25 +1661,45 @@
   justify-content: center;
   gap: 0.75rem;
   padding: 0.75rem 0;
-  position: sticky;
-  bottom: 0;
-  background: #0a0a0a;
 }
 
 .manage-reorder {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  /* Bottom-aligned, so a wrapped label/input pair sits on the same baseline as
+     the buttons rather than floating above them. */
+  align-items: flex-end;
+  gap: 0.5rem 0.75rem;
   flex-wrap: wrap;
   margin: 0.5rem 0 1rem;
 }
 
-.manage-reorder input {
+/*
+ * A label and its input wrap as one.
+ *
+ * These rows are long runs of number inputs, and on a narrow viewport they used
+ * to break wherever they ran out of room — leaving "so they start at" on one line
+ * and the field it labels on the next, which reads as a different control.
+ */
+.manage-reorder-field {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.manage-reorder input,
+.manage-reorder-field input,
+.manage-reorder-field select {
   background: #111;
   color: #ddd;
   border: 1px solid #444;
   font-family: monospace;
   padding: 0.25rem 0.4rem;
+  min-height: 44px;
+  box-sizing: border-box;
+}
+
+.manage-reorder input {
   width: 6rem;
 }
 
@@ -1622,6 +1708,8 @@
   gap: 0.3rem;
   align-items: center;
   margin-top: 0.2rem;
+  /* The card's buttons wrap rather than overflowing a narrow column. */
+  flex-wrap: wrap;
 }
 
 /* --- Directory roles --------------------------------------------------- */
@@ -1765,25 +1853,207 @@
   font-size: 0.75rem;
 }
 
-/* The card's buttons wrap rather than overflowing a narrow column. */
-.manage-card-actions {
-  flex-wrap: wrap;
-}
-
-/* Screen-level status line. Sticky because the pages list is long and an
-   action taken at the bottom reported to the top used to scroll out of view. */
-.manage-notice {
+/* --- Tabs, and the strip that stays put ---------------------------------- */
+/*
+ * One sticky wrapper holds the tab bar and the notice.
+ *
+ * Both used to want `top: 0` for themselves, which meant whichever came second
+ * slid under the first. Wrapping them makes the whole strip one sticky thing, so
+ * they cannot overlap however tall either becomes.
+ */
+.manage-sticky {
   position: sticky;
   top: 0;
   z-index: 5;
+  background: #0a0a0a;
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid #333;
+}
+
+.manage-tabs {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.manage-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.4rem 0.9rem;
+  background: #111;
+  color: #ddd;
+  border: 1px solid #333;
+  /* The selected tab is marked by a border and a background, leaving the outline
+     free to mean focus and nothing else. */
+  border-bottom: 3px solid transparent;
+  font-family: monospace;
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.manage-tab:hover {
+  border-color: #444;
+}
+
+.manage-tab-selected {
+  background: #1a1a00;
+  color: #ffd;
+  border-bottom-color: #ff0;
+}
+
+.manage-tab-name {
+  font-weight: 700;
+}
+
+.manage-tab-count {
+  font-size: 0.7rem;
+  color: #999;
+}
+
+.manage-tab-selected .manage-tab-count {
+  color: #cc9;
+}
+
+/*
+ * Focus is cyan; selection is yellow. Two states, two hues, so a keyboard user
+ * can see which tab they are on and which one is showing at the same time.
+ */
+.manage-tab:focus-visible {
+  outline: 2px solid #4cf;
+  outline-offset: 2px;
+}
+
+/* --- The notice line ----------------------------------------------------- */
+/*
+ * Both live regions are always in the tree and only the matching one is filled,
+ * so the tone decides whether an outcome interrupts. A failure used to be
+ * announced through `role="status"` exactly like a success.
+ */
+.manage-notice {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  margin: 0 0 0.75rem;
   padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+.manage-notice-empty {
+  padding: 0;
+}
+
+.manage-notice-status {
   background: #1a1a00;
   border: 1px solid #ff0;
   color: #ffd;
+}
+
+.manage-notice-alert {
+  background: #200;
+  border: 1px solid #f66;
+  color: #fdd;
+}
+
+.manage-notice-text {
+  margin: 0;
+}
+
+/* --- Groups, markers and per-card reporting ------------------------------ */
+.manage-group {
+  margin-top: 1.5rem;
+}
+
+.manage-group-title {
   font-size: 0.8rem;
+  font-weight: 700;
+  color: #ddd;
+  margin: 0 0 0.5rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid #333;
+}
+
+.manage-card-markers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.manage-marker {
+  padding: 0 0.3rem;
+  font-size: 0.65rem;
+  color: #bbb;
+  border: 1px solid #444;
+}
+
+.manage-card-number {
+  font-size: 1rem;
+}
+
+.manage-card-title {
+  overflow-wrap: anywhere;
+}
+
+.manage-card-busy {
+  color: #4cf;
+}
+
+.manage-note-warn {
+  color: #fc6;
+}
+
+.manage-note-done {
+  color: #9c9;
+}
+
+.manage-load-error,
+.manage-no-match {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+/* --- Confirmations ------------------------------------------------------- */
+.manage-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgb(0 0 0 / 75%);
+}
+
+.manage-confirm {
+  max-width: 32rem;
+  padding: 1rem;
+  background: #111;
+  border: 1px solid #f66;
+  color: #ddd;
+  font-family: monospace;
+}
+
+.manage-confirm-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  color: #fdd;
+}
+
+.manage-confirm-body {
+  margin: 0 0 1rem;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.manage-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
