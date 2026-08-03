@@ -159,9 +159,7 @@ export function SoloEditor() {
       <Link to="/" className="sidebar-back-link">
         &lt; Back to home
       </Link>
-      <Link to="/import" className="sidebar-back-link">
-        Import a page from an image →
-      </Link>
+
 
       <section className="sidebar-section">
         <h2 className="sidebar-heading">Page</h2>
