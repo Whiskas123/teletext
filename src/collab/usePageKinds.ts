@@ -21,7 +21,6 @@ import { useCallback } from 'react';
 import { usePageData } from '@playhtml/react';
 
 import {
-  DEFAULT_PAGE_KIND,
   isPageKind,
   kindAt,
   type PageKind,
@@ -36,10 +35,7 @@ export interface PageKindsApi {
   kinds: PageKinds;
   /** The kind of one page, defaulting to an ordinary page. */
   kindOf(pageNumber: number): PageKind;
-  /**
-   * Set a page's kind. Writing the default removes the key rather than storing
-   * it, so the channel holds only the headings — which are the exception.
-   */
+  /** Set a page's kind. The default is stored like any other. */
   setKind(pageNumber: number, kind: PageKind): void;
 }
 
@@ -58,8 +54,12 @@ export function usePageKinds(): PageKindsApi {
       // and two marking the same one converge last-writer-wins — the same
       // reason titles are stored this way.
       setKinds((draft) => {
-        if (kind === DEFAULT_PAGE_KIND) delete draft[pageNumber];
-        else draft[pageNumber] = kind;
+        // The default is written rather than the key removed: playhtml's draft
+        // is a Proxy with no `deleteProperty` trap, so `delete` throws and
+        // aborts the mutation. `kindAt` reads a stored `page` and a missing
+        // key identically, and `useOccupiedPages` counts only headings, so
+        // nothing downstream can tell the difference.
+        draft[pageNumber] = kind;
       });
     },
     [setKinds],

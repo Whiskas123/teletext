@@ -129,10 +129,22 @@ export function usePresence(): PresenceApi {
       setData((draft) => {
         const now = Date.now();
         draft[id] = { memberId: id, name, color: c, lastSeen: now };
-        // Prune clearly-dead entries (well past the stale window).
+        // Retire clearly-dead entries (well past the stale window) by dating
+        // them to the epoch rather than removing them.
+        //
+        // `delete draft[key]` throws "unable to delete property" — playhtml's
+        // draft is a Proxy with no `deleteProperty` trap — and the exception
+        // aborts the whole mutator, taking this heartbeat with it. So once any
+        // member went stale, presence stopped updating for everyone.
+        //
+        // A zero `lastSeen` is indistinguishable from absence to every reader:
+        // membership is decided by freshness (see STALE_MS below), not by the
+        // key existing. The map then keeps one retired entry per member id
+        // instead of shrinking, which is bounded by distinct members rather
+        // than by time.
         for (const key of Object.keys(draft)) {
-          if (now - draft[key].lastSeen > PRUNE_MS) {
-            delete draft[key];
+          if (draft[key].lastSeen > 0 && now - draft[key].lastSeen > PRUNE_MS) {
+            draft[key] = { ...draft[key], lastSeen: 0 };
           }
         }
       });
@@ -143,9 +155,11 @@ export function usePresence(): PresenceApi {
 
     return () => {
       clearInterval(timer);
-      // Best-effort: remove our entry so others see us leave promptly.
+      // Best-effort: retire our entry so others see us leave promptly. Dated
+      // to the epoch rather than deleted, for the reason above.
       setData((draft) => {
-        delete draft[identityRef.current.memberId];
+        const id = identityRef.current.memberId;
+        if (draft[id] != null) draft[id] = { ...draft[id], lastSeen: 0 };
       });
     };
   }, [setData, roomId]);

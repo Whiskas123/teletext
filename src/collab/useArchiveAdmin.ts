@@ -26,7 +26,7 @@ import { TITLES_CHANNEL } from './useGuide';
 import { PAGE_KINDS_CHANNEL } from './usePageKinds';
 import { DESCRIPTIONS_CHANNEL, type DescriptionsData } from './usePageText';
 import { useOccupiedPages } from './useOccupiedPages';
-import type { PageKinds } from '../domain/directory';
+import { DEFAULT_PAGE_KIND, type PageKinds } from '../domain/directory';
 import type { PagesData, TeletextPage, TitlesData } from './types';
 
 /** A capture as the list endpoint returns it — metadata only, no cells. */
@@ -499,32 +499,40 @@ export function useArchiveAdmin(): ArchiveAdminApi {
       const detach = <T,>(value: T): T | undefined =>
         value === undefined ? undefined : (JSON.parse(JSON.stringify(value)) as T);
 
-      const replayInto = <T,>(draft: Record<number, T>) => {
-        const held = new Map<number, T | undefined>();
+      /**
+       * Vacating a page writes an empty value; it never deletes the key.
+       *
+       * playhtml's draft is a Proxy with no `deleteProperty` trap, so `delete
+       * draft[page]` throws "unable to delete property" and aborts the whole
+       * mutation — which is what made moving a page one place lose it.
+       *
+       * Writing empty is equivalent to every reader anyway: `normalizePage`
+       * turns `{}` into a blank page, `guideEntries` does not list a blank
+       * page with an empty title, and `useOccupiedPages` counts neither. So an
+       * emptied key and an absent one mean the same thing everywhere.
+       */
+      const replayInto = <T,>(draft: Record<number, T>, empty: T) => {
+        const held = new Map<number, T>();
         for (const page of plan.lifts) {
-          held.set(page, detach(draft[page]));
-          delete draft[page];
+          held.set(page, detach(draft[page]) ?? empty);
+          draft[page] = empty;
         }
         for (const { from, to } of plan.moves) {
-          const value = detach(draft[from]);
-          if (value === undefined) delete draft[to];
-          else draft[to] = value;
-          delete draft[from];
+          draft[to] = detach(draft[from]) ?? empty;
+          draft[from] = empty;
         }
         for (const { from, to } of plan.drops) {
-          const value = held.get(from);
-          if (value === undefined) delete draft[to];
-          else draft[to] = value;
+          draft[to] = held.get(from) ?? empty;
         }
       };
 
-      setPages((draft) => replayInto(draft));
-      setTitles((draft) => replayInto(draft));
-      setDescriptions((draft) => replayInto(draft));
+      setPages((draft) => replayInto(draft, {}));
+      setTitles((draft) => replayInto(draft, ''));
+      setDescriptions((draft) => replayInto(draft, ''));
       // Kinds are keyed by page number like titles, so a heading that moves
       // stays a heading — otherwise a renumbering would quietly flatten the
-      // directory.
-      setKinds((draft) => replayInto(draft));
+      // directory. Its empty value is the default kind, not a missing key.
+      setKinds((draft) => replayInto(draft, DEFAULT_PAGE_KIND));
     },
     [setPages, setTitles, setKinds, setDescriptions],
   );
@@ -588,9 +596,9 @@ export function useArchiveAdmin(): ArchiveAdminApi {
       // pages never collide — the same shape titles already had.
       setTitle(pageNumber, nextTitle);
       setDescriptions((draft) => {
-        const trimmed = nextDescription.trim();
-        if (trimmed.length === 0) delete draft[pageNumber];
-        else draft[pageNumber] = trimmed.slice(0, 500);
+        // Empty string rather than removing the key: deleting throws on
+        // playhtml's draft, and an empty description reads the same anyway.
+        draft[pageNumber] = nextDescription.trim().slice(0, 500);
       });
     },
     [setTitle, setDescriptions],
@@ -613,17 +621,20 @@ export function useArchiveAdmin(): ArchiveAdminApi {
         // make the page look occupied afterwards. Readers already treat an
         // absent page and a blank one identically (`normalizePage`,
         // `guideEntries`), so removing the keys is the cleaner of the two.
+        // Emptied, not deleted — see `replayInto`. A blank page with no title
+        // reads as absent to the directory, the search and the occupancy
+        // check alike, and deleting the key throws on playhtml's draft.
         setPages((draft) => {
-          delete draft[pageNumber];
+          draft[pageNumber] = {};
         });
         setTitles((draft) => {
-          delete draft[pageNumber];
+          draft[pageNumber] = '';
         });
         setKinds((draft) => {
-          delete draft[pageNumber];
+          draft[pageNumber] = DEFAULT_PAGE_KIND;
         });
         setDescriptions((draft) => {
-          delete draft[pageNumber];
+          draft[pageNumber] = '';
         });
         return { ok: true };
       } catch (error) {
