@@ -2002,22 +2002,16 @@
 }
 
 /*
- * An ordinary listing: smaller, lighter, sentence case.
+ * An ordinary listing: smaller and lighter, and left exactly as it was typed.
  *
- * The titles are stored as teletext wrote them, which is to say shouted, so the
- * case is undone here rather than in the data — `lowercase` plus a capitalised
- * first letter, since `capitalize` alone would leave "PAVILHÃO" as it found it.
- * `display: block` because `::first-letter` does not apply to an inline box.
+ * No `text-transform` at all. Whoever titled the page chose that capitalisation,
+ * and re-casing it here would be this stylesheet overruling them — including on
+ * names where the case carries meaning and a blanket rule gets it wrong.
  */
 .yellow-pages-entry-page .yellow-pages-name {
-  display: block;
   font-weight: 400;
   font-size: 0.9rem;
-  text-transform: lowercase;
-}
-
-.yellow-pages-entry-page .yellow-pages-name::first-letter {
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .yellow-pages-entry-page .yellow-pages-number {

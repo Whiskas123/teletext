@@ -52,6 +52,38 @@ interface Block {
   rows: Row[];
 }
 
+/**
+ * Drop consecutive listings that repeat the previous one's name.
+ *
+ * A teletext article longer than one screen is continued on the next page under
+ * the same title, so the corpus is full of runs like NOTÍCIAS 117, NOTÍCIAS 118,
+ * NOTÍCIAS 119. Listing each one says nothing the first does not, and pads the
+ * directory with rows nobody needs to choose between — the first is where you
+ * start reading either way.
+ *
+ * Only adjacent rows at the same depth are collapsed, and only ordinary pages: a
+ * heading that happens to share a name with the listing above it is a different
+ * kind of thing and stays.
+ */
+function collapseRepeats(rows: readonly Row[]): Row[] {
+  const kept: Row[] = [];
+
+  for (const row of rows) {
+    const previous = kept[kept.length - 1];
+    const repeats =
+      previous != null &&
+      row.node.kind === 'page' &&
+      previous.node.kind === 'page' &&
+      previous.depth === row.depth &&
+      previous.node.title.trim().toLocaleLowerCase() ===
+        row.node.title.trim().toLocaleLowerCase();
+
+    if (!repeats) kept.push(row);
+  }
+
+  return kept;
+}
+
 function directoryBlocks(nodes: readonly DirectoryNode[]): Block[] {
   const blocks: Block[] = [];
 
@@ -83,7 +115,11 @@ function directoryBlocks(nodes: readonly DirectoryNode[]): Block[] {
   };
 
   walk(nodes, 0);
-  return blocks;
+  // Collapsed per block, after the rows are gathered: a run only counts as a run
+  // if nothing separates it, and the block is what defines "next to each other".
+  return blocks
+    .map((block) => ({ ...block, rows: collapseRepeats(block.rows) }))
+    .filter((block) => block.rows.length > 0);
 }
 
 /** One listing row. */
