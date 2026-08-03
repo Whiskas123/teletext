@@ -47,7 +47,6 @@ export interface OnAirPanelProps {
   livePage(pageNumber: number): TeletextPage | null;
   onNudge(pageNumber: number, delta: -1 | 1): void;
   onMoveTo(pageNumber: number, destination: number): void;
-  onUnpublish(pageNumber: number): void;
   onDelete(pageNumber: number, title: string): void;
   onSaveText(pageNumber: number, draft: OnAirCardDraft): void;
   onSetRole(pageNumber: number, kind: PageKind): void;
@@ -70,7 +69,6 @@ export function OnAirPanel({
   livePage,
   onNudge,
   onMoveTo,
-  onUnpublish,
   onDelete,
   onSaveText,
   onSetRole,
@@ -154,7 +152,6 @@ export function OnAirPanel({
           closeMover: state.closeMover,
           setDestination: state.setDestination,
           moveTo: (target) => onMoveTo(row.pageNumber, target),
-          unpublish: () => onUnpublish(row.pageNumber),
           remove: () => onDelete(row.pageNumber, row.title),
           saveText: () => {
             if (state.editor != null) onSaveText(row.pageNumber, state.editor.draft);

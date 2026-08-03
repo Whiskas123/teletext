@@ -48,7 +48,6 @@ export interface OnAirCardDraft {
 
 export interface OnAirCardCallbacks {
   nudge(delta: -1 | 1): void;
-  unpublish(): void;
   remove(): void;
   saveText(): void;
   setRole(kind: PageKind): void;
@@ -243,16 +242,9 @@ export function OnAirPageCard({
           >
             {editorOpen ? 'Close' : 'Edit'}
           </button>
-          {entry != null && (
-            <button
-              type="button"
-              className="manage-mini-btn"
-              disabled={disabled}
-              onClick={on.unpublish}
-            >
-              Unpublish
-            </button>
-          )}
+          {/* Delete is the one way off air: it empties the page, whether or not
+              it had a publication record, so a separate Unpublish would be the
+              same action under a second name and a second confirmation. */}
           <button
             type="button"
             className="manage-mini-btn manage-mini-btn-danger"

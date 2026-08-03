@@ -28,6 +28,7 @@ import { useSnapshot } from '../../collab/useSnapshot';
 import { usePageKinds } from '../../collab/usePageKinds';
 import { useAdminStatus } from '../../collab/useIsModerator';
 import { PLAYGROUND_MIN_PAGE } from '../../domain/access';
+import { MAX_TITLE_LENGTH } from '../../domain/publication';
 import type { TabKey } from '../../domain/manageTabs';
 import { ManageTabBar } from './ManageTabBar';
 import { NoticeArea } from './NoticeArea';
@@ -89,6 +90,22 @@ export function ManageArchivePage() {
       },
     });
   }, [actions, archive.selected, archive.draft]);
+
+  const handlePublishBatch = useCallback(
+    (startPage: number) => {
+      actions.publishBatch(
+        // Titles come from the manifest: a run is for filling a section quickly,
+        // and anything needing its own wording is a page to publish on its own.
+        archive.batch.map((capture) => ({
+          id: capture.id,
+          title: capture.manifest_title?.slice(0, MAX_TITLE_LENGTH) ?? '',
+        })),
+        startPage,
+      );
+      archive.clearBatch();
+    },
+    [actions, archive],
+  );
 
   const onAirCounts = useMemo(() => {
     // Null until the live document has synced. A confident "0 pages on air" while
@@ -193,13 +210,6 @@ export function ManageArchivePage() {
             livePage={data.livePage}
             onNudge={actions.nudge}
             onMoveTo={actions.moveTo}
-            onUnpublish={(pageNumber) =>
-              actions.askConfirm({
-                action: 'unpublish',
-                pageNumber,
-                title: data.titleOf(pageNumber),
-              })
-            }
             onDelete={(pageNumber, title) =>
               actions.askConfirm({ action: 'delete', pageNumber, title })
             }
@@ -229,6 +239,7 @@ export function ManageArchivePage() {
             publicationsByPage={data.publishedByPage}
             publishBusy={actions.inFlight.publishBusy}
             onPublish={handlePublish}
+            onPublishBatch={handlePublishBatch}
           />
         )}
       </div>

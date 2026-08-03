@@ -1,13 +1,20 @@
 /**
  * usePageRoll — the teletext "rolling digits" transition between pages.
  *
- * When the displayed Page_Number changes, a real teletext set counts through
- * the intervening numbers before settling. This hook reproduces that: the
- * header number counts **up** one page at a time towards the target — always
- * up, wrapping {@link MAX_PAGE} → {@link MIN_PAGE}, the way a set cycling
- * through the carousel does (999 → 120 rolls 999, 100, 101 … 120) — and the
- * page CONTENT is held frozen until the roll lands, so the new page doesn't
- * appear before its number does.
+ * When the viewer dials a Page_Number, a real teletext set counts through the
+ * intervening numbers before settling. This hook reproduces that: the header
+ * number counts **up** one page at a time towards the target — always up,
+ * wrapping {@link MAX_PAGE} → {@link MIN_PAGE}, the way a set cycling through
+ * the carousel does (999 → 120 rolls 999, 100, 101 … 120) — and the page
+ * CONTENT is held frozen until the roll lands, so the new page doesn't appear
+ * before its number does.
+ *
+ * ## Only for a dialled number
+ *
+ * Stepping to the previous or next page is not a dial, and rolling it looks
+ * absurd: going back from 120 to 119 counted *up* through 998 numbers to get
+ * there. Those callers announce themselves with {@link PageRoll.skipRoll} before
+ * they change the page, and the header goes straight to it.
  *
  * While idle (not rolling) the content stays live, so edits made to the page
  * currently on screen show up immediately.
@@ -37,6 +44,12 @@ export interface PageRoll {
   displayNumber: number;
   /** The page content to render — held frozen until the roll lands. */
   shownPage: TeletextPage;
+  /**
+   * Suppress the roll for the next page change, for stepping rather than
+   * dialling. Call it immediately before changing the page: it sets a ref, so it
+   * takes effect on the very next change and is spent by it.
+   */
+  skipRoll(): void;
 }
 
 /**
@@ -52,6 +65,12 @@ export function usePageRoll(
   const pageRef = useRef(page);
   const rollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const rollingRef = useRef(false);
+  /** Set by `skipRoll`, cleared by the change it applies to. */
+  const skipRef = useRef(false);
+
+  const skipRoll = useCallback(() => {
+    skipRef.current = true;
+  }, []);
 
   const setDisplayNumber = useCallback((n: number) => {
     displayRef.current = n;
@@ -71,6 +90,9 @@ export function usePageRoll(
   useEffect(() => {
     if (displayRef.current === targetPageNumber) return;
     const target = targetPageNumber;
+    // Spent by this change, whichever way it goes.
+    const straightThere = skipRef.current;
+    skipRef.current = false;
     rollingRef.current = true;
     stopRoll();
     rollTimer.current = setInterval(() => {
@@ -81,7 +103,9 @@ export function usePageRoll(
         setShownPage(pageRef.current); // reveal the target page content
         return;
       }
-      setDisplayNumber(nextRollStep(cur));
+      // A step lands on its first tick instead of counting; the content is still
+      // revealed by the settle above, so the number never arrives before it.
+      setDisplayNumber(straightThere ? target : nextRollStep(cur));
     }, PAGE_ROLL_MS);
   }, [targetPageNumber, stopRoll, setDisplayNumber]);
 
@@ -97,5 +121,5 @@ export function usePageRoll(
     return () => stopRoll();
   }, [stopRoll]);
 
-  return { displayNumber, shownPage };
+  return { displayNumber, shownPage, skipRoll };
 }

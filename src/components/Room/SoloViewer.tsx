@@ -137,7 +137,19 @@ export function SoloViewer({ pageNumber: pageNumberProp }: SoloViewerProps) {
   const { displayedPageNumber, page, setDisplayedPage, gotoNextNonEmpty, gotoPrevNonEmpty } =
     useSoloView(initialPageNumber);
 
-  const { displayNumber, shownPage } = usePageRoll(displayedPageNumber, page);
+  const { displayNumber, shownPage, skipRoll } = usePageRoll(displayedPageNumber, page);
+
+  // Stepping is not dialling: going back one page should not count up through
+  // 998 numbers to get there.
+  const stepPrev = useCallback(() => {
+    skipRoll();
+    return gotoPrevNonEmpty();
+  }, [skipRoll, gotoPrevNonEmpty]);
+
+  const stepNext = useCallback(() => {
+    skipRoll();
+    return gotoNextNonEmpty();
+  }, [skipRoll, gotoNextNonEmpty]);
 
   const [openObject, setOpenObject] = useState<OpenObject>(null);
   const remoteSlotRef = useRef<HTMLDivElement>(null);
@@ -210,9 +222,28 @@ export function SoloViewer({ pageNumber: pageNumberProp }: SoloViewerProps) {
           </div>
           <div className="tv-controls">
             <div className="tv-speaker" aria-hidden="true" />
-            <div className="tv-knobs" aria-hidden="true">
-              <div className="tv-knob" />
-              <div className="tv-knob" />
+            {/* The chassis knobs, which used to be decoration. A set's tuning
+                knobs stepped through channels, so stepping through pages is what
+                they should have done all along. */}
+            <div className="tv-knobs">
+              <button
+                type="button"
+                className="tv-knob tv-knob-btn"
+                aria-label="Previous page with content"
+                title="Previous page"
+                onClick={stepPrev}
+              >
+                <span aria-hidden="true">‹</span>
+              </button>
+              <button
+                type="button"
+                className="tv-knob tv-knob-btn"
+                aria-label="Next page with content"
+                title="Next page"
+                onClick={stepNext}
+              >
+                <span aria-hidden="true">›</span>
+              </button>
             </div>
           </div>
         </div>
@@ -237,8 +268,8 @@ export function SoloViewer({ pageNumber: pageNumberProp }: SoloViewerProps) {
               >
                 <SoloRemote
                   onSelect={setDisplayedPage}
-                  onNext={gotoNextNonEmpty}
-                  onPrev={gotoPrevNonEmpty}
+                  onNext={stepNext}
+                  onPrev={stepPrev}
                 />
               </div>
             )}

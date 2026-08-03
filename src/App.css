@@ -950,6 +950,48 @@
   transform-origin: center bottom;
 }
 
+/*
+ * The knobs that actually do something: previous and next page.
+ *
+ * Same moulded shape, with the indicator line replaced by an arrow — a knob
+ * whose position means nothing is decoration, and these have a direction.
+ */
+.tv-knob-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  color: rgb(255 255 255 / 70%);
+  font-family: monospace;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tv-knob-btn::after {
+  content: none;
+}
+
+.tv-knob-btn:hover {
+  color: #fff;
+  box-shadow:
+    0 2px 4px rgb(0 0 0 / 70%),
+    inset 0 1px 2px rgb(255 255 255 / 25%),
+    0 0 0 2px #1a1a1a,
+    0 0 0 3px #6a6a6a;
+}
+
+.tv-knob-btn:active {
+  /* Pressed in, like a knob being turned. */
+  transform: translateY(1px);
+}
+
+.tv-knob-btn:focus-visible {
+  outline: 2px solid #4cf;
+  outline-offset: 3px;
+}
+
 /* Bottom foot / base of the TV */
 .room-viewer-screen::after {
   content: '';
@@ -1384,6 +1426,59 @@
  */
 .manage-results {
   min-width: 0;
+}
+
+/* --- Selecting a run of captures ----------------------------------------- */
+.manage-capture-cell {
+  position: relative;
+}
+
+/* Over the card's top-left corner, where the render has a page number rather
+   than content worth covering. */
+.manage-capture-pick {
+  position: absolute;
+  top: 0.35rem;
+  left: 0.35rem;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: #000c;
+  border: 1px solid #444;
+  cursor: pointer;
+}
+
+.manage-batch {
+  margin-bottom: 1rem;
+  padding: 0.6rem 0.75rem;
+  background: #001a1a;
+  border: 1px solid #4cf;
+  font-size: 0.75rem;
+}
+
+.manage-batch-head {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+}
+
+.manage-batch-list {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.2rem 0.75rem;
+}
+
+.manage-batch-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
 }
 
 .manage-capture-grid {

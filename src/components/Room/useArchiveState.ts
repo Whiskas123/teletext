@@ -50,6 +50,16 @@ export interface ArchiveState {
   setOffset(offset: number): void;
   select(capture: CaptureSummary): void;
   setDraft(patch: Partial<PublishDraft>): void;
+  /**
+   * Captures queued for publishing in one go, in the order they were ticked.
+   * That order is the point: it decides which page number each one lands on.
+   */
+  batch: CaptureSummary[];
+  toggleBatch(capture: CaptureSummary): void;
+  clearBatch(): void;
+  /** First page number of the run, as typed. */
+  batchStart: string;
+  setBatchStart(value: string): void;
 }
 
 export function useArchiveState(): ArchiveState {
@@ -59,6 +69,8 @@ export function useArchiveState(): ArchiveState {
   const [selected, setSelected] = useState<CaptureSummary | null>(null);
   const [sourcePage, setSourcePage] = useState<TeletextPage | null>(null);
   const [draft, setDraftState] = useState<PublishDraft>(EMPTY_DRAFT);
+  const [batch, setBatch] = useState<CaptureSummary[]>([]);
+  const [batchStart, setBatchStart] = useState('');
 
   useEffect(() => {
     const raw = filters.q ?? '';
@@ -105,6 +117,16 @@ export function useArchiveState(): ArchiveState {
     setDraftState((current) => ({ ...current, ...patch }));
   }, []);
 
+  const toggleBatch = useCallback((capture: CaptureSummary) => {
+    setBatch((current) =>
+      current.some((item) => item.id === capture.id)
+        ? current.filter((item) => item.id !== capture.id)
+        : [...current, capture],
+    );
+  }, []);
+
+  const clearBatch = useCallback(() => setBatch([]), []);
+
   return {
     filters,
     queryFilters,
@@ -118,5 +140,10 @@ export function useArchiveState(): ArchiveState {
     setOffset,
     select,
     setDraft,
+    batch,
+    toggleBatch,
+    clearBatch,
+    batchStart,
+    setBatchStart,
   };
 }

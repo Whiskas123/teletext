@@ -129,6 +129,15 @@ export function publishFailed(pageNumber: number, reason?: string): Notice {
   return alert(`Publishing to page ${pageNumber} did not complete.${because}`);
 }
 
+/** A whole run of captures published onto consecutive pages. */
+export function batchPublished(count: number, startPage: number): Notice {
+  return status(
+    count === 1
+      ? `Published to page ${startPage}.`
+      : `Published ${count} pages, ${startPage} to ${startPage + count - 1}.`,
+  );
+}
+
 /** A publish target outside the curated range. Reuses the domain's own prose. */
 export function publishTargetOutOfRange(): Notice {
   return alert(describeRejection('page-out-of-range'));

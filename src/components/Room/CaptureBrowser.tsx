@@ -46,6 +46,9 @@ export interface CaptureBrowserProps {
   onRetry(): void;
   selectedId: number | null;
   onSelect(capture: CaptureSummary): void;
+  /** Capture ids queued for a batch publish. */
+  batchIds: ReadonlySet<number>;
+  onToggleBatch(capture: CaptureSummary): void;
 }
 
 export function CaptureBrowser({
@@ -63,6 +66,8 @@ export function CaptureBrowser({
   onRetry,
   selectedId,
   onSelect,
+  batchIds,
+  onToggleBatch,
 }: CaptureBrowserProps) {
   return (
     <section className="manage-results" aria-label="Captures">
@@ -185,7 +190,20 @@ export function CaptureBrowser({
           {captures.map((capture) => {
             const reason = blockedReason(capture);
             return (
-              <li key={capture.id}>
+              <li key={capture.id} className="manage-capture-cell">
+                {/* A sibling of the card rather than inside it: a checkbox nested
+                    in a button is neither valid nor operable. */}
+                <label className="manage-capture-pick">
+                  <input
+                    type="checkbox"
+                    checked={batchIds.has(capture.id)}
+                    onChange={() => onToggleBatch(capture)}
+                  />
+                  <span className="sr-only">
+                    Select {capture.source.toUpperCase()} page{' '}
+                    {capture.original_page} for publishing
+                  </span>
+                </label>
                 <button
                   type="button"
                   className={`manage-capture${

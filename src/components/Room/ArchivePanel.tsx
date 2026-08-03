@@ -11,6 +11,7 @@ import { useEffect, useMemo } from 'react';
 import type { CaptureSummary, PublishedEntry } from '../../collab/useArchiveAdmin';
 import type { CustomMenu, MenuDraft } from '../../domain/menu';
 import type { TeletextPage } from '../../types/teletext';
+import { BatchPublishBar } from './BatchPublishBar';
 import { CaptureBrowser } from './CaptureBrowser';
 import { PublishPanel } from './PublishPanel';
 import type { ArchiveState } from './useArchiveState';
@@ -32,6 +33,7 @@ export interface ArchivePanelProps {
   publicationsByPage: ReadonlyMap<number, PublishedEntry>;
   publishBusy: boolean;
   onPublish(): void;
+  onPublishBatch(startPage: number): void;
 }
 
 export function ArchivePanel({
@@ -51,6 +53,7 @@ export function ArchivePanel({
   publicationsByPage,
   publishBusy,
   onPublish,
+  onPublishBatch,
 }: ArchivePanelProps) {
   const { selected, setSourcePage } = state;
   const selectedId = selected?.id ?? null;
@@ -98,8 +101,30 @@ export function ArchivePanel({
   const selectionOffScreen =
     selected != null && !captures.some((capture) => capture.id === selected.id);
 
+  const publishedPages = useMemo(
+    () => new Set(publicationsByPage.keys()),
+    [publicationsByPage],
+  );
+
+  const batchIds = useMemo(
+    () => new Set(state.batch.map((capture) => capture.id)),
+    [state.batch],
+  );
+
   return (
-    <div className="manage-body">
+    <>
+      <BatchPublishBar
+        batch={state.batch}
+        start={state.batchStart}
+        onStart={state.setBatchStart}
+        onClear={state.clearBatch}
+        onRemove={state.toggleBatch}
+        onPublish={onPublishBatch}
+        busy={publishBusy}
+        publishedPages={publishedPages}
+      />
+
+      <div className="manage-body">
       <CaptureBrowser
         filters={state.filters}
         appliedFilters={state.queryFilters}
@@ -115,6 +140,8 @@ export function ArchivePanel({
         onRetry={onRetry}
         selectedId={selectedId}
         onSelect={state.select}
+        batchIds={batchIds}
+        onToggleBatch={state.toggleBatch}
       />
 
       <div className="manage-detail-column">
@@ -139,6 +166,7 @@ export function ArchivePanel({
           onPublish={onPublish}
         />
       </div>
-    </div>
+      </div>
+    </>
   );
 }

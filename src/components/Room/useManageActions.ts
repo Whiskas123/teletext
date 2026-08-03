@@ -28,6 +28,7 @@ import {
   type PageActionName,
 } from '../../domain/inFlight';
 import {
+  batchPublished,
   blockMoved,
   pageActionFailed,
   pageActionSucceeded,
@@ -70,6 +71,12 @@ export interface PublishInput {
   transforms: PublishTransforms;
 }
 
+/** One capture in a run, with the title it should carry. */
+export interface BatchItem {
+  id: number;
+  title: string;
+}
+
 export interface ManageActionsApi {
   notice: Notice | null;
   setNotice(notice: Notice | null): void;
@@ -86,6 +93,8 @@ export interface ManageActionsApi {
   setRole(pageNumber: number, kind: PageKind): void;
   saveText(pageNumber: number, title: string, description: string): void;
   publish(input: PublishInput): void;
+  /** Publish a run of captures onto consecutive pages from `startPage`. */
+  publishBatch(items: readonly BatchItem[], startPage: number): void;
 }
 
 export function useManageActions({
@@ -278,6 +287,56 @@ export function useManageActions({
     [runAction, data],
   );
 
+  /**
+   * Publish a run of captures onto consecutive page numbers.
+   *
+   * Sequential rather than concurrent, deliberately: each publish is a database
+   * write followed by a playhtml write, and firing twenty of those at once would
+   * interleave the second halves unpredictably and reload the publication records
+   * twenty times. One at a time is also what makes a partial failure legible —
+   * the run keeps going and reports which pages did not take.
+   */
+  const publishBatch = useCallback(
+    (items: readonly BatchItem[], startPage: number) => {
+      if (items.length === 0) return;
+
+      runAction(
+        { kind: 'publish' },
+        async () => {
+          const failed: number[] = [];
+          let lastError = '';
+
+          for (const [index, item] of items.entries()) {
+            const pageNumber = startPage + index;
+            const result = await data.publish({
+              pageNumber,
+              captureId: item.id,
+              title: item.title,
+              description: '',
+              transforms: { shiftDown: true, menuId: null },
+            });
+            if (!result.ok) {
+              failed.push(pageNumber);
+              lastError = result.error;
+            }
+          }
+
+          return failed.length === 0
+            ? { ok: true as const }
+            : {
+                ok: false as const,
+                error: `${failed.length} of ${items.length} did not publish (${failed.join(', ')}). ${lastError}`,
+              };
+        },
+        (outcome) =>
+          outcome.ok
+            ? batchPublished(items.length, startPage)
+            : { tone: 'alert', text: outcome.error },
+      );
+    },
+    [runAction, data],
+  );
+
   const askConfirm = useCallback((request: ConfirmRequest) => {
     confirmOpener.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -299,15 +358,10 @@ export function useManageActions({
     closeConfirm();
     if (request == null) return;
 
-    if (request.action === 'delete') {
-      runPageAction(request.pageNumber, 'delete', () =>
-        data.deletePage(request.pageNumber),
-      );
-    } else {
-      runPageAction(request.pageNumber, 'unpublish', () =>
-        data.unpublish(request.pageNumber),
-      );
-    }
+    // Delete is the one confirmed Page_Action now: taking a page off air always
+    // means emptying it, whether or not it had a publication record, so there is
+    // nothing left for a separate confirmed unpublish to mean.
+    runPageAction(request.pageNumber, 'delete', () => data.deletePage(request.pageNumber));
   }, [confirming, closeConfirm, runPageAction, data]);
 
   return {
@@ -324,5 +378,6 @@ export function useManageActions({
     setRole,
     saveText,
     publish,
+    publishBatch,
   };
 }

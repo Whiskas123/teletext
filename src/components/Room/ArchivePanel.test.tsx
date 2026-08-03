@@ -70,6 +70,7 @@ function Harness(overrides: Partial<ArchivePanelProps> = {}) {
       publicationsByPage={new Map()}
       publishBusy={false}
       onPublish={vi.fn()}
+      onPublishBatch={vi.fn()}
       {...overrides}
     />
   );

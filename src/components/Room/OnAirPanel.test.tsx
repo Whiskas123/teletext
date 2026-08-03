@@ -59,7 +59,6 @@ function Harness(overrides: Partial<OnAirPanelProps> = {}) {
       livePage={() => null}
       onNudge={vi.fn()}
       onMoveTo={vi.fn()}
-      onUnpublish={vi.fn()}
       onDelete={vi.fn()}
       onSaveText={vi.fn()}
       onSetRole={vi.fn()}
