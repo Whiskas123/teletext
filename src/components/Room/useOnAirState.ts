@@ -27,6 +27,18 @@ export interface EditorState {
   draft: OnAirCardDraft;
 }
 
+/**
+ * The one "move to" slot.
+ *
+ * The destination is held as the string the operator typed, not a number: a
+ * half-typed `3` is not page 3, and coercing early makes the field fight back
+ * while it is being filled in.
+ */
+export interface MoverState {
+  pageNumber: number;
+  destination: string;
+}
+
 export interface OnAirState {
   filter: OnAirFilter;
   setFilterText(text: string): void;
@@ -38,6 +50,11 @@ export interface OnAirState {
   closeEditor(): void;
   editDraft(patch: Partial<OnAirCardDraft>): void;
   resetDraft(stored: OnAirCardDraft): void;
+  /** The one page being sent to a chosen number, and where to. */
+  mover: MoverState | null;
+  openMover(pageNumber: number): void;
+  closeMover(): void;
+  setDestination(value: string): void;
   /**
    * Advanced by `clearFilter` so the panel can put focus back on the input.
    * A counter rather than a boolean: two clears in a row are two requests, and a
@@ -49,6 +66,7 @@ export interface OnAirState {
 export function useOnAirState(): OnAirState {
   const [filter, setFilter] = useState<OnAirFilter>(EMPTY_ON_AIR_FILTER);
   const [editor, setEditor] = useState<EditorState | null>(null);
+  const [mover, setMover] = useState<MoverState | null>(null);
   const [focusFilterRequest, setFocusFilterRequest] = useState(0);
 
   const setFilterText = useCallback((text: string) => {
@@ -86,6 +104,18 @@ export function useOnAirState(): OnAirState {
     );
   }, []);
 
+  const openMover = useCallback((pageNumber: number) => {
+    // Pre-filled with the page's own number, so the field says what it wants and
+    // typing over it is one gesture.
+    setMover({ pageNumber, destination: String(pageNumber) });
+  }, []);
+
+  const closeMover = useCallback(() => setMover(null), []);
+
+  const setDestination = useCallback((destination: string) => {
+    setMover((current) => (current == null ? current : { ...current, destination }));
+  }, []);
+
   return {
     filter,
     setFilterText,
@@ -97,6 +127,10 @@ export function useOnAirState(): OnAirState {
     closeEditor,
     editDraft,
     resetDraft,
+    mover,
+    openMover,
+    closeMover,
+    setDestination,
     focusFilterRequest,
   };
 }

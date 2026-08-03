@@ -26,6 +26,7 @@ import {
   type RangeRestriction,
 } from '../../domain/onAirList';
 import type { InFlightView } from '../../domain/inFlight';
+import { previewMove } from '../../domain/pageMove';
 import type { TeletextPage } from '../../types/teletext';
 import { OnAirPageCard, type OnAirCardDraft } from './OnAirPageCard';
 import { ReorderTools, type ReorderToolsProps } from './ReorderTools';
@@ -45,6 +46,7 @@ export interface OnAirPanelProps {
   kindOf(pageNumber: number): PageKind;
   livePage(pageNumber: number): TeletextPage | null;
   onNudge(pageNumber: number, delta: -1 | 1): void;
+  onMoveTo(pageNumber: number, destination: number): void;
   onUnpublish(pageNumber: number): void;
   onDelete(pageNumber: number, title: string): void;
   onSaveText(pageNumber: number, draft: OnAirCardDraft): void;
@@ -67,6 +69,7 @@ export function OnAirPanel({
   kindOf,
   livePage,
   onNudge,
+  onMoveTo,
   onUnpublish,
   onDelete,
   onSaveText,
@@ -86,6 +89,10 @@ export function OnAirPanel({
   }, [state.focusFilterRequest]);
 
   const occupied = useMemo(() => new Set(occupiedPages), [occupiedPages]);
+  const publishedNumbers = useMemo(
+    () => new Set(publicationsByPage.keys()),
+    [publicationsByPage],
+  );
 
   const rows = useMemo<OnAirRow[]>(
     () =>
@@ -112,6 +119,8 @@ export function OnAirPanel({
       description: descriptionOf(row.pageNumber),
     };
     const editorOpen = state.editor?.pageNumber === row.pageNumber;
+    const destination =
+      state.mover?.pageNumber === row.pageNumber ? state.mover.destination : null;
 
     return (
       <OnAirPageCard
@@ -124,10 +133,27 @@ export function OnAirPanel({
         stored={stored}
         draft={editorOpen ? (state.editor?.draft ?? null) : null}
         editorOpen={editorOpen}
+        destination={destination}
+        movePreview={
+          destination == null
+            ? null
+            : previewMove({
+                occupied: occupiedPages,
+                published: publishedNumbers,
+                fromPage: row.pageNumber,
+                // An empty or half-typed field is not a page number, and
+                // `previewMove` says so rather than being asked to guess.
+                destination: destination === '' ? Number.NaN : Number(destination),
+              })
+        }
         busy={inFlight.pageBusy(row.pageNumber)}
         outcome={outcomes.get(row.pageNumber) ?? null}
         on={{
           nudge: (delta) => onNudge(row.pageNumber, delta),
+          openMover: () => state.openMover(row.pageNumber),
+          closeMover: state.closeMover,
+          setDestination: state.setDestination,
+          moveTo: (target) => onMoveTo(row.pageNumber, target),
           unpublish: () => onUnpublish(row.pageNumber),
           remove: () => onDelete(row.pageNumber, row.title),
           saveText: () => {

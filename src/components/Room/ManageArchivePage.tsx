@@ -70,6 +70,7 @@ export function ManageArchivePage() {
     data,
     setKind,
     onTextSaved: onAir.closeEditor,
+    onMoved: onAir.closeMover,
     noticeRef,
   });
 
@@ -191,6 +192,7 @@ export function ManageArchivePage() {
             kindOf={kindOf}
             livePage={data.livePage}
             onNudge={actions.nudge}
+            onMoveTo={actions.moveTo}
             onUnpublish={(pageNumber) =>
               actions.askConfirm({
                 action: 'unpublish',

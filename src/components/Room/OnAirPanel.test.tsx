@@ -58,6 +58,7 @@ function Harness(overrides: Partial<OnAirPanelProps> = {}) {
       kindOf={() => 'page'}
       livePage={() => null}
       onNudge={vi.fn()}
+      onMoveTo={vi.fn()}
       onUnpublish={vi.fn()}
       onDelete={vi.fn()}
       onSaveText={vi.fn()}
@@ -302,6 +303,163 @@ describe('the nudge arrows', () => {
     // can write to, so it is the one that most needs moderating.
     expect(screen.getByRole('button', { name: 'Move page 712 to 713' })).toBeEnabled();
     expect(screen.getByRole('button', { name: /^Delete$/ })).toBeEnabled();
+  });
+});
+
+describe('moving a page to a chosen number', () => {
+  /** Open the "Move to…" control on the card at `index`. */
+  async function openMover(
+    user: ReturnType<typeof userEvent.setup>,
+    index: number,
+  ) {
+    const card = within(screen.getAllByRole('listitem')[index]);
+    await user.click(
+      card.getByRole('button', { name: /renumber page \d+/i }),
+    );
+    return card;
+  }
+
+  it('opens a destination field pre-filled with the page it is on', async () => {
+    const user = userEvent.setup();
+    renderPanel();
+
+    const card = await openMover(user, 0);
+    const field = card.getByLabelText(/new number for page 204/i);
+    expect(field).toHaveValue(204);
+    expect(field).toHaveFocus();
+  });
+
+  it('opens on one page at a time', async () => {
+    const user = userEvent.setup();
+    renderPanel();
+
+    await openMover(user, 0);
+    await openMover(user, 1);
+
+    const cards = screen.getAllByRole('listitem');
+    expect(within(cards[0]).queryByLabelText(/new number for page 204/i)).toBeNull();
+    expect(within(cards[1]).getByLabelText(/new number for page 412/i)).toBeInTheDocument();
+  });
+
+  it('sends the page where it was told', async () => {
+    const user = userEvent.setup();
+    const onMoveTo = vi.fn();
+    renderPanel({ onMoveTo });
+
+    const card = await openMover(user, 0);
+    const field = card.getByLabelText(/new number for page 204/i);
+    await user.clear(field);
+    await user.type(field, '305');
+    await user.click(card.getByRole('button', { name: /^Move$/ }));
+
+    expect(onMoveTo).toHaveBeenCalledWith(204, 305);
+  });
+
+  it('accepts Enter as well as the button', async () => {
+    const user = userEvent.setup();
+    const onMoveTo = vi.fn();
+    renderPanel({ onMoveTo });
+
+    const card = await openMover(user, 0);
+    const field = card.getByLabelText(/new number for page 204/i);
+    await user.clear(field);
+    await user.type(field, '305{Enter}');
+
+    expect(onMoveTo).toHaveBeenCalledWith(204, 305);
+  });
+
+  it('says what else will move before anything happens', async () => {
+    const user = userEvent.setup();
+    renderPanel();
+
+    const card = await openMover(user, 0);
+    const field = card.getByLabelText(/new number for page 204/i);
+
+    // 412 and 413 lie between 204 and 500, so they come down to close the gap.
+    // This is the part that is not obvious from a number box: page numbers are
+    // positions, so moving one moves everything it passes.
+    await user.clear(field);
+    await user.type(field, '500');
+    expect(card.getByText(/2 other pages shift/i)).toBeInTheDocument();
+  });
+
+  it('says when nothing else is disturbed', async () => {
+    const user = userEvent.setup();
+    renderPanel();
+
+    // Nothing sits above 712, so sending it to 999 moves it alone.
+    const card = await openMover(user, 3);
+    const field = card.getByLabelText(/new number for page 712/i);
+    await user.clear(field);
+    await user.type(field, '999');
+
+    expect(card.getByText(/nothing else moves/i)).toBeInTheDocument();
+  });
+
+  it('refuses to leave the page where it already is', async () => {
+    const user = userEvent.setup();
+    const onMoveTo = vi.fn();
+    renderPanel({ onMoveTo });
+
+    const card = await openMover(user, 0);
+    expect(card.getByText(/already there/i)).toBeInTheDocument();
+    expect(card.getByRole('button', { name: /^Move$/ })).toBeDisabled();
+  });
+
+  it('refuses a destination outside 100–999, saying so', async () => {
+    const user = userEvent.setup();
+    renderPanel();
+
+    const card = await openMover(user, 0);
+    const field = card.getByLabelText(/new number for page 204/i);
+    await user.clear(field);
+    await user.type(field, '42');
+
+    expect(card.getByText(/between 100 and 999/i)).toBeInTheDocument();
+    expect(card.getByRole('button', { name: /^Move$/ })).toBeDisabled();
+  });
+
+  it('refuses to send a published page into the playground', async () => {
+    const user = userEvent.setup();
+    renderPanel();
+
+    // 204 is the published one.
+    const card = await openMover(user, 0);
+    const field = card.getByLabelText(/new number for page 204/i);
+    await user.clear(field);
+    await user.type(field, '750');
+
+    expect(card.getByText(/open playground/i)).toBeInTheDocument();
+    expect(card.getByRole('button', { name: /^Move$/ })).toBeDisabled();
+  });
+
+  it('allows a hand-made page out of the playground, and warns that it changes who may edit it', async () => {
+    const user = userEvent.setup();
+    renderPanel();
+
+    const card = await openMover(user, 3);
+    const field = card.getByLabelText(/new number for page 712/i);
+    await user.clear(field);
+    await user.type(field, '305');
+
+    // The arrows refuse this because one keypress is too easy; naming 305 is
+    // deliberate, so it goes ahead with a note.
+    expect(card.getByText(/only a moderator/i)).toBeInTheDocument();
+    expect(card.getByRole('button', { name: /^Move$/ })).toBeEnabled();
+  });
+
+  it('closes without moving anything', async () => {
+    const user = userEvent.setup();
+    const onMoveTo = vi.fn();
+    renderPanel({ onMoveTo });
+
+    const card = await openMover(user, 0);
+    await user.click(
+      card.getByRole('button', { name: /cancel renumbering page 204/i }),
+    );
+
+    expect(card.queryByLabelText(/new number for page 204/i)).toBeNull();
+    expect(onMoveTo).not.toHaveBeenCalled();
   });
 });
 

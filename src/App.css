@@ -1836,6 +1836,44 @@
   padding: 0 0.1em;
 }
 
+/* --- "Move to…" on a page card ------------------------------------------- */
+/*
+ * A destination and what it will cost. The preview line matters as much as the
+ * field: page numbers are positions, so sending this page to 305 renumbers
+ * everything between here and there, and that is not obvious from a number box.
+ */
+.manage-move {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 100%;
+  margin-top: 0.4rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid #333;
+}
+
+.manage-move-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.manage-move input {
+  width: 5.5rem;
+  min-height: 44px;
+  box-sizing: border-box;
+  background: #111;
+  color: #ddd;
+  border: 1px solid #4cf;
+  font-family: monospace;
+  font-size: 0.8rem;
+  padding: 0.25rem 0.4rem;
+}
+
+.manage-move .manage-note {
+  margin: 0;
+}
+
 /* Inline title/description editor on a page card. */
 .manage-edit {
   display: flex;

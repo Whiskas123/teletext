@@ -28,6 +28,7 @@ import {
   type PageActionName,
 } from '../../domain/inFlight';
 import {
+  blockMoved,
   pageActionFailed,
   pageActionSucceeded,
   publishFailed,
@@ -46,6 +47,12 @@ export interface ManageActionsInput {
   setKind(pageNumber: number, kind: PageKind): void;
   /** Called once a page's text has been stored, so the editor can close. */
   onTextSaved(pageNumber: number): void;
+  /**
+   * Called once a page has been renumbered, so the move control can close. The
+   * card under that number is a different page afterwards, so leaving the field
+   * open would aim it at something the operator did not choose.
+   */
+  onMoved(): void;
   /**
    * The notice line, for the case where a confirmation's opening control has gone
    * with the page it deleted. Owned by the shell, which renders it — a ref handed
@@ -74,6 +81,8 @@ export interface ManageActionsApi {
   closeConfirm(): void;
   confirmAction(): void;
   nudge(pageNumber: number, delta: -1 | 1): void;
+  /** Send a page to a page number the operator chose. */
+  moveTo(pageNumber: number, destination: number): void;
   setRole(pageNumber: number, kind: PageKind): void;
   saveText(pageNumber: number, title: string, description: string): void;
   publish(input: PublishInput): void;
@@ -83,6 +92,7 @@ export function useManageActions({
   data,
   setKind,
   onTextSaved,
+  onMoved,
   noticeRef,
 }: ManageActionsInput): ManageActionsApi {
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -168,17 +178,44 @@ export function useManageActions({
     [runAction],
   );
 
-  const nudge = useCallback(
-    (pageNumber: number, delta: -1 | 1) => {
-      runPageAction(
-        pageNumber,
-        delta < 0 ? 'nudge-lower' : 'nudge-higher',
-        // A nudge is a block move of one page, which slides whatever it passes
-        // over. The card says so before it is pressed.
-        () => data.moveBlock(pageNumber, pageNumber, pageNumber + delta),
+  /**
+   * Move one page to another number.
+   *
+   * A block move of one, which is the only move primitive the server has — so a
+   * nudge and a named destination are the same request with a different arrow.
+   * The success message names where the page ended up rather than where it was,
+   * because "page 204 moved" is unhelpful when 204 is no longer it.
+   */
+  const move = useCallback(
+    (pageNumber: number, destination: number, action: PageActionName) => {
+      runAction(
+        { kind: 'page', pageNumber, action },
+        () => data.moveBlock(pageNumber, pageNumber, destination),
+        (outcome) => {
+          if (outcome.ok) onMoved();
+          return outcome.ok
+            ? blockMoved(pageNumber, pageNumber, destination)
+            : pageActionFailed(action, pageNumber, outcome.error);
+        },
       );
     },
-    [runPageAction, data],
+    [runAction, data, onMoved],
+  );
+
+  const nudge = useCallback(
+    (pageNumber: number, delta: -1 | 1) => {
+      // Slides whatever it passes over rather than needing a free slot. The card
+      // says so before it is pressed.
+      move(pageNumber, pageNumber + delta, delta < 0 ? 'nudge-lower' : 'nudge-higher');
+    },
+    [move],
+  );
+
+  const moveTo = useCallback(
+    (pageNumber: number, destination: number) => {
+      move(pageNumber, destination, 'move-to');
+    },
+    [move],
   );
 
   const setRole = useCallback(
@@ -283,6 +320,7 @@ export function useManageActions({
     closeConfirm,
     confirmAction,
     nudge,
+    moveTo,
     setRole,
     saveText,
     publish,

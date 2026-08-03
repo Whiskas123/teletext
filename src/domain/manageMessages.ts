@@ -49,6 +49,8 @@ export function actionLabel(action: PageActionName): string {
       return 'Move one page earlier';
     case 'nudge-higher':
       return 'Move one page later';
+    case 'move-to':
+      return 'Move to a page number';
     case 'unpublish':
       return 'Unpublish';
     case 'delete':
@@ -65,6 +67,7 @@ export function actionProgress(action: PageActionName): string {
   switch (action) {
     case 'nudge-lower':
     case 'nudge-higher':
+    case 'move-to':
       return 'Moving…';
     case 'unpublish':
       return 'Unpublishing…';
@@ -82,6 +85,7 @@ export function actionDone(action: PageActionName): string {
   switch (action) {
     case 'nudge-lower':
     case 'nudge-higher':
+    case 'move-to':
       return 'moved';
     case 'unpublish':
       return 'unpublished';

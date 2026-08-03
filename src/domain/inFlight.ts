@@ -28,6 +28,7 @@
 export type PageActionName =
   | 'nudge-lower'
   | 'nudge-higher'
+  | 'move-to'
   | 'unpublish'
   | 'delete'
   | 'save-text'

@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-
+import { useNavigate } from 'react-router-dom';
 import { useRoomOccupancy } from '../../collab/useRoomOccupancy';
 import { useOccupiedPages } from '../../collab/useOccupiedPages';
 import { firstFreePlaygroundPage } from '../../domain/access';

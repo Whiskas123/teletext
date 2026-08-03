@@ -352,6 +352,31 @@ describe('one action at a time, per page', () => {
     );
   });
 
+  it('moves a page to the number the operator names, and says where it went', async () => {
+    const user = userEvent.setup();
+    renderManage();
+
+    const card = within(screen.getAllByRole('listitem')[0]);
+    await user.click(card.getByRole('button', { name: /renumber page 204/i }));
+
+    const field = card.getByLabelText(/new number for page 204/i);
+    await user.clear(field);
+    await user.type(field, '305');
+    await user.click(card.getByRole('button', { name: /^Move$/ }));
+
+    // A block move of one — the only move primitive the server has.
+    await waitFor(() => expect(data.moveBlock).toHaveBeenCalledWith(204, 204, 305));
+
+    // Reported in both places, in the same words: the notice line, which scrolls
+    // away, and the card, which is where the operator was looking. And naming the
+    // destination rather than the old number, since 204 is no longer this page.
+    await waitFor(() =>
+      expect(screen.getAllByText(/page 204 is now 305/i)).toHaveLength(2),
+    );
+    // The field closes, because the card under 204 is a different page now.
+    expect(card.queryByLabelText(/new number for page 204/i)).toBeNull();
+  });
+
   it('reports a success through status and a failure through alert', async () => {
     const user = userEvent.setup();
     data = makeData({

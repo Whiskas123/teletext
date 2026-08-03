@@ -23,10 +23,14 @@
 import { useState } from 'react';
 
 import { MAX_PAGE, MIN_PAGE } from '../../domain/pageOps';
-import { PLAYGROUND_MIN_PAGE } from '../../domain/access';
 import { PAGE_KINDS, type PageKind } from '../../domain/directory';
 import type { PageActionName } from '../../domain/inFlight';
 import { actionProgress, type Notice } from '../../domain/manageMessages';
+import {
+  describeMovePreview,
+  nudgeRefusal,
+  type MovePreview,
+} from '../../domain/pageMove';
 import type { OnAirRow } from '../../domain/onAirList';
 import { MAX_DESCRIPTION_LENGTH, MAX_TITLE_LENGTH } from '../../domain/publication';
 import type { PublishedEntry } from '../../collab/useArchiveAdmin';
@@ -52,6 +56,10 @@ export interface OnAirCardCallbacks {
   closeEditor(): void;
   editDraft(patch: Partial<OnAirCardDraft>): void;
   discardDraft(): void;
+  openMover(): void;
+  closeMover(): void;
+  setDestination(value: string): void;
+  moveTo(destination: number): void;
 }
 
 export interface OnAirPageCardProps {
@@ -64,6 +72,10 @@ export interface OnAirPageCardProps {
   occupied: ReadonlySet<number>;
   draft: OnAirCardDraft | null;
   editorOpen: boolean;
+  /** The destination being typed, or null when this card is not being moved. */
+  destination: string | null;
+  /** What sending this page to `destination` would do. */
+  movePreview: MovePreview | null;
   /** The action running against this page, or null. */
   busy: PageActionName | null;
   /** How this page's last action went. */
@@ -71,29 +83,6 @@ export interface OnAirPageCardProps {
   /** Stored values, for spotting an unsaved change. */
   stored: OnAirCardDraft;
   on: OnAirCardCallbacks;
-}
-
-/** Why a nudge in this direction is unavailable, or null when it can be made. */
-function nudgeRefusal(
-  row: OnAirRow,
-  delta: -1 | 1,
-  published: boolean,
-): string | null {
-  const destination = row.pageNumber + delta;
-  if (destination < MIN_PAGE) return `There is no page below ${MIN_PAGE}.`;
-  if (destination > MAX_PAGE) return `There is no page above ${MAX_PAGE}.`;
-
-  // A published page may not cross into the playground — the server refuses it,
-  // because 700 and above is editable by any visitor.
-  if (published && destination >= PLAYGROUND_MIN_PAGE) {
-    return `${PLAYGROUND_MIN_PAGE} and above is the open playground, where any visitor could edit this page.`;
-  }
-  // And the reverse, which nothing used to stop: nudging 700 down to 699 takes a
-  // visitor's own page into the curated range, out of their reach.
-  if (!published && row.group === 'playground' && destination < PLAYGROUND_MIN_PAGE) {
-    return `Below ${PLAYGROUND_MIN_PAGE} is the curated range, where only a moderator may edit. Use Move block to do this deliberately.`;
-  }
-  return null;
 }
 
 export function OnAirPageCard({
@@ -104,6 +93,8 @@ export function OnAirPageCard({
   occupied,
   draft,
   editorOpen,
+  destination,
+  movePreview,
   busy,
   outcome,
   stored,
@@ -112,6 +103,8 @@ export function OnAirPageCard({
   const [showContent, setShowContent] = useState(false);
   const { pageNumber } = row;
   const disabled = busy != null;
+  const moverOpen = destination != null;
+  const canMove = movePreview?.ok === true;
 
   const unsaved =
     draft != null &&
@@ -120,7 +113,7 @@ export function OnAirPageCard({
 
   const nudgeButton = (delta: -1 | 1) => {
     const destination = pageNumber + delta;
-    const refusal = nudgeRefusal(row, delta, entry != null);
+    const refusal = nudgeRefusal(pageNumber, delta, entry != null);
     const swaps = refusal == null && occupied.has(destination);
     const label =
       refusal != null
@@ -228,6 +221,23 @@ export function OnAirPageCard({
           <button
             type="button"
             className="manage-mini-btn"
+            // The visible text is the same on every card, so the name says which
+            // page it belongs to — and changes with the state, or a screen reader
+            // would be told "renumber" by the button that cancels it.
+            aria-label={
+              moverOpen
+                ? `Cancel renumbering page ${pageNumber}`
+                : `Renumber page ${pageNumber}`
+            }
+            aria-expanded={moverOpen}
+            disabled={disabled}
+            onClick={() => (moverOpen ? on.closeMover() : on.openMover())}
+          >
+            {moverOpen ? 'Cancel move' : 'Move to…'}
+          </button>
+          <button
+            type="button"
+            className="manage-mini-btn"
             disabled={disabled}
             onClick={() => (editorOpen ? on.closeEditor() : on.openEditor())}
           >
@@ -252,6 +262,57 @@ export function OnAirPageCard({
             Delete
           </button>
         </div>
+
+        {/*
+          * Naming a destination, rather than pressing an arrow twelve times.
+          *
+          * It reports what the move will do before it is made — including how
+          * many other pages get renumbered, which is the part that is easy to
+          * forget: page numbers are positions, so putting this page at 305 moves
+          * whatever is between here and there.
+          */}
+        {moverOpen && destination != null && (
+          <form
+            className="manage-move"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (canMove) on.moveTo(Number(destination));
+            }}
+          >
+            <label className="sidebar-field-label" htmlFor={`m-${pageNumber}`}>
+              New number for page {pageNumber}
+            </label>
+            <div className="manage-move-row">
+              <input
+                id={`m-${pageNumber}`}
+                type="number"
+                min={MIN_PAGE}
+                max={MAX_PAGE}
+                value={destination}
+                // The operator opened this to type a number into it.
+                autoFocus
+                onChange={(event) => on.setDestination(event.target.value)}
+              />
+              <button
+                type="submit"
+                className="manage-mini-btn"
+                disabled={disabled || !canMove}
+              >
+                Move
+              </button>
+            </div>
+            {movePreview != null && (
+              <p
+                className={
+                  canMove ? 'manage-note' : 'manage-note manage-note-error'
+                }
+                role="status"
+              >
+                {describeMovePreview(movePreview)}
+              </p>
+            )}
+          </form>
+        )}
 
         {busy != null && (
           <span className="manage-note manage-card-busy">{actionProgress(busy)}</span>
