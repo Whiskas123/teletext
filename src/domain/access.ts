@@ -47,3 +47,28 @@ export function canEditPage(pageNumber: number, isModerator: boolean): boolean {
   }
   return isModerator || !isArchivePage(pageNumber);
 }
+
+/**
+ * The lowest playground page nobody has claimed yet.
+ *
+ * "Create a page" should open a blank one, not drop everybody on
+ * {@link PLAYGROUND_MIN_PAGE} to overwrite each other's work — which is what
+ * happened while the editor simply defaulted to the first playground number.
+ *
+ * A page counts as claimed if it holds anything at all, and `occupied` is
+ * expected to reflect that broadly: content, a title, a heading role. A page
+ * with a title but no cells has been claimed by whoever titled it, even though
+ * nothing is drawn on it yet.
+ *
+ * Returns `null` when the whole playground is taken, which the caller has to
+ * handle — silently reusing an occupied page would be worse than saying so.
+ */
+export function firstFreePlaygroundPage(
+  occupied: readonly number[],
+): number | null {
+  const taken = new Set(occupied);
+  for (let page = PLAYGROUND_MIN_PAGE; page <= MAX_PAGE; page += 1) {
+    if (!taken.has(page)) return page;
+  }
+  return null;
+}

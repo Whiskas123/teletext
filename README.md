@@ -12,7 +12,7 @@ From the landing page:
 
 - **Watch solo** (`/watch`) — the TV on your own. The remote control changes the page immediately, the yellow pages list what's out there, the magnifying glass searches every page by text, and three-digit page numbers in the content are clickable links. No chat, no vote, no name needed.
 - **Watch together** (`/room/:roomId`) — join one of six fixed "house" rooms (living room, bedrooms, kitchen, garage, dining room). Everyone in a room sees the same page, chats in the sidebar, and changing the page goes to a **vote**: a request stands for 60 s and needs a majority of the members present when it was raised. You join as `Guest-XXXX` and can rename yourself from the room sidebar.
-- **Create / edit pages** (`/edit`, `/edit/:pageNumber`) — the editor. Edits are per-cell and shared, so a page being edited updates live wherever it's being watched. Pages 100–699 are a curated **archive** (only the moderator can edit them); 700–999 are the open **playground** — see [Archive vs. playground](#archive-vs-playground) below.
+- **Create / edit pages** (`/edit`, `/edit/:pageNumber`) — the editor. Choosing it from the landing page opens the **first free playground page**, so two people creating a page at once don't land on the same number and overwrite each other. Edits are per-cell and shared, so a page being edited updates live wherever it's being watched. Pages 100–699 are a curated **archive** (only the moderator can edit them); 700–999 are the open **playground** — see [Archive vs. playground](#archive-vs-playground) below.
 
 ## Editing
 

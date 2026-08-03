@@ -25,6 +25,7 @@ import { PAGES_CHANNEL } from './useEditPage';
 import { TITLES_CHANNEL } from './useGuide';
 import { PAGE_KINDS_CHANNEL } from './usePageKinds';
 import { DESCRIPTIONS_CHANNEL, type DescriptionsData } from './usePageText';
+import { useOccupiedPages } from './useOccupiedPages';
 import type { PageKinds } from '../domain/directory';
 import type { PagesData, TeletextPage, TitlesData } from './types';
 
@@ -204,7 +205,7 @@ export function useArchiveAdmin(): ArchiveAdminApi {
   // renumbering can move the content, not just the records.
   const [livePages, setPages] = usePageData<PagesData>(PAGES_CHANNEL, {});
   const [liveTitles, setTitles] = usePageData<TitlesData>(TITLES_CHANNEL, {});
-  const [liveKinds, setKinds] = usePageData<PageKinds>(PAGE_KINDS_CHANNEL, {});
+  const [, setKinds] = usePageData<PageKinds>(PAGE_KINDS_CHANNEL, {});
   // Descriptions live beside titles rather than only on the publication record,
   // so a page made by hand can have one too.
   const [liveDescriptions, setDescriptions] = usePageData<DescriptionsData>(
@@ -305,43 +306,7 @@ export function useArchiveAdmin(): ArchiveAdminApi {
    * An entry that normalises to an empty page is an empty slot, not content —
    * clearing a page leaves the key behind.
    */
-  const occupiedPages = useMemo(() => {
-    const pages = new Set<number>();
-
-    const add = (key: string): number | null => {
-      const pageNumber = Number(key);
-      return Number.isInteger(pageNumber) ? pageNumber : null;
-    };
-
-    for (const [key, stored] of Object.entries(livePages ?? {})) {
-      const pageNumber = add(key);
-      if (pageNumber == null) continue;
-      const page = pageToArray(stored);
-      // A key with no ink is an empty slot, not content — clearing a page
-      // leaves the key behind.
-      if (page.some((cell) => cell.char !== ' ' || cell.graphics != null)) {
-        pages.add(pageNumber);
-      }
-    }
-
-    // A page can exist without cells. The directory lists anything with a
-    // title (see `guideEntries`), and a page marked as a heading is a page
-    // too. Counting only cells left those out of this screen entirely — and,
-    // worse, out of the occupancy sent to the reorder planner, so a shift
-    // would move another page on top of one and overwrite its title.
-    for (const [key, title] of Object.entries(liveTitles ?? {})) {
-      const pageNumber = add(key);
-      if (pageNumber != null && typeof title === 'string' && title.trim().length > 0) {
-        pages.add(pageNumber);
-      }
-    }
-    for (const [key, kind] of Object.entries(liveKinds ?? {})) {
-      const pageNumber = add(key);
-      if (pageNumber != null && kind != null) pages.add(pageNumber);
-    }
-
-    return [...pages].sort((a, b) => a - b);
-  }, [livePages, liveTitles, liveKinds]);
+  const occupiedPages = useOccupiedPages();
 
   /** Live pages with no publication record — someone's own work. */
   const handMadePages = useMemo(() => {

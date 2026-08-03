@@ -1,69 +1,70 @@
-// Feature: archive vs. playground page access.
-import { describe, expect, it } from 'vitest';
-import fc from 'fast-check';
-import { canEditPage, isArchivePage, PLAYGROUND_MIN_PAGE } from './access';
-
 /**
- * The archive/playground boundary: pages 100..(PLAYGROUND_MIN_PAGE - 1) are
- * the curated archive, editable only by a moderator; pages
- * PLAYGROUND_MIN_PAGE..999 are the open playground, editable by anyone.
- * Numbers outside 100..999 aren't valid pages at all, so nobody can edit them.
+ * Tests for the archive/playground split and for finding a free page.
+ *
+ * The free-page rule matters because it decides where "Create a page" lands:
+ * getting it wrong drops two people on the same number to overwrite each
+ * other, which is exactly what defaulting to the first playground page did.
  */
 
-/** Independent oracle for `isArchivePage`, derived from the acceptance criteria. */
-function expectedIsArchivePage(n: number): boolean {
-  return Number.isInteger(n) && n >= 100 && n < PLAYGROUND_MIN_PAGE;
-}
+import fc from 'fast-check';
+import { describe, expect, it } from 'vitest';
 
-/** Independent oracle for `canEditPage`. */
-function expectedCanEditPage(n: number, isModerator: boolean): boolean {
-  if (!Number.isInteger(n) || n < 100 || n > 999) return false;
-  return isModerator || !expectedIsArchivePage(n);
-}
+import { MAX_PAGE } from './pageOps';
+import { PLAYGROUND_MIN_PAGE, firstFreePlaygroundPage } from './access';
 
-/** Broad coverage: in-range archive/playground numbers, boundaries, and invalid input. */
-const numberArb: fc.Arbitrary<number> = fc.oneof(
-  fc.integer({ min: 100, max: 999 }),
-  fc.constantFrom(
-    99,
-    100,
-    PLAYGROUND_MIN_PAGE - 1,
-    PLAYGROUND_MIN_PAGE,
-    PLAYGROUND_MIN_PAGE + 1,
-    998,
-    999,
-    1000,
-    0,
-    -1,
-  ),
-  fc.integer(),
-  fc.double({ noNaN: true }),
-  fc.constantFrom(Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY),
+const arbOccupied = fc.uniqueArray(
+  fc.integer({ min: PLAYGROUND_MIN_PAGE, max: MAX_PAGE }),
+  { maxLength: 40 },
 );
 
-describe('archive/playground access', () => {
-  it('isArchivePage(n) matches an independent oracle', () => {
+describe('firstFreePlaygroundPage', () => {
+  it('starts at the bottom of the playground when nothing is taken', () => {
+    expect(firstFreePlaygroundPage([])).toBe(PLAYGROUND_MIN_PAGE);
+  });
+
+  it('never returns a page that is taken', () => {
     fc.assert(
-      fc.property(numberArb, (n) => {
-        expect(isArchivePage(n)).toBe(expectedIsArchivePage(n));
+      fc.property(arbOccupied, (occupied) => {
+        const free = firstFreePlaygroundPage(occupied);
+        if (free != null) expect(occupied).not.toContain(free);
       }),
-      { numRuns: 500 },
     );
   });
 
-  it('canEditPage(n, isModerator) matches an independent oracle', () => {
+  it('always returns a playground page, never an archive one', () => {
     fc.assert(
-      fc.property(numberArb, fc.boolean(), (n, isModerator) => {
-        expect(canEditPage(n, isModerator)).toBe(expectedCanEditPage(n, isModerator));
+      fc.property(arbOccupied, (occupied) => {
+        const free = firstFreePlaygroundPage(occupied);
+        if (free != null) {
+          expect(free).toBeGreaterThanOrEqual(PLAYGROUND_MIN_PAGE);
+          expect(free).toBeLessThanOrEqual(MAX_PAGE);
+        }
       }),
-      { numRuns: 500 },
     );
   });
 
-  it('a moderator can always edit any valid page, archive or playground', () => {
+  it('returns the lowest free page, not just any', () => {
+    expect(firstFreePlaygroundPage([700, 701, 703])).toBe(702);
+  });
+
+  it('ignores archive pages entirely', () => {
+    // The archive being full says nothing about the playground.
+    const archive = Array.from({ length: 600 }, (_, i) => 100 + i);
+    expect(firstFreePlaygroundPage(archive)).toBe(PLAYGROUND_MIN_PAGE);
+  });
+
+  it('reports a full playground rather than reusing a page', () => {
+    const all = Array.from(
+      { length: MAX_PAGE - PLAYGROUND_MIN_PAGE + 1 },
+      (_, i) => PLAYGROUND_MIN_PAGE + i,
+    );
+    expect(firstFreePlaygroundPage(all)).toBeNull();
+  });
+
+  it('never throws', () => {
     fc.assert(
-      fc.property(fc.integer({ min: 100, max: 999 }), (n) => {
-        expect(canEditPage(n, true)).toBe(true);
+      fc.property(fc.array(fc.integer()), (occupied) => {
+        expect(() => firstFreePlaygroundPage(occupied)).not.toThrow();
       }),
     );
   });

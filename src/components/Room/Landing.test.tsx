@@ -18,6 +18,16 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => navigateMock };
 });
 
+/**
+ * Which pages are already claimed, as the live document would report them.
+ * Landing uses this to open the editor on a blank page rather than dropping
+ * everyone on the same one.
+ */
+let occupiedPages: number[] = [];
+vi.mock('../../collab/useOccupiedPages', () => ({
+  useOccupiedPages: () => occupiedPages,
+}));
+
 function renderLanding() {
   return render(
     <MemoryRouter>
@@ -36,6 +46,7 @@ async function openRooms(user: ReturnType<typeof userEvent.setup>) {
 describe('Landing', () => {
   beforeEach(() => {
     navigateMock.mockReset();
+    occupiedPages = [];
     try {
       window.sessionStorage.clear();
     } catch {
@@ -76,7 +87,31 @@ describe('Landing', () => {
     expect(navigateMock).toHaveBeenCalledWith('/watch');
   });
 
-  it('create / edit opens the solo editor', async () => {
+  it('create / edit opens the first free playground page', async () => {
+    const user = userEvent.setup();
+    renderLanding();
+
+    await user.click(
+      screen.getByRole('button', { name: /create or edit teletext pages/i }),
+    );
+    expect(navigateMock).toHaveBeenCalledWith('/edit/700');
+  });
+
+  it('skips playground pages that are already taken', async () => {
+    // Landing everyone on the first playground number meant two people
+    // creating a page at once overwrote each other.
+    occupiedPages = [700, 701, 703];
+    const user = userEvent.setup();
+    renderLanding();
+
+    await user.click(
+      screen.getByRole('button', { name: /create or edit teletext pages/i }),
+    );
+    expect(navigateMock).toHaveBeenCalledWith('/edit/702');
+  });
+
+  it('falls back to the editor default when the playground is full', async () => {
+    occupiedPages = Array.from({ length: 300 }, (_, i) => 700 + i);
     const user = userEvent.setup();
     renderLanding();
 

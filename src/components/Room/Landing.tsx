@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { useRoomOccupancy } from '../../collab/useRoomOccupancy';
+import { useOccupiedPages } from '../../collab/useOccupiedPages';
+import { firstFreePlaygroundPage } from '../../domain/access';
 import { ROOMS } from './rooms';
 
 /**
@@ -14,7 +16,10 @@ import { ROOMS } from './rooms';
  *    occupancy, and enters the room viewer (`/room/:roomId`). A name is
  *    optional here too: members start as `Guest-XXXX` and can rename themselves
  *    from the room sidebar.
- *  - **Create / edit pages** (`/edit`) — the solo editor for the global pages.
+ *  - **Create / edit pages** — the solo editor, opened on the first *free*
+ *    playground page rather than on the editor's default. Landing everyone on
+ *    the same number meant two people creating a page at once overwrote each
+ *    other's work.
  */
 
 const PROJECT_TITLE = 'TELETEXT ROOMS';
@@ -32,6 +37,24 @@ export function Landing() {
   const [expanded, setExpanded] = useState<Option | null>(null);
 
   const occupancy = useRoomOccupancy(ROOMS.map((r) => r.id));
+  const occupiedPages = useOccupiedPages();
+
+  /**
+   * Open the editor on a blank page.
+   *
+   * Resolved at click time rather than on render: by then the live document has
+   * had the whole time the landing screen was on screen to sync, so the answer
+   * reflects what is actually taken. Navigating with an explicit page number
+   * also means the editor never has to re-decide and shift under the user once
+   * more pages arrive.
+   *
+   * With the playground full there is no blank page to offer, so the editor
+   * opens on its own default and says so there.
+   */
+  function handleCreatePage() {
+    const free = firstFreePlaygroundPage(occupiedPages);
+    navigate(free == null ? '/edit' : `/edit/${free}`);
+  }
 
   function handleWatchRoom(roomId: string) {
     navigate(`/room/${roomId}`);
@@ -83,7 +106,7 @@ export function Landing() {
             <button
               type="button"
               className="landing-option-card"
-              onClick={() => navigate('/edit')}
+              onClick={handleCreatePage}
               aria-label="Create or edit teletext pages"
             >
               <span className="landing-option-title">Create / edit pages</span>
