@@ -1039,10 +1039,10 @@
   gap: 3rem;
   position: relative;
   flex-wrap: wrap;
-  /* Above the Yellow Pages backdrop (z-index 200). These objects are the
-     controls, not content the directory should cover: with the bar underneath,
-     a click aimed at the yellow book hit the backdrop and closed the directory
-     instead, so the icon could never close what it opened. */
+  /* Above the page, below the open directory and the search (z-index 400). A
+     click aimed at the yellow book while the directory is open lands on the
+     backdrop, which closes it — so the icon still closes what it opened, without
+     the objects being drawn over the directory itself. */
   z-index: 300;
 }
 
@@ -1143,15 +1143,27 @@
 }
 
 /* --- Yellow Pages directory popup --- */
+/*
+ * Above everything, including the object bar.
+ *
+ * The bar used to sit on top of this so that a click on the yellow book icon
+ * could close what it had opened. It still can: the icon is now under the
+ * backdrop, and a click there hits the backdrop, which closes the directory —
+ * the same outcome by a simpler route. What the old order also did was draw the
+ * remote, the book and the magnifier *over* the open directory, which read as a
+ * rendering fault.
+ */
 .yellow-pages-overlay {
   position: fixed;
   inset: 0;
-  z-index: 200;
+  z-index: 400;
   display: flex;
-  align-items: center;
+  /* Top-aligned rather than centred: the directory is as tall as it needs to be,
+     and a centred one that overflows is clipped at both ends at once. */
+  align-items: flex-start;
   justify-content: center;
   padding: 1.5rem;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgb(0 0 0 / 60%);
 }
 
 .yellow-pages-book {
@@ -1168,10 +1180,14 @@
    * collapse to nothing nor run off the screen. Height still stops at 85vh and
    * scrolls; a phone book is expected to be long.
    */
-  width: fit-content;
-  min-width: min(24rem, 92vw);
-  max-width: min(44rem, 92vw);
-  max-height: 85vh;
+  /*
+   * Wide, because the listings are laid out in columns now. `auto-fit` needs a
+   * definite width to divide up, so this takes the room it is given rather than
+   * shrinking to one column's worth of content; a short directory simply fills
+   * fewer tracks.
+   */
+  width: min(84rem, 94vw);
+  max-height: 92vh;
   overflow-y: auto;
   background: #ffcf1f;
   color: #141007;
@@ -1228,15 +1244,27 @@
 }
 
 /*
- * One column, flowing straight down.
+ * Columns of whole blocks.
  *
- * It used to fill two columns top-to-bottom, which was right for a flat list
- * and became wrong once listings could nest: a category and the pages indented
- * beneath it would be split down the middle, with the children in one column
- * and the next category stranded in the other. A tree only reads in one order.
+ * Flowing the rows themselves across columns was the wrong unit: a category and
+ * the pages indented beneath it got split down the middle, with the children in
+ * one column and the next category stranded in the other. The block — a heading
+ * and its own pages — is the thing that has to stay together, so the columns are
+ * made of those. `auto-fit` collapses the tracks a short directory does not need.
  *
- * Still CSS Grid rather than `columns`/multicol, so each entry is a genuinely
- * separate, correctly hit-tested box — see the note in YellowPages.tsx.
+ * `align-items: start` so a block of three rows does not stretch to match a block
+ * of thirty beside it.
+ */
+.yellow-pages-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  align-items: start;
+  gap: 0.35rem 2rem;
+}
+
+/*
+ * CSS Grid rather than `columns`/multicol, so each entry is a genuinely separate,
+ * correctly hit-tested box — see the note in YellowPages.tsx.
  */
 .yellow-pages-list {
   list-style: none;
@@ -1244,6 +1272,9 @@
   padding: 0;
   display: grid;
   grid-auto-flow: row;
+  /* A block is one unit and must not be torn apart if this ever falls back to a
+     multicol context. */
+  break-inside: avoid;
 }
 
 .yellow-pages-entry {

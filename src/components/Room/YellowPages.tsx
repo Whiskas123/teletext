@@ -27,49 +27,87 @@ function formatPageNumber(n: number): string {
   return String(n).padStart(3, '0');
 }
 
-/**
- * One listing and everything filed beneath it.
- *
- * Depth is passed down rather than derived from nesting the lists, because the
- * directory is laid out in two columns that flow top-to-bottom: a nested `<ul>`
- * would be one grid item and could not break across them. Indenting a flat run
- * of rows keeps the reading order and the column flow intact.
- */
-function Listing({
-  node,
-  depth,
-  onPick,
-}: {
+/** One row of the directory: a listing, and how deep it is filed. */
+interface Row {
   node: DirectoryNode;
   depth: number;
-  onPick: (pageNumber: number) => void;
-}) {
-  const heading = node.kind === 'category' || node.kind === 'subcategory';
+}
+
+/**
+ * A block of rows that must stay together — a heading and the pages under it.
+ *
+ * The directory is a tree, and a tree only reads in one order, so it used to be
+ * laid out in a single column: splitting a flat run of rows across columns
+ * stranded a category's children away from the category. Blocks fix that from
+ * the other end. Each heading and its own pages is a self-contained unit, so the
+ * units can be placed side by side without any of them being cut in half — and a
+ * wide screen stops showing one narrow column with 200 rows in it.
+ *
+ * A heading nested inside another becomes a block of its own rather than being
+ * absorbed, so one enormous category cannot collapse the layout back to a single
+ * column.
+ */
+interface Block {
+  key: number;
+  rows: Row[];
+}
+
+function directoryBlocks(nodes: readonly DirectoryNode[]): Block[] {
+  const blocks: Block[] = [];
+
+  const walk = (list: readonly DirectoryNode[], depth: number): void => {
+    /** Consecutive pages filed under no heading, gathered into one block. */
+    let loose: Block | null = null;
+
+    for (const node of list) {
+      const isHeading = node.kind === 'category' || node.kind === 'subcategory';
+      if (!isHeading) {
+        if (loose == null) {
+          loose = { key: node.pageNumber, rows: [] };
+          blocks.push(loose);
+        }
+        loose.rows.push({ node, depth });
+        continue;
+      }
+
+      loose = null;
+      const rows: Row[] = [{ node, depth }];
+      const nested: DirectoryNode[] = [];
+      for (const child of node.children) {
+        if (child.kind === 'page') rows.push({ node: child, depth: depth + 1 });
+        else nested.push(child);
+      }
+      blocks.push({ key: node.pageNumber, rows });
+      walk(nested, depth + 1);
+    }
+  };
+
+  walk(nodes, 0);
+  return blocks;
+}
+
+/** One listing row. */
+function Listing({ row, onPick }: { row: Row; onPick: (pageNumber: number) => void }) {
+  const { node, depth } = row;
   return (
-    <>
-      <li
-        className={`yellow-pages-entry yellow-pages-entry-${node.kind}`}
-        style={depth > 0 ? { paddingLeft: `${depth * 0.9}rem` } : undefined}
+    <li
+      className={`yellow-pages-entry yellow-pages-entry-${node.kind}`}
+      style={depth > 0 ? { paddingLeft: `${depth * 0.9}rem` } : undefined}
+    >
+      <button
+        type="button"
+        className="yellow-pages-entry-btn"
+        onClick={() => onPick(node.pageNumber)}
       >
-        <button
-          type="button"
-          className="yellow-pages-entry-btn"
-          onClick={() => onPick(node.pageNumber)}
-        >
-          <span className="yellow-pages-name">
-            {node.title.trim().length > 0 ? node.title : 'Untitled listing'}
-          </span>
-          <span className="yellow-pages-leader" aria-hidden="true" />
-          <span className="yellow-pages-number">
-            {formatPageNumber(node.pageNumber)}
-          </span>
-        </button>
-      </li>
-      {heading &&
-        node.children.map((child) => (
-          <Listing key={child.pageNumber} node={child} depth={depth + 1} onPick={onPick} />
-        ))}
-    </>
+        <span className="yellow-pages-name">
+          {node.title.trim().length > 0 ? node.title : 'Untitled listing'}
+        </span>
+        <span className="yellow-pages-leader" aria-hidden="true" />
+        <span className="yellow-pages-number">
+          {formatPageNumber(node.pageNumber)}
+        </span>
+      </button>
+    </li>
   );
 }
 
@@ -90,6 +128,8 @@ export function YellowPages({ onSelect, onClose }: YellowPagesProps) {
       ),
     [entries, kinds],
   );
+
+  const blocks = useMemo(() => directoryBlocks(tree), [tree]);
 
   // Close on Escape.
   useEffect(() => {
@@ -135,22 +175,25 @@ export function YellowPages({ onSelect, onClose }: YellowPagesProps) {
             No listings yet. Create a page in the editor to have it appear here.
           </p>
         ) : (
-          // One column, flowing down: the listing is a tree and nesting only
-          // reads in one order. Still Grid rather than multicol so each entry
-          // is its own hit-tested box — see `.yellow-pages-list` in App.css.
-          <ul className="yellow-pages-list">
-            {tree.map((node) => (
-              <Listing
-                key={node.pageNumber}
-                node={node}
-                depth={0}
-                onPick={(pageNumber) => {
-                  onSelect(pageNumber);
-                  onClose();
-                }}
-              />
+          // Columns of whole blocks. Grid rather than multicol so each entry is
+          // its own hit-tested box and no heading is ever cut in half — see
+          // `directoryBlocks` above and `.yellow-pages-columns` in App.css.
+          <div className="yellow-pages-columns">
+            {blocks.map((block) => (
+              <ul key={block.key} className="yellow-pages-list">
+                {block.rows.map((row) => (
+                  <Listing
+                    key={row.node.pageNumber}
+                    row={row}
+                    onPick={(pageNumber) => {
+                      onSelect(pageNumber);
+                      onClose();
+                    }}
+                  />
+                ))}
+              </ul>
             ))}
-          </ul>
+          </div>
         )}
 
         <p className="yellow-pages-footnote">Tap a listing to request that page.</p>
