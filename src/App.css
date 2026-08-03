@@ -1747,3 +1747,25 @@
   color: #ffcf1f;
   padding: 0 0.1em;
 }
+
+/* Inline title/description editor on a page card. */
+.manage-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.4rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid #333;
+}
+
+.manage-edit input,
+.manage-edit textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 0.75rem;
+}
+
+/* The card's buttons wrap rather than overflowing a narrow column. */
+.manage-card-actions {
+  flex-wrap: wrap;
+}

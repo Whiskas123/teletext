@@ -45,6 +45,7 @@ interface Accepted {
   cells: unknown;
   title: string;
   kind: string;
+  description: string;
 }
 
 /**
@@ -81,6 +82,13 @@ function acceptable(body: Record<string, unknown>): {
     return value === 'category' || value === 'subcategory' ? value : 'page';
   };
 
+  const descriptions = body.descriptions;
+  const descriptionFor = (pageNumber: number): string => {
+    if (descriptions == null || typeof descriptions !== 'object') return '';
+    const value = (descriptions as Record<string, unknown>)[pageNumber];
+    return typeof value === 'string' ? value.slice(0, 500) : '';
+  };
+
   const accepted: Accepted[] = [];
   let rejected = 0;
 
@@ -102,6 +110,7 @@ function acceptable(body: Record<string, unknown>): {
       cells,
       title: titleFor(pageNumber),
       kind: kindFor(pageNumber),
+      description: descriptionFor(pageNumber),
     });
   }
 
@@ -158,19 +167,23 @@ export default async function handler(
     const cells = accepted.map((page) => JSON.stringify(page.cells));
     const titles = accepted.map((page) => page.title);
     const kindValues = accepted.map((page) => page.kind);
+    const descriptionValues = accepted.map((page) => page.description);
 
     await db()`
-      insert into live_pages (page_number, cells, title, kind, updated_at)
+      insert into live_pages (page_number, cells, title, kind, description, updated_at)
       select * from unnest(
         ${numbers}::int[],
         ${cells}::jsonb[],
         ${titles}::text[],
-        ${kindValues}::text[]
-      ) as t(page_number, cells, title, kind), lateral (select now()) as u(updated_at)
+        ${kindValues}::text[],
+        ${descriptionValues}::text[]
+      ) as t(page_number, cells, title, kind, description),
+        lateral (select now()) as u(updated_at)
       on conflict (page_number) do update
         set cells = excluded.cells,
             title = excluded.title,
             kind = excluded.kind,
+            description = excluded.description,
             updated_at = excluded.updated_at
     `;
 

@@ -28,6 +28,7 @@ import { usePageData } from '@playhtml/react';
 import { PAGES_CHANNEL } from './useEditPage';
 import { TITLES_CHANNEL } from './useGuide';
 import { PAGE_KINDS_CHANNEL } from './usePageKinds';
+import { DESCRIPTIONS_CHANNEL, type DescriptionsData } from './usePageText';
 import type { PageKinds } from '../domain/directory';
 import type { PagesData, TitlesData } from './types';
 
@@ -58,6 +59,7 @@ export function useSnapshot(): SnapshotApi {
   const [pages] = usePageData<PagesData>(PAGES_CHANNEL, {});
   const [titles] = usePageData<TitlesData>(TITLES_CHANNEL, {});
   const [kinds] = usePageData<PageKinds>(PAGE_KINDS_CHANNEL, {});
+  const [descriptions] = usePageData<DescriptionsData>(DESCRIPTIONS_CHANNEL, {});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<SnapshotOutcome | null>(null);
@@ -81,6 +83,7 @@ export function useSnapshot(): SnapshotApi {
           pages: pages ?? {},
           titles: titles ?? {},
           kinds: kinds ?? {},
+          descriptions: descriptions ?? {},
         }),
       });
 
@@ -106,7 +109,7 @@ export function useSnapshot(): SnapshotApi {
     } finally {
       setSaving(false);
     }
-  }, [pages, titles, kinds, pageCount]);
+  }, [pages, titles, kinds, descriptions, pageCount]);
 
   return { snapshot, saving, error, lastResult, pageCount };
 }

@@ -77,6 +77,7 @@ export function ManageArchivePage() {
     captures, total, published, menus, loading, error, pageSize,
     search, loadPage, livePage, transform, publish, unpublish, saveMenu, deleteMenu,
     shiftPages, moveBlock, occupiedPages, handMadePages,
+    deletePage, titleOf, descriptionOf, setPageText,
   } = admin_;
   const snapshot = useSnapshot();
   const { kindOf, setKind } = usePageKinds();
@@ -100,6 +101,10 @@ export function ManageArchivePage() {
   const [blockStart, setBlockStart] = useState('');
   const [blockEnd, setBlockEnd] = useState('');
   const [blockTo, setBlockTo] = useState('');
+  /** Page whose title/description panel is open, or null. */
+  const [editing, setEditing] = useState<number | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
 
   useEffect(() => {
     search(filters, offset);
@@ -194,6 +199,40 @@ export function ManageArchivePage() {
       );
     },
     [moveBlock],
+  );
+
+  const startEditing = useCallback(
+    (page: number) => {
+      setEditing(page);
+      setEditTitle(titleOf(page));
+      setEditDescription(descriptionOf(page));
+    },
+    [titleOf, descriptionOf],
+  );
+
+  const saveEditing = useCallback(() => {
+    if (editing == null) return;
+    setPageText(editing, editTitle, editDescription);
+    setNotice(`Page ${editing} updated.`);
+    setEditing(null);
+  }, [editing, editTitle, editDescription, setPageText]);
+
+  const handleDelete = useCallback(
+    async (page: number) => {
+      // Deleting takes the content, the title, the heading role and the
+      // publication record with it, and nothing else on this screen is
+      // destructive, so it asks first.
+      const ok = window.confirm(
+        `Delete page ${page}? Its content, title and description go with it. ` +
+          'This cannot be undone from here — only from a backup.',
+      );
+      if (!ok) return;
+      setBusy(true);
+      const result = await deletePage(page);
+      setBusy(false);
+      setNotice(result.ok ? `Page ${page} deleted.` : result.error);
+    },
+    [deletePage],
   );
 
   const handleUnpublish = useCallback(
@@ -639,7 +678,7 @@ export function ManageArchivePage() {
                   <strong>{pageNumber}</strong>
                   {entry != null ? (
                     <>
-                      <span>{entry.title || <em>untitled</em>}</span>
+                      <span>{titleOf(pageNumber) || <em>untitled</em>}</span>
                       <span>
                         {entry.source.toUpperCase()} {entry.original_page}
                         {entry.topic != null && ` · ${entry.topic}`}
@@ -653,10 +692,13 @@ export function ManageArchivePage() {
                       )}
                     </>
                   ) : (
-                    <span className="manage-note">
-                      {pageNumber >= 700 ? 'playground' : 'made by hand'} — not from
-                      the archive
-                    </span>
+                    <>
+                      <span>{titleOf(pageNumber) || <em>untitled</em>}</span>
+                      <span className="manage-note">
+                        {pageNumber >= 700 ? 'playground' : 'made by hand'} — not from
+                        the archive
+                      </span>
+                    </>
                   )}
                   {/* What this page is in the Yellow Pages directory. Stored
                       per page in playhtml, so it covers hand-made pages too,
@@ -700,6 +742,15 @@ export function ManageArchivePage() {
                     >
                       →
                     </button>
+                    <button
+                      type="button"
+                      className="manage-mini-btn"
+                      onClick={() =>
+                        editing === pageNumber ? setEditing(null) : startEditing(pageNumber)
+                      }
+                    >
+                      {editing === pageNumber ? 'Close' : 'Edit'}
+                    </button>
                     {entry != null && (
                       <button
                         type="button"
@@ -710,7 +761,48 @@ export function ManageArchivePage() {
                         Unpublish
                       </button>
                     )}
+                    <button
+                      type="button"
+                      className="manage-mini-btn manage-mini-btn-danger"
+                      disabled={busy}
+                      onClick={() => void handleDelete(pageNumber)}
+                    >
+                      Delete
+                    </button>
                   </div>
+
+                  {editing === pageNumber && (
+                    <div className="manage-edit">
+                      <label className="sidebar-field-label" htmlFor={`t-${pageNumber}`}>
+                        Title ({editTitle.length}/{MAX_TITLE_LENGTH})
+                      </label>
+                      <input
+                        id={`t-${pageNumber}`}
+                        className="landing-name-input"
+                        maxLength={MAX_TITLE_LENGTH}
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                      />
+                      <label className="sidebar-field-label" htmlFor={`d-${pageNumber}`}>
+                        Description ({editDescription.length}/{MAX_DESCRIPTION_LENGTH})
+                      </label>
+                      <textarea
+                        id={`d-${pageNumber}`}
+                        className="landing-name-input"
+                        rows={2}
+                        maxLength={MAX_DESCRIPTION_LENGTH}
+                        value={editDescription}
+                        onChange={(e) => setEditDescription(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="sidebar-action-btn"
+                        onClick={saveEditing}
+                      >
+                        Save
+                      </button>
+                    </div>
+                  )}
                 </div>
               </li>
               );

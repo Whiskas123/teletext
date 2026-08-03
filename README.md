@@ -56,6 +56,7 @@ The playhtml channels:
 | `pages` | global | `{ [pageNumber]: { [cellIndex]: Cell } }` — one Yjs key per cell, so concurrent edits to different cells merge and edits to the same cell converge last-writer-wins |
 | `titles` | global | page titles for the yellow pages directory |
 | `page-kinds` | global | whether each page is a category, subcategory or ordinary page — the directory's shape |
+| `descriptions` | global | page descriptions, so pages made by hand can have one too |
 | `room-sync:<roomId>` | per room | the page the room is watching |
 | `chat:<roomId>` | per room | the room's messages |
 | `vote:<roomId>` | per room | the active change request and its votes |
@@ -154,6 +155,8 @@ Page numbers are positions, not names — 200 is where the news starts because t
 - **← →** on a card nudge one page along. A block of one.
 
 All of them renumber the records *and* carry the content.
+
+Each card also has **Edit** (title and description, for any page — not only archive ones) and **Delete**, which takes the content, title, heading role, description and publication record with it and asks first.
 
 **Occupancy is every page, not every published page.** The plan is made against the union of the archive publications in Postgres and everything in the live playhtml document — seeded pages, pages people made by hand, the playground. Planning from the publication records alone was a real bug: a hand-made page at 201 is invisible there, so shifting 200 up silently overwrote it. Only a connected browser can see the live document, so the client sends those page numbers with the request. Archive pages are still refused entry to the playground (700+), where anyone could edit them.
 

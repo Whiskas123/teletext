@@ -24,6 +24,7 @@ import { useImportPages } from './useImportPages';
 import { PAGES_CHANNEL } from './useEditPage';
 import { TITLES_CHANNEL } from './useGuide';
 import { PAGE_KINDS_CHANNEL } from './usePageKinds';
+import { DESCRIPTIONS_CHANNEL, type DescriptionsData } from './usePageText';
 import type { PageKinds } from '../domain/directory';
 import type { PagesData, TeletextPage, TitlesData } from './types';
 
@@ -173,6 +174,17 @@ export interface ArchiveAdminApi {
     blockEnd: number,
     destination: number,
   ): Promise<{ ok: true } | { ok: false; error: string }>;
+  /**
+   * Remove a page entirely: its content, title, heading role and description,
+   * plus its publication record when it has one.
+   */
+  deletePage(pageNumber: number): Promise<{ ok: true } | { ok: false; error: string }>;
+  /** The live title of a page, whether or not it came from the archive. */
+  titleOf(pageNumber: number): string;
+  /** The live description of a page. */
+  descriptionOf(pageNumber: number): string;
+  /** Set a page's title and description in the live document. */
+  setPageText(pageNumber: number, title: string, description: string): void;
   /** Every page holding content, from either store, ascending. */
   occupiedPages: number[];
   /** Live pages that hold content but were not published from the archive. */
@@ -191,8 +203,14 @@ export function useArchiveAdmin(): ArchiveAdminApi {
   // rather than what the database says was published to it — and so a
   // renumbering can move the content, not just the records.
   const [livePages, setPages] = usePageData<PagesData>(PAGES_CHANNEL, {});
-  const [, setTitles] = usePageData<TitlesData>(TITLES_CHANNEL, {});
-  const [, setKinds] = usePageData<PageKinds>(PAGE_KINDS_CHANNEL, {});
+  const [liveTitles, setTitles] = usePageData<TitlesData>(TITLES_CHANNEL, {});
+  const [liveKinds, setKinds] = usePageData<PageKinds>(PAGE_KINDS_CHANNEL, {});
+  // Descriptions live beside titles rather than only on the publication record,
+  // so a page made by hand can have one too.
+  const [liveDescriptions, setDescriptions] = usePageData<DescriptionsData>(
+    DESCRIPTIONS_CHANNEL,
+    {},
+  );
   const [query, setQuery] = useState<{ filters: CaptureFilters; offset: number }>({
     filters: {},
     offset: 0,
@@ -288,17 +306,42 @@ export function useArchiveAdmin(): ArchiveAdminApi {
    * clearing a page leaves the key behind.
    */
   const occupiedPages = useMemo(() => {
-    const pages: number[] = [];
-    for (const [key, stored] of Object.entries(livePages ?? {})) {
+    const pages = new Set<number>();
+
+    const add = (key: string): number | null => {
       const pageNumber = Number(key);
-      if (!Number.isInteger(pageNumber)) continue;
+      return Number.isInteger(pageNumber) ? pageNumber : null;
+    };
+
+    for (const [key, stored] of Object.entries(livePages ?? {})) {
+      const pageNumber = add(key);
+      if (pageNumber == null) continue;
       const page = pageToArray(stored);
+      // A key with no ink is an empty slot, not content — clearing a page
+      // leaves the key behind.
       if (page.some((cell) => cell.char !== ' ' || cell.graphics != null)) {
-        pages.push(pageNumber);
+        pages.add(pageNumber);
       }
     }
-    return pages.sort((a, b) => a - b);
-  }, [livePages]);
+
+    // A page can exist without cells. The directory lists anything with a
+    // title (see `guideEntries`), and a page marked as a heading is a page
+    // too. Counting only cells left those out of this screen entirely — and,
+    // worse, out of the occupancy sent to the reorder planner, so a shift
+    // would move another page on top of one and overwrite its title.
+    for (const [key, title] of Object.entries(liveTitles ?? {})) {
+      const pageNumber = add(key);
+      if (pageNumber != null && typeof title === 'string' && title.trim().length > 0) {
+        pages.add(pageNumber);
+      }
+    }
+    for (const [key, kind] of Object.entries(liveKinds ?? {})) {
+      const pageNumber = add(key);
+      if (pageNumber != null && kind != null) pages.add(pageNumber);
+    }
+
+    return [...pages].sort((a, b) => a - b);
+  }, [livePages, liveTitles, liveKinds]);
 
   /** Live pages with no publication record — someone's own work. */
   const handMadePages = useMemo(() => {
@@ -478,15 +521,29 @@ export function useArchiveAdmin(): ArchiveAdminApi {
        * titles are keyed the same way and must move together — a page whose
        * title stayed behind would be mislabelled.
        */
+      /**
+       * Take a value out of the draft as plain data.
+       *
+       * Reading `draft[page]` gives a reference *into* the document, not a
+       * copy. Holding one across the `delete` that follows leaves a reference
+       * to something no longer in the document, and writing it back at the new
+       * number stored nothing — which is why moving a page one place with the
+       * arrows made it disappear rather than move. Cells, titles and kinds are
+       * all plain data, so a structural copy detaches them completely.
+       */
+      const detach = <T,>(value: T): T | undefined =>
+        value === undefined ? undefined : (JSON.parse(JSON.stringify(value)) as T);
+
       const replayInto = <T,>(draft: Record<number, T>) => {
         const held = new Map<number, T | undefined>();
         for (const page of plan.lifts) {
-          held.set(page, draft[page]);
+          held.set(page, detach(draft[page]));
           delete draft[page];
         }
         for (const { from, to } of plan.moves) {
-          if (draft[from] === undefined) delete draft[to];
-          else draft[to] = draft[from];
+          const value = detach(draft[from]);
+          if (value === undefined) delete draft[to];
+          else draft[to] = value;
           delete draft[from];
         }
         for (const { from, to } of plan.drops) {
@@ -498,12 +555,13 @@ export function useArchiveAdmin(): ArchiveAdminApi {
 
       setPages((draft) => replayInto(draft));
       setTitles((draft) => replayInto(draft));
+      setDescriptions((draft) => replayInto(draft));
       // Kinds are keyed by page number like titles, so a heading that moves
       // stays a heading — otherwise a renumbering would quietly flatten the
       // directory.
       setKinds((draft) => replayInto(draft));
     },
-    [setPages, setTitles, setKinds],
+    [setPages, setTitles, setKinds, setDescriptions],
   );
 
   const reorder = useCallback(
@@ -543,6 +601,65 @@ export function useArchiveAdmin(): ArchiveAdminApi {
     [reorder],
   );
 
+  const titleOf = useCallback(
+    (pageNumber: number): string => {
+      const value = liveTitles?.[pageNumber];
+      return typeof value === 'string' ? value : '';
+    },
+    [liveTitles],
+  );
+
+  const descriptionOf = useCallback(
+    (pageNumber: number): string => {
+      const value = liveDescriptions?.[pageNumber];
+      return typeof value === 'string' ? value : '';
+    },
+    [liveDescriptions],
+  );
+
+  const setPageText = useCallback(
+    (pageNumber: number, nextTitle: string, nextDescription: string) => {
+      // One key per page in each channel, so two people editing different
+      // pages never collide — the same shape titles already had.
+      setTitle(pageNumber, nextTitle);
+      setDescriptions((draft) => {
+        const trimmed = nextDescription.trim();
+        if (trimmed.length === 0) delete draft[pageNumber];
+        else draft[pageNumber] = trimmed.slice(0, 500);
+      });
+    },
+    [setTitle, setDescriptions],
+  );
+
+  const deletePage = useCallback<ArchiveAdminApi['deletePage']>(
+    async (pageNumber) => {
+      // The record goes first. If clearing the live document succeeded and
+      // this failed, the page would be gone but still listed as published —
+      // whereas a record removed with content still live is visible and
+      // fixable from this screen.
+      const isPublished = published.some((entry) => entry.page_number === pageNumber);
+      if (isPublished) {
+        const result = await unpublish(pageNumber);
+        if (!result.ok) return result;
+      }
+
+      setPages((draft) => {
+        delete draft[pageNumber];
+      });
+      setTitles((draft) => {
+        delete draft[pageNumber];
+      });
+      setKinds((draft) => {
+        delete draft[pageNumber];
+      });
+      setDescriptions((draft) => {
+        delete draft[pageNumber];
+      });
+      return { ok: true };
+    },
+    [published, unpublish, setPages, setTitles, setKinds, setDescriptions],
+  );
+
   return {
     captures,
     total,
@@ -561,6 +678,10 @@ export function useArchiveAdmin(): ArchiveAdminApi {
     deleteMenu,
     shiftPages,
     moveBlock,
+    deletePage,
+    titleOf,
+    descriptionOf,
+    setPageText,
     occupiedPages,
     handMadePages,
   };
