@@ -9,7 +9,7 @@
  * and its page number.
  */
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useGuide } from '../../collab/useGuide';
 import { usePageKinds } from '../../collab/usePageKinds';
@@ -111,6 +111,50 @@ function Listing({ row, onPick }: { row: Row; onPick: (pageNumber: number) => vo
   );
 }
 
+/**
+ * How many sheets the columns spill across, and which one is showing.
+ *
+ * The listings flow into columns of a fixed width, filling each one top to bottom
+ * before starting the next, and a directory longer than the screen simply makes
+ * more columns than fit. Rather than scroll sideways, the flow is shifted a whole
+ * screen at a time — a page of a phone book, turned.
+ *
+ * The shift is `100% + gap` per sheet, not `100%`: the column pitch includes the
+ * gap, while the box width counts one fewer gap than columns, so shifting by the
+ * width alone would drift by a gap every sheet.
+ */
+function useSheets(flow: React.RefObject<HTMLDivElement | null>, deps: unknown) {
+  const [sheet, setSheet] = useState(0);
+  const [sheets, setSheets] = useState(1);
+
+  useEffect(() => {
+    const element = flow.current;
+    if (element == null) return;
+
+    const measure = () => {
+      const gap = parseFloat(getComputedStyle(element).columnGap) || 0;
+      const visible = element.clientWidth + gap;
+      const total = element.scrollWidth + gap;
+      const count = visible > 0 ? Math.max(1, Math.round(total / visible)) : 1;
+      setSheets(count);
+      setSheet((current) => Math.min(current, count - 1));
+    };
+
+    // After layout rather than during the effect, so the measurement sees the
+    // columns the browser actually produced.
+    const frame = requestAnimationFrame(measure);
+    const observer = new ResizeObserver(() => measure());
+    observer.observe(element);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [flow, deps]);
+
+  return { sheet, sheets, setSheet };
+}
+
 export function YellowPages({ onSelect, onClose }: YellowPagesProps) {
   const { entries } = useGuide();
   const { kinds } = usePageKinds();
@@ -131,14 +175,22 @@ export function YellowPages({ onSelect, onClose }: YellowPagesProps) {
 
   const blocks = useMemo(() => directoryBlocks(tree), [tree]);
 
-  // Close on Escape.
+  const flowRef = useRef<HTMLDivElement>(null);
+  const { sheet, sheets, setSheet } = useSheets(flowRef, blocks);
+
+  // Escape closes; the arrows turn the page.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (e.key === 'ArrowRight') setSheet((s) => Math.min(s + 1, sheets - 1));
+      if (e.key === 'ArrowLeft') setSheet((s) => Math.max(s - 1, 0));
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, setSheet, sheets]);
 
   return (
     <div
@@ -153,9 +205,37 @@ export function YellowPages({ onSelect, onClose }: YellowPagesProps) {
       aria-label="Yellow Pages"
       onClick={onClose}
     >
-      <div className="yellow-pages-book" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="yellow-pages-book yellow-pages-book-full"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="yellow-pages-masthead">
           <span className="yellow-pages-brand">Page Directory</span>
+          {sheets > 1 && (
+            <div className="yellow-pages-pager">
+              <button
+                type="button"
+                className="yellow-pages-turn"
+                aria-label="Previous sheet"
+                disabled={sheet === 0}
+                onClick={() => setSheet((s) => Math.max(s - 1, 0))}
+              >
+                ‹
+              </button>
+              <span className="yellow-pages-sheet-count" aria-live="polite">
+                Sheet {sheet + 1} of {sheets}
+              </span>
+              <button
+                type="button"
+                className="yellow-pages-turn"
+                aria-label="Next sheet"
+                disabled={sheet === sheets - 1}
+                onClick={() => setSheet((s) => Math.min(s + 1, sheets - 1))}
+              >
+                ›
+              </button>
+            </div>
+          )}
           <button
             type="button"
             className="yellow-pages-close"
@@ -165,9 +245,6 @@ export function YellowPages({ onSelect, onClose }: YellowPagesProps) {
             ×
           </button>
         </div>
-        <p className="yellow-pages-tagline">
-          
-        </p>
         <hr className="yellow-pages-rule" />
 
         {entries.length === 0 ? (
@@ -175,24 +252,33 @@ export function YellowPages({ onSelect, onClose }: YellowPagesProps) {
             No listings yet. Create a page in the editor to have it appear here.
           </p>
         ) : (
-          // Columns of whole blocks. Grid rather than multicol so each entry is
-          // its own hit-tested box and no heading is ever cut in half — see
-          // `directoryBlocks` above and `.yellow-pages-columns` in App.css.
-          <div className="yellow-pages-columns">
-            {blocks.map((block) => (
-              <ul key={block.key} className="yellow-pages-list">
-                {block.rows.map((row) => (
-                  <Listing
-                    key={row.node.pageNumber}
-                    row={row}
-                    onPick={(pageNumber) => {
-                      onSelect(pageNumber);
-                      onClose();
-                    }}
-                  />
-                ))}
-              </ul>
-            ))}
+          <div className="yellow-pages-viewport">
+            {/*
+              * Multi-column, filling each column to the bottom before starting the
+              * next — so it reads down and then across, the way a directory does.
+              * Each block is `break-inside: avoid`, so a heading is never parted
+              * from the pages under it.
+              */}
+            <div
+              className="yellow-pages-flow"
+              ref={flowRef}
+              style={{ transform: `translateX(calc(${-sheet} * (100% + var(--yp-gap))))` }}
+            >
+              {blocks.map((block) => (
+                <ul key={block.key} className="yellow-pages-list">
+                  {block.rows.map((row) => (
+                    <Listing
+                      key={row.node.pageNumber}
+                      row={row}
+                      onPick={(pageNumber) => {
+                        onSelect(pageNumber);
+                        onClose();
+                      }}
+                    />
+                  ))}
+                </ul>
+              ))}
+            </div>
           </div>
         )}
 
