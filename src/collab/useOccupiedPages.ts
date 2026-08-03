@@ -59,7 +59,12 @@ export function useOccupiedPages(): number[] {
 
     for (const [key, kind] of Object.entries(kinds ?? {})) {
       const pageNumber = asPage(key);
-      if (pageNumber != null && kind != null) occupied.add(pageNumber);
+      // Only a heading claims a page. `page` is the default and `setKind`
+      // removes the key rather than storing it, but counting a stored `page`
+      // as occupancy would make a page impossible to free again.
+      if (pageNumber != null && (kind === 'category' || kind === 'subcategory')) {
+        occupied.add(pageNumber);
+      }
     }
 
     return [...occupied].sort((a, b) => a - b);

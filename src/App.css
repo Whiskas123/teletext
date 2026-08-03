@@ -1769,3 +1769,21 @@
 .manage-card-actions {
   flex-wrap: wrap;
 }
+
+/* Screen-level status line. Sticky because the pages list is long and an
+   action taken at the bottom reported to the top used to scroll out of view. */
+.manage-notice {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: #1a1a00;
+  border: 1px solid #ff0;
+  color: #ffd;
+  font-size: 0.8rem;
+}

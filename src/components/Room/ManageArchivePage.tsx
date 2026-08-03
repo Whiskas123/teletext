@@ -156,49 +156,70 @@ export function ManageArchivePage() {
   const current = Number.isInteger(target) ? livePage(target) : null;
   const targetTaken = takenPages.get(target);
 
-  const handlePublish = useCallback(async () => {
-    if (selected == null) return;
-    setBusy(true);
-    setNotice(null);
-    const result = await publish({
-      pageNumber: Number(pageNumber),
-      captureId: selected.id,
-      title,
-      description,
-      transforms: { shiftDown, menuId },
-    });
-    setBusy(false);
-    setNotice(result.ok ? `Published to page ${pageNumber}.` : result.error);
-  }, [selected, pageNumber, title, description, shiftDown, menuId, publish]);
+  /**
+   * Run an action with the busy flag, always clearing it and always saying
+   * something.
+   *
+   * Every handler here used to set the flag, await, and clear it — so any
+   * rejection left `busy` stuck `true`, which disables every button on the
+   * screen. The symptom was the worst kind: a confirm dialog, then nothing at
+   * all, and no way to try again because the button that would retry was now
+   * disabled with no explanation.
+   */
+  const run = useCallback(
+    async (
+      action: () => Promise<{ ok: true } | { ok: false; error: string }>,
+      success: string,
+    ) => {
+      setBusy(true);
+      setNotice(null);
+      try {
+        const result = await action();
+        setNotice(result.ok ? success : result.error);
+      } catch (error) {
+        setNotice(
+          error instanceof Error ? error.message : 'Something went wrong.',
+        );
+      } finally {
+        setBusy(false);
+      }
+    },
+    [],
+  );
+
+  const handlePublish = useCallback(() => {
+    if (selected == null) return Promise.resolve();
+    return run(
+      () =>
+        publish({
+          pageNumber: Number(pageNumber),
+          captureId: selected.id,
+          title,
+          description,
+          transforms: { shiftDown, menuId },
+        }),
+      `Published to page ${pageNumber}.`,
+    );
+  }, [run, selected, pageNumber, title, description, shiftDown, menuId, publish]);
 
   const handleShift = useCallback(
-    async (fromPage: number, delta: number) => {
-      setBusy(true);
-      const result = await shiftPages(fromPage, delta);
-      setBusy(false);
-      setNotice(
-        result.ok
-          ? `Pages from ${fromPage} moved by ${delta > 0 ? '+' : ''}${delta}.`
-          : result.error,
-      );
-    },
-    [shiftPages],
+    (fromPage: number, delta: number) =>
+      run(
+        () => shiftPages(fromPage, delta),
+        `Pages from ${fromPage} moved by ${delta > 0 ? '+' : ''}${delta}.`,
+      ),
+    [run, shiftPages],
   );
 
   const handleMove = useCallback(
-    async (start: number, end: number, destination: number) => {
-      setBusy(true);
-      const result = await moveBlock(start, end, destination);
-      setBusy(false);
-      setNotice(
-        result.ok
-          ? start === end
-            ? `Page ${start} is now ${destination}.`
-            : `Pages ${start}–${end} now start at ${destination}.`
-          : result.error,
-      );
-    },
-    [moveBlock],
+    (start: number, end: number, destination: number) =>
+      run(
+        () => moveBlock(start, end, destination),
+        start === end
+          ? `Page ${start} is now ${destination}.`
+          : `Pages ${start}–${end} now start at ${destination}.`,
+      ),
+    [run, moveBlock],
   );
 
   const startEditing = useCallback(
@@ -227,22 +248,14 @@ export function ManageArchivePage() {
           'This cannot be undone from here — only from a backup.',
       );
       if (!ok) return;
-      setBusy(true);
-      const result = await deletePage(page);
-      setBusy(false);
-      setNotice(result.ok ? `Page ${page} deleted.` : result.error);
+      await run(() => deletePage(page), `Page ${page} deleted.`);
     },
-    [deletePage],
+    [run, deletePage],
   );
 
   const handleUnpublish = useCallback(
-    async (page: number) => {
-      setBusy(true);
-      const result = await unpublish(page);
-      setBusy(false);
-      setNotice(result.ok ? `Page ${page} unpublished.` : result.error);
-    },
-    [unpublish],
+    (page: number) => run(() => unpublish(page), `Page ${page} unpublished.`),
+    [run, unpublish],
   );
 
   if (authLoading) {
@@ -283,6 +296,27 @@ export function ManageArchivePage() {
           {total} captures match · {published.length} pages published
         </p>
       </header>
+
+      {/*
+        * At the top of the screen, not inside the capture panel where it used
+        * to be: actions on the pages list set a message too, and with no
+        * capture selected that panel is not rendered — so deleting a page
+        * reported success or failure to nobody, which read as nothing having
+        * happened at all.
+        */}
+      {notice != null && (
+        <p className="manage-notice" role="status">
+          {notice}
+          <button
+            type="button"
+            className="manage-mini-btn"
+            onClick={() => setNotice(null)}
+            aria-label="Dismiss message"
+          >
+            ×
+          </button>
+        </p>
+      )}
 
       <section className="manage-backup" aria-label="Backup">
         <button
@@ -543,7 +577,7 @@ export function ManageArchivePage() {
                 {busy ? 'Publishing…' : current == null ? 'Publish' : 'Replace what is there'}
               </button>
 
-              {notice != null && <p className="manage-note" role="status">{notice}</p>}
+
             </>
           )}
         </section>

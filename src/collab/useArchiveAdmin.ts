@@ -598,29 +598,46 @@ export function useArchiveAdmin(): ArchiveAdminApi {
 
   const deletePage = useCallback<ArchiveAdminApi['deletePage']>(
     async (pageNumber) => {
-      // The record goes first. If clearing the live document succeeded and
-      // this failed, the page would be gone but still listed as published —
-      // whereas a record removed with content still live is visible and
-      // fixable from this screen.
-      const isPublished = published.some((entry) => entry.page_number === pageNumber);
-      if (isPublished) {
-        const result = await unpublish(pageNumber);
-        if (!result.ok) return result;
-      }
+      try {
+        // The record goes first. If clearing the live document succeeded and
+        // this failed, the page would be gone but still listed as published —
+        // whereas a record removed with content still live is visible and
+        // fixable from this screen.
+        const isPublished = published.some((entry) => entry.page_number === pageNumber);
+        if (isPublished) {
+          const result = await unpublish(pageNumber);
+          if (!result.ok) return result;
+        }
 
-      setPages((draft) => {
-        delete draft[pageNumber];
-      });
-      setTitles((draft) => {
-        delete draft[pageNumber];
-      });
-      setKinds((draft) => {
-        delete draft[pageNumber];
-      });
-      setDescriptions((draft) => {
-        delete draft[pageNumber];
-      });
-      return { ok: true };
+        // Every channel keyed by page number, so nothing is left behind to
+        // make the page look occupied afterwards. Readers already treat an
+        // absent page and a blank one identically (`normalizePage`,
+        // `guideEntries`), so removing the keys is the cleaner of the two.
+        setPages((draft) => {
+          delete draft[pageNumber];
+        });
+        setTitles((draft) => {
+          delete draft[pageNumber];
+        });
+        setKinds((draft) => {
+          delete draft[pageNumber];
+        });
+        setDescriptions((draft) => {
+          delete draft[pageNumber];
+        });
+        return { ok: true };
+      } catch (error) {
+        // Returned rather than thrown: the caller clears its busy flag on a
+        // result, and a rejected promise left the whole screen disabled with
+        // nothing on it to say why.
+        return {
+          ok: false,
+          error:
+            error instanceof Error
+              ? `Could not delete page ${pageNumber}: ${error.message}`
+              : `Could not delete page ${pageNumber}.`,
+        };
+      }
     },
     [published, unpublish, setPages, setTitles, setKinds, setDescriptions],
   );
