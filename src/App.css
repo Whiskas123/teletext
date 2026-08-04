@@ -844,9 +844,31 @@
     /* dark sides */
     inset 4px 0 8px rgba(0,0,0,0.35),
     inset -4px 0 8px rgba(0,0,0,0.35);
-  display: inline-flex;
+  /*
+   * Width-driven, not content-driven.
+   *
+   * This was `inline-flex` with `align-items: center`, so the cabinet was as wide
+   * as the 40-column grid inside it demanded — about 716px once the bezel and
+   * cabinet padding were added, with nothing able to give. On a phone the whole
+   * TV simply hung off the side of the page.
+   *
+   * Now the width comes from outside and the grid scales to fit it (see
+   * `.tv-screen` below). `max-width` is the size it used to be, so nothing
+   * changes on a desktop; `stretch` is what gives the bezel a definite width for
+   * the container query to measure.
+   */
+  display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
+  width: 100%;
+  /*
+   * 684px is the size the cabinet has always been, worked back from the parts:
+   * 40 columns × 14px = 560, + 28 for the screen's padding and border, + 32 for
+   * the bezel, + 64 for the wood. Landing on it exactly means the grid fills the
+   * well flush at full size instead of sitting off-centre in it.
+   */
+  max-width: 684px;
+  box-sizing: border-box;
   gap: 0;
   position: relative;
 }
@@ -867,11 +889,21 @@
   position: relative;
 }
 
+.tv-bezel {
+  min-width: 0;
+}
+
 /* CRT screen well — slightly curved via border-radius and inner shadow */
 .tv-screen {
   position: relative;
   border-radius: 6px;
   overflow: hidden;
+  min-width: 0;
+  /* Centred, so any sub-pixel left over by the scaling below is split either side
+     rather than all falling on one edge. */
+  text-align: center;
+  /* Measured by the rule below, the same trick the manage previews use. */
+  container-type: inline-size;
   box-shadow:
     inset 0 0 30px rgba(0,0,0,0.9),
     inset 0 0 8px rgba(0,100,200,0.12),
@@ -908,6 +940,30 @@
   pointer-events: none;
   z-index: 11;
   border-radius: inherit;
+}
+
+/*
+ * The page, scaled to the screen it is in.
+ *
+ * The grid is 40 columns of 1em, so its width is exactly 40em and the font size
+ * is the only dial: at `(container - 28px) / 40` the screen lands exactly on the
+ * well's width, the 28px being `.teletext-screen`'s own 12px padding either side
+ * plus its 2px border. `min()` caps it at the 14px it has always been, so a
+ * desktop is pixel-identical and only narrow viewports scale down.
+ *
+ * A teletext page only means anything whole — 40 columns is the medium — so it
+ * shrinks rather than cropping or scrolling.
+ */
+.tv-screen .teletext-screen {
+  font-size: min(14px, calc((100cqw - 28px) / 40));
+}
+
+/* Older engines without container units keep the fixed size; the max-width on
+   the cabinet still stops it overflowing a desktop. */
+@supports not (width: 1cqw) {
+  .tv-screen .teletext-screen {
+    font-size: 14px;
+  }
 }
 
 /* ── TV controls bar (speaker + knobs) ──── */
@@ -1142,6 +1198,103 @@
   border-top-color: #1c1c1c;
 }
 
+/* --- The watch screens on a phone ---------------------------------------- */
+/*
+ * One breakpoint, at the width the TV stops being able to hold its natural size.
+ * Below it the cabinet keeps working — the grid scales itself — so everything
+ * here is about the chrome around it: the props under the screen were 110px tall
+ * and 3rem apart, which on a 375px screen wrapped into three rows and pushed the
+ * TV off the top of the page.
+ */
+@media (max-width: 720px) {
+  .room-layout {
+    padding: 0.5rem;
+    gap: 0.75rem;
+  }
+
+  .room-layout-header {
+    gap: 0.4rem 0.75rem;
+  }
+
+  /* The sidebar has already wrapped under the main column by this width; it may
+     as well use the whole of it rather than sitting in a 260px strip. */
+  .room-layout-sidebar {
+    flex: 1 1 100%;
+  }
+
+  /* A phone has less height to spare than a monitor, and the message list is the
+     part that can afford to give some back. */
+  .chat-messages {
+    max-height: 12rem;
+  }
+
+  .room-viewer {
+    gap: 1rem;
+    padding: 0.5rem 0 1.5rem;
+  }
+
+  /* The cabinet's own trim, in proportion: 28px/32px of wood around a 300px-wide
+     screen is most of the screen. */
+  .room-viewer-screen {
+    padding: 14px 14px 0;
+    border-radius: 12px 12px 10px 10px;
+  }
+
+  .tv-bezel {
+    padding: 8px 8px 10px;
+    border-radius: 7px 7px 5px 5px;
+  }
+
+  .tv-controls {
+    padding: 8px 4px 12px;
+    gap: 0.5rem;
+  }
+
+  .tv-speaker {
+    height: 28px;
+  }
+
+  /* A 28px knob is not a tap target. The moulding scales with it. */
+  .tv-knob-btn {
+    width: 44px;
+    height: 44px;
+    font-size: 1.25rem;
+  }
+
+  .object-bar {
+    gap: 0.75rem;
+  }
+
+  .object-img {
+    height: 64px;
+  }
+
+  .object-caption {
+    font-size: 0.6rem;
+  }
+
+  /*
+   * The remote's panel, centred on the viewport rather than on the prop.
+   *
+   * Anchored to its slot it hung off whichever edge the remote happened to be
+   * near, and `max-width: 80vw` only narrowed it rather than moving it. Fixed and
+   * centred, it is reachable with a thumb and cannot overflow.
+   */
+  .remote-popover {
+    position: fixed;
+    top: auto;
+    bottom: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(21rem, calc(100vw - 1.5rem));
+    max-width: none;
+  }
+
+  .remote-popover::after {
+    display: none;
+  }
+}
+
 /* --- Yellow Pages directory popup --- */
 /*
  * Above everything, including the object bar.
@@ -1251,6 +1404,44 @@
 @media (prefers-reduced-motion: reduce) {
   .yellow-pages-flow {
     transition: none;
+  }
+}
+
+/*
+ * The directory on a phone: narrower columns and less margin.
+ *
+ * A 19rem column does not fit a 375px screen once the padding is taken off, so it
+ * would produce one column of the wrong width and waste the rest. 13rem gives one
+ * full-width column on a phone and two on a large one, and the sheet-turning
+ * works unchanged.
+ */
+@media (max-width: 720px) {
+  .yellow-pages-book-full {
+    padding: 0.75rem 0.9rem;
+  }
+
+  .yellow-pages-flow {
+    --yp-gap: 1.25rem;
+
+    column-width: 13rem;
+  }
+
+  .yellow-pages-brand {
+    font-size: 1.35rem;
+  }
+
+  .yellow-pages-masthead {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .yellow-pages-footnote {
+    margin-top: 0.4rem;
+    font-size: 0.75rem;
+  }
+
+  .page-search-list {
+    max-height: 60vh;
   }
 }
 
