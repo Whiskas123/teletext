@@ -7,6 +7,15 @@ import {
   type BrushHistoryState,
 } from "../../domain/brush";
 import {
+  describeTextStyle,
+  isRecordableTextStyle,
+  recordTextStyle,
+  stepTextStyle,
+  textStyleKey,
+  type TextStyle,
+  type TextStyleHistoryState,
+} from "../../domain/textStyle";
+import {
   IconBack,
   IconBlink,
   IconBlock,
@@ -150,9 +159,31 @@ function BrushSwatch({ brush }: { brush: Brush | undefined }) {
       {([0, 1, 2, 3, 4, 5] as const).map((i) => (
         <span
           key={i}
-          className={`preset-motif-dot teletext-bg-${brush.colors[i]}`}
+          // Unlit sixths are drawn black, or a brush picked off a half-filled cell
+          // would be indistinguishable in the strip from a solid one.
+          className={`preset-motif-dot teletext-bg-${
+            sixelBit(brush.pattern, i) ? brush.colors[i] : "black"
+          }`}
         />
       ))}
+    </span>
+  );
+}
+
+/**
+ * Preview of a remembered text style: a letter in the pair, so the swatch shows
+ * what it would look like to type rather than two abstract squares.
+ */
+function TextStyleSwatch({ style }: { style: TextStyle | undefined }) {
+  if (!style) return null;
+  return (
+    <span
+      className={`text-style-swatch teletext-fg-${style.fg} teletext-bg-${style.bg}${
+        style.doubleHeight ? " text-style-swatch-double-height" : ""
+      }`}
+      aria-hidden
+    >
+      A
     </span>
   );
 }
@@ -261,6 +292,11 @@ export function Editor({
     history: [],
     index: 0,
   }));
+  /** Recently used text styles, the typing counterpart of the brush strip. */
+  const [textStyles, setTextStyles] = useState<TextStyleHistoryState>(() => ({
+    history: [],
+    index: 0,
+  }));
   /** Sixel sub-cell (0-5) the pixel brush is currently aimed at. */
   const [hoveredPartIndex, setHoveredPartIndex] = useState<number | null>(null);
   const [selectedSixelIndex, setSelectedSixelIndex] = useState(0);
@@ -281,6 +317,43 @@ export function Editor({
   const rememberBrush = useCallback((brush: Brush) => {
     setBrushes((prev) => recordBrush(prev.history, prev.index, brush));
   }, []);
+
+  /** Remember a text style that was just typed with (see `domain/textStyle.ts`). */
+  const rememberTextStyle = useCallback((style: TextStyle) => {
+    if (!isRecordableTextStyle(style)) return;
+    setTextStyles((prev) => recordTextStyle(prev.history, prev.index, style));
+  }, []);
+
+  /** Make a remembered style the active one, and go back to typing. */
+  const applyTextStyle = useCallback((style: TextStyle) => {
+    setFg(style.fg);
+    setBg(style.bg);
+    setDoubleHeightOn(style.doubleHeight);
+    setBrushMode("off");
+  }, []);
+
+  /** Step the style cursor and switch to whatever it lands on. */
+  const stepTextStyleHistory = useCallback(
+    (delta: number) => {
+      const index = stepTextStyle(textStyles.history, textStyles.index, delta);
+      const style = textStyles.history[index];
+      if (!style) return;
+      applyTextStyle(style);
+      setTextStyles((prev) => ({ ...prev, index }));
+    },
+    [textStyles, applyTextStyle],
+  );
+
+  /** Jump straight to a style in the strip. */
+  const selectTextStyleFromHistory = useCallback(
+    (index: number) => {
+      const style = textStyles.history[index];
+      if (!style) return;
+      applyTextStyle(style);
+      setTextStyles((prev) => ({ ...prev, index }));
+    },
+    [textStyles, applyTextStyle],
+  );
 
   const selectedMotif = MOTIF_PATTERNS[selectedMotifIndex];
   const brushColors: SixelColors =
@@ -508,10 +581,15 @@ export function Editor({
         return;
       }
 
-      setFg(cell.fg);
-      setBg(cell.bg);
-      setDoubleHeightOn(cell.doubleHeight === true);
-      setBrushMode("off");
+      const style: TextStyle = {
+        fg: cell.fg,
+        bg: cell.bg,
+        doubleHeight: cell.doubleHeight === true,
+      };
+      applyTextStyle(style);
+      // Lifted styles join the strip like typed ones, so picking a heading off the
+      // page is enough to have it to hand for the rest of the session.
+      rememberTextStyle(style);
       setCursorIndex(index);
       focusHiddenInput();
     },
@@ -519,6 +597,8 @@ export function Editor({
       page,
       selectedMotifIndex,
       rememberBrush,
+      applyTextStyle,
+      rememberTextStyle,
       setCursorIndex,
       focusHiddenInput,
     ],
@@ -720,9 +800,14 @@ export function Editor({
         // nothing stale reappears if double height is later turned off there.
         writeCell(index + COLS, emptyCellValue());
       }
+      // Remembered on use rather than on choosing a colour: a style is only worth
+      // recalling once it has actually been typed with, and recording every
+      // half-made pair as the member clicks through the palette would fill the
+      // strip with combinations nobody used.
+      rememberTextStyle({ fg, bg, doubleHeight: applyDoubleHeight });
       return applyDoubleHeight;
     },
-    [fg, bg, doubleHeightOn, writeCell, page],
+    [fg, bg, doubleHeightOn, writeCell, page, rememberTextStyle],
   );
 
   const handleKeyDown = useCallback(
@@ -942,6 +1027,52 @@ export function Editor({
             <IconDoubleHeight className="sidebar-toggle-icon" />
             <span>Double height</span>
           </button>
+
+          {textStyles.history.length > 0 && (
+            <div className="color-block brush-history">
+              <span className="sidebar-field-label">Recent text styles</span>
+              <div className="brush-history-stepper">
+                <button
+                  type="button"
+                  className="brush-history-step"
+                  onClick={() => stepTextStyleHistory(1)}
+                  disabled={textStyles.index >= textStyles.history.length - 1}
+                  title="Older text style"
+                  aria-label="Older text style"
+                >
+                  ◀
+                </button>
+                <span className="brush-history-current">
+                  <TextStyleSwatch style={textStyles.history[textStyles.index]} />
+                </span>
+                <button
+                  type="button"
+                  className="brush-history-step"
+                  onClick={() => stepTextStyleHistory(-1)}
+                  disabled={textStyles.index <= 0}
+                  title="Newer text style"
+                  aria-label="Newer text style"
+                >
+                  ▶
+                </button>
+              </div>
+              <div className="brush-history-strip">
+                {textStyles.history.map((style, idx) => (
+                  <button
+                    key={textStyleKey(style)}
+                    type="button"
+                    className={`brush-history-btn ${idx === textStyles.index ? "brush-history-btn-active" : ""}`}
+                    title={describeTextStyle(style)}
+                    onClick={() => selectTextStyleFromHistory(idx)}
+                    aria-label={`Use recent text style ${idx + 1}: ${describeTextStyle(style)}`}
+                    aria-pressed={idx === textStyles.index}
+                  >
+                    <TextStyleSwatch style={style} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
 
         <section className="sidebar-section">

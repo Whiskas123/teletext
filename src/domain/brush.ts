@@ -12,7 +12,9 @@
  * {@link recordBrush} — readable and testable on their own.
  */
 
+import { recordRecent, stepRecent, type RecentList } from './recentList';
 import type { SixelColors, TeletextColor } from '../types/teletext';
+
 
 /** A brush configuration worth remembering. */
 export type Brush =
@@ -64,35 +66,18 @@ export function brushKey(brush: Brush): string {
  * The state of the recent-brushes strip: the list itself (index 0 = most
  * recently used) and the cursor the ◀ / ▶ stepper moves through it.
  */
-export interface BrushHistoryState {
-  history: Brush[];
-  index: number;
-}
+export type BrushHistoryState = RecentList<Brush>;
 
 /**
- * Record a brush that was just painted with.
- *
- * Normally this prepends the brush (removing any earlier duplicate) and resets
- * the cursor to the front. The exception matters: when the brush is the one the
- * cursor already points at — i.e. the member stepped back to an older brush and
- * is now painting with it — the list and cursor are left alone. Reshuffling
- * there would move the entry out from under the stepper and make going forward
- * again impossible.
- *
- * Total: never throws, and always returns a list of at most
- * {@link BRUSH_HISTORY_MAX} entries with an in-range cursor.
+ * Record a brush that was just painted with. See {@link recordRecent} for the
+ * ordering rule, which the text-style strip shares.
  */
 export function recordBrush(
   history: readonly Brush[],
   index: number,
   brush: Brush,
 ): BrushHistoryState {
-  const current = history[index];
-  if (current && brushesEqual(current, brush)) {
-    return { history: [...history], index };
-  }
-  const next = [brush, ...history.filter((b) => !brushesEqual(b, brush))];
-  return { history: next.slice(0, BRUSH_HISTORY_MAX), index: 0 };
+  return recordRecent(history, index, brush, brushesEqual, BRUSH_HISTORY_MAX);
 }
 
 /**
@@ -104,7 +89,5 @@ export function stepBrush(
   index: number,
   delta: number,
 ): number {
-  if (history.length === 0) return 0;
-  const target = index + delta;
-  return Math.min(history.length - 1, Math.max(0, target));
+  return stepRecent(history, index, delta);
 }

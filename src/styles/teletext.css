@@ -674,6 +674,31 @@
   border: 1px solid #444;
 }
 
+/*
+ * A text style previews as a letter in the pair rather than two squares: the
+ * whole question is whether that foreground reads against that background, and
+ * only actual glyph strokes answer it.
+ */
+.text-style-swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.8rem;
+  height: 1.2rem;
+  border-radius: 2px;
+  border: 1px solid #444;
+  font-family: 'Press Start 2P', 'Courier New', Courier, monospace;
+  font-size: 0.6rem;
+  line-height: 1;
+}
+
+/* Squashed the way a real double-height glyph is stretched, so the marker reads
+   as "this one is tall" without needing twice the room in the strip. */
+.text-style-swatch-double-height {
+  font-size: 0.85rem;
+  letter-spacing: -0.05em;
+}
+
 .preset-motif-preview {
   display: grid;
   grid-template-columns: 1fr 1fr;
