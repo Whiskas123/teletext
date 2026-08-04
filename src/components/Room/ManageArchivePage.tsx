@@ -88,6 +88,7 @@ export function ManageArchivePage() {
         shiftDown: archive.draft.shiftDown,
         menuId: archive.draft.menuId,
       },
+      kind: archive.draft.kind,
     });
   }, [actions, archive.selected, archive.draft]);
 
@@ -101,6 +102,7 @@ export function ManageArchivePage() {
           title: capture.manifest_title?.slice(0, MAX_TITLE_LENGTH) ?? '',
         })),
         startPage,
+        archive.batchKind,
       );
       archive.clearBatch();
     },

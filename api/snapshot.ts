@@ -27,6 +27,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
+import { DEFAULT_PAGE_KIND, isPageKind } from '../src/domain/directory';
 import { isCompletePageArray, pageToArray } from '../src/domain/pageEncoding';
 import { db } from './_lib/db';
 import { bodyObject, fail, json, methodIs, serverError } from './_lib/http';
@@ -79,7 +80,9 @@ function acceptable(body: Record<string, unknown>): {
   const kindFor = (pageNumber: number): string => {
     if (kinds == null || typeof kinds !== 'object') return 'page';
     const value = (kinds as Record<string, unknown>)[pageNumber];
-    return value === 'category' || value === 'subcategory' ? value : 'page';
+    // Checked against the domain's own list, so adding a heading level does not
+    // silently start flattening it here.
+    return isPageKind(value) ? value : DEFAULT_PAGE_KIND;
   };
 
   const descriptions = body.descriptions;

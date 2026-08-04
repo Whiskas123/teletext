@@ -86,11 +86,20 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+/**
+ * The two page groups, by name.
+ *
+ * By name rather than by index: the panel has other labelled regions now (the
+ * bulk transform bar), so positional lookups broke the moment one was added.
+ */
+const groupRegions = () =>
+  screen.getAllByRole('region', { name: /^(curated|playground) \d/i });
+
 describe('the two groups', () => {
   it('lists the curated range first, then the playground, each labelled', () => {
     renderPanel();
 
-    const groups = screen.getAllByRole('region');
+    const groups = groupRegions();
     expect(groups[0]).toHaveAccessibleName(/curated 100–699/i);
     expect(groups[1]).toHaveAccessibleName(/playground 700–999/i);
   });
@@ -98,7 +107,7 @@ describe('the two groups', () => {
   it('puts each page in its own group, ascending', () => {
     renderPanel();
 
-    const groups = screen.getAllByRole('region');
+    const groups = groupRegions();
     expect(
       within(groups[0]).getAllByRole('listitem').map((c) =>
         within(c).getByText(/^\d{3}$/).textContent,
@@ -121,13 +130,35 @@ describe('the two groups', () => {
     expect(within(cards[3]).getByText('Playground 700–999')).toBeInTheDocument();
   });
 
-  it('says when a page holds no content, and offers unpublish only where there is a record', () => {
+  it('says when a page holds no content', () => {
     renderPanel();
 
     const cards = screen.getAllByRole('listitem');
     expect(within(cards[0]).getByText(/holds no content/i)).toBeInTheDocument();
-    expect(within(cards[0]).getByRole('button', { name: /unpublish/i })).toBeInTheDocument();
-    expect(within(cards[1]).queryByRole('button', { name: /unpublish/i })).toBeNull();
+  });
+
+  it('offers a bulk-change tick only on a published page', () => {
+    renderPanel();
+
+    // Re-applying transforms means publishing the page's capture again, so a
+    // hand-made page has nothing to select.
+    const cards = screen.getAllByRole('listitem');
+    expect(
+      within(cards[0]).getByRole('checkbox', { name: /select page 204/i }),
+    ).toBeInTheDocument();
+    expect(within(cards[1]).queryByRole('checkbox')).toBeNull();
+  });
+
+  it('offers Delete as the one way off air, published or not', () => {
+    renderPanel();
+
+    // Unpublish was removed: on a published page it did exactly what Delete does,
+    // under a second name and a second confirmation.
+    const cards = screen.getAllByRole('listitem');
+    expect(within(cards[0]).queryByRole('button', { name: /unpublish/i })).toBeNull();
+    for (const card of cards) {
+      expect(within(card).getByRole('button', { name: /^Delete$/ })).toBeInTheDocument();
+    }
   });
 });
 
@@ -231,7 +262,7 @@ describe('an empty group, and an empty screen', () => {
   it('labels an empty group and says its range holds nothing', () => {
     renderPanel({ occupiedPages: [204] });
 
-    const groups = screen.getAllByRole('region');
+    const groups = groupRegions();
     expect(groups[1]).toHaveAccessibleName(/playground 700–999/i);
     expect(within(groups[1]).getByText(/no page in 700–999/i)).toBeInTheDocument();
   });

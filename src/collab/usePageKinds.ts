@@ -1,5 +1,5 @@
 /**
- * usePageKinds — whether each page is a category, a subcategory, or a page.
+ * usePageKinds — whether each page is a heading in the directory, and how deep.
  *
  * This is what gives the Yellow Pages directory its shape (see
  * `domain/directory.ts`), and it lives in playhtml rather than in Postgres for

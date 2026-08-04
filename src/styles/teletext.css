@@ -196,6 +196,50 @@
   cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Crect x='0' y='0' width='6' height='6' fill='%23fff' stroke='%23000' stroke-width='1'/%3E%3C/svg%3E") 2 2, crosshair;
 }
 
+/*
+ * The eyedropper takes nothing, so it should not look like the painting cursor.
+ * A plain crosshair with no block tip: there is no tip, only a target.
+ */
+.teletext-screen-wrapper.picker-cursor {
+  cursor: crosshair;
+}
+
+/*
+ * A shape lifted off the page, shown beside the motif previews.
+ *
+ * Same 2×3 preview as `.preset-motif-preview`, but unlit sub-cells are drawn
+ * black rather than coloured — the whole point is to show which sixths the brush
+ * will actually paint.
+ */
+.brush-picked-pattern {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid #333;
+}
+
+.brush-picked-preview {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr 1fr;
+  gap: 1px;
+  width: 1.8rem;
+  height: 1.2rem;
+  background: #444;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.brush-picked-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
 /* Home grid of teletext pages */
 .page-grid-wrapper {
   display: flex;

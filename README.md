@@ -55,7 +55,7 @@ The playhtml channels:
 |---|---|---|
 | `pages` | global | `{ [pageNumber]: { [cellIndex]: Cell } }` — one Yjs key per cell, so concurrent edits to different cells merge and edits to the same cell converge last-writer-wins |
 | `titles` | global | page titles for the yellow pages directory |
-| `page-kinds` | global | whether each page is a category, subcategory or ordinary page — the directory's shape |
+| `page-kinds` | global | whether each page is a category, subcategory, subsubcategory or ordinary page — the directory's shape |
 | `descriptions` | global | page descriptions, so pages made by hand can have one too |
 | `room-sync:<roomId>` | per room | the page the room is watching |
 | `chat:<roomId>` | per room | the room's messages |
@@ -140,7 +140,7 @@ Reading text back out of a 40×24 grid has a few catches that decide whether the
 
 ### Categories in the Yellow Pages
 
-The directory is a tree: sections, sub-sections, and the pages beneath them. Each page is marked **category**, **subcategory** or **page** from the picker on its card in `/manage`, and the nesting is read off page-number order — a heading owns everything that follows it until the next heading at the same level or above.
+The directory is a tree: sections, sub-sections, sub-sub-sections, and the pages beneath them. Each page is marked **category**, **subcategory**, **subsubcategory** or **page** — from the picker on its card in `/manage`, or at the moment it is published from the archive — and the nesting is read off page-number order: a heading owns everything that follows it until the next heading at the same level or above. The heading levels live in one list, `HEADING_KINDS` in `src/domain/directory.ts`, and position in that list *is* depth, so another level is a one-line change rather than a new branch in the nesting, the occupancy check and the directory renderer.
 
 The tree is derived, never stored, which is the point: nothing can be orphaned or point at a missing parent, and **moving a block moves a whole section intact**, because the tree is only ever a reading of the order. A subcategory with no category above it is promoted rather than hidden, and so is a page before the first heading — a page missing from the index would be invisible with nothing to show it had happened.
 

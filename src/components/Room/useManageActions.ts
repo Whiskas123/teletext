@@ -70,6 +70,12 @@ export interface PublishInput {
   title: string;
   description: string;
   transforms: PublishTransforms;
+  /**
+   * Directory role to give the page once it is on air, or `undefined` to leave
+   * whatever it already has — which is what a re-publish that only changes the
+   * transforms wants.
+   */
+  kind?: PageKind;
 }
 
 /** One capture in a run, with the title it should carry. */
@@ -95,7 +101,11 @@ export interface ManageActionsApi {
   saveText(pageNumber: number, title: string, description: string): void;
   publish(input: PublishInput): void;
   /** Publish a run of captures onto consecutive pages from `startPage`. */
-  publishBatch(items: readonly BatchItem[], startPage: number): void;
+  publishBatch(
+    items: readonly BatchItem[],
+    startPage: number,
+    kind: PageKind,
+  ): void;
   /** Re-publish pages that already have records, to change their transforms. */
   republish(items: readonly PublishInput[]): void;
 }
@@ -277,17 +287,25 @@ export function useManageActions({
   );
 
   const publish = useCallback(
-    ({ pageNumber, captureId, title, description, transforms }: PublishInput) => {
+    (input: PublishInput) => {
+      const { pageNumber, kind } = input;
       runAction(
         { kind: 'publish' },
-        () => data.publish({ pageNumber, captureId, title, description, transforms }),
+        async () => {
+          const result = await data.publish(input);
+          // The role goes on after the content, and only if the content landed:
+          // a heading with nothing under it would be a directory entry for a page
+          // that is not there.
+          if (result.ok && kind != null) setKind(pageNumber, kind);
+          return result;
+        },
         (outcome) =>
           outcome.ok
             ? publishSucceeded(pageNumber)
             : publishFailed(pageNumber, outcome.error),
       );
     },
-    [runAction, data],
+    [runAction, data, setKind],
   );
 
   /**
@@ -300,7 +318,7 @@ export function useManageActions({
    * the run keeps going and reports which pages did not take.
    */
   const publishBatch = useCallback(
-    (items: readonly BatchItem[], startPage: number) => {
+    (items: readonly BatchItem[], startPage: number, kind: PageKind) => {
       if (items.length === 0) return;
 
       runAction(
@@ -318,7 +336,9 @@ export function useManageActions({
               description: '',
               transforms: { shiftDown: true, menuId: null },
             });
-            if (!result.ok) {
+            if (result.ok) {
+              setKind(pageNumber, kind);
+            } else {
               failed.push(pageNumber);
               lastError = result.error;
             }
@@ -337,7 +357,7 @@ export function useManageActions({
             : { tone: 'alert', text: outcome.error },
       );
     },
-    [runAction, data],
+    [runAction, data, setKind],
   );
 
   /**

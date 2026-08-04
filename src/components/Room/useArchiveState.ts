@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { CaptureFilters, CaptureSummary } from '../../collab/useArchiveAdmin';
+import { DEFAULT_PAGE_KIND, type PageKind } from '../../domain/directory';
 import { MAX_TITLE_LENGTH } from '../../domain/publication';
 import type { TeletextPage } from '../../types/teletext';
 import type { PublishDraft } from './PublishPanel';
@@ -33,6 +34,8 @@ const EMPTY_DRAFT: PublishDraft = {
   // off meant remembering to tick it every time.
   shiftDown: true,
   menuId: null,
+  // Most pages are just pages; a heading is the deliberate choice.
+  kind: DEFAULT_PAGE_KIND,
 };
 
 export interface ArchiveState {
@@ -60,6 +63,9 @@ export interface ArchiveState {
   /** First page number of the run, as typed. */
   batchStart: string;
   setBatchStart(value: string): void;
+  /** The directory role every page in the run gets. */
+  batchKind: PageKind;
+  setBatchKind(kind: PageKind): void;
 }
 
 export function useArchiveState(): ArchiveState {
@@ -71,6 +77,7 @@ export function useArchiveState(): ArchiveState {
   const [draft, setDraftState] = useState<PublishDraft>(EMPTY_DRAFT);
   const [batch, setBatch] = useState<CaptureSummary[]>([]);
   const [batchStart, setBatchStart] = useState('');
+  const [batchKind, setBatchKind] = useState<PageKind>(DEFAULT_PAGE_KIND);
 
   useEffect(() => {
     const raw = filters.q ?? '';
@@ -145,5 +152,7 @@ export function useArchiveState(): ArchiveState {
     clearBatch,
     batchStart,
     setBatchStart,
+    batchKind,
+    setBatchKind,
   };
 }

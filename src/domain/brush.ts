@@ -22,6 +22,16 @@ export type Brush =
       motifIndex: number;
       /** The six per-part colors the motif paints with. */
       colors: SixelColors;
+      /**
+       * Which of the six sub-cells the brush lights, 0-63.
+       *
+       * A motif chosen from the picker fills the whole cell (`SIXEL_MAX`) and
+       * only varies colour, which is all the block brush could ever do. A brush
+       * lifted off the page with the eyedropper carries the shape it found, so
+       * the pattern has to travel with the colours or picking up a half-filled
+       * cell would paint a solid one.
+       */
+      pattern: number;
     }
   | { kind: 'pixel'; color: TeletextColor };
 
@@ -35,6 +45,7 @@ export function brushesEqual(a: Brush, b: Brush): boolean {
   if (a.kind === 'block' && b.kind === 'block') {
     return (
       a.motifIndex === b.motifIndex &&
+      a.pattern === b.pattern &&
       a.colors.length === b.colors.length &&
       a.colors.every((c, i) => c === b.colors[i])
     );
@@ -46,7 +57,7 @@ export function brushesEqual(a: Brush, b: Brush): boolean {
 export function brushKey(brush: Brush): string {
   return brush.kind === 'pixel'
     ? `pixel:${brush.color}`
-    : `block:${brush.motifIndex}:${brush.colors.join('-')}`;
+    : `block:${brush.motifIndex}:${brush.pattern}:${brush.colors.join('-')}`;
 }
 
 /**

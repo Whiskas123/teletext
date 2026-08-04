@@ -13,7 +13,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useGuide } from '../../collab/useGuide';
 import { usePageKinds } from '../../collab/usePageKinds';
-import { buildDirectory, type DirectoryNode } from '../../domain/directory';
+import {
+  buildDirectory,
+  isHeadingKind,
+  type DirectoryNode,
+} from '../../domain/directory';
 
 export interface YellowPagesProps {
   /** Called with a listing's Page_Number when it is selected (routes to voting). */
@@ -72,8 +76,8 @@ function collapseRepeats(rows: readonly Row[]): Row[] {
     const previous = kept[kept.length - 1];
     const repeats =
       previous != null &&
-      row.node.kind === 'page' &&
-      previous.node.kind === 'page' &&
+      !isHeadingKind(row.node.kind) &&
+      !isHeadingKind(previous.node.kind) &&
       previous.depth === row.depth &&
       previous.node.title.trim().toLocaleLowerCase() ===
         row.node.title.trim().toLocaleLowerCase();
@@ -92,8 +96,7 @@ function directoryBlocks(nodes: readonly DirectoryNode[]): Block[] {
     let loose: Block | null = null;
 
     for (const node of list) {
-      const isHeading = node.kind === 'category' || node.kind === 'subcategory';
-      if (!isHeading) {
+      if (!isHeadingKind(node.kind)) {
         if (loose == null) {
           loose = { key: node.pageNumber, rows: [] };
           blocks.push(loose);
@@ -106,8 +109,10 @@ function directoryBlocks(nodes: readonly DirectoryNode[]): Block[] {
       const rows: Row[] = [{ node, depth }];
       const nested: DirectoryNode[] = [];
       for (const child of node.children) {
-        if (child.kind === 'page') rows.push({ node: child, depth: depth + 1 });
-        else nested.push(child);
+        // A nested heading becomes a block of its own; only plain listings are
+        // absorbed, so one enormous section cannot collapse the columns.
+        if (isHeadingKind(child.kind)) nested.push(child);
+        else rows.push({ node: child, depth: depth + 1 });
       }
       blocks.push({ key: node.pageNumber, rows });
       walk(nested, depth + 1);

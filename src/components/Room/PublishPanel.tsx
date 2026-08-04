@@ -12,6 +12,7 @@
  * 40 cells wide and only means anything whole.
  */
 
+import { PAGE_KINDS, type PageKind } from '../../domain/directory';
 import type { CustomMenu, MenuDraft } from '../../domain/menu';
 import type {
   CaptureSummary,
@@ -35,6 +36,8 @@ export interface PublishDraft {
   description: string;
   shiftDown: boolean;
   menuId: number | null;
+  /** Where the page sits in the Yellow Pages directory once it is on air. */
+  kind: PageKind;
 }
 
 export interface PublishPanelProps {
@@ -181,6 +184,30 @@ export function PublishPanel({
         value={draft.title}
         onChange={(e) => onDraft({ title: e.target.value })}
       />
+
+      {/*
+        * Set here rather than only afterwards on the pages list.
+        *
+        * The directory role is part of deciding where a page goes — publishing a
+        * section heading and publishing one of its pages are different acts — and
+        * having to go to the other tab to say which it was meant the tree was
+        * always briefly wrong.
+        */}
+      <label className="sidebar-field-label" htmlFor="manage-publish-kind">
+        Directory role
+      </label>
+      <select
+        id="manage-publish-kind"
+        className="landing-name-input"
+        value={draft.kind}
+        onChange={(event) => onDraft({ kind: event.target.value as PageKind })}
+      >
+        {PAGE_KINDS.map((kind) => (
+          <option key={kind} value={kind}>
+            {kind}
+          </option>
+        ))}
+      </select>
 
       <label className="sidebar-field-label" htmlFor="manage-description">
         Description ({draft.description.length}/{MAX_DESCRIPTION_LENGTH})

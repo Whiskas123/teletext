@@ -102,6 +102,49 @@ describe('buildDirectory', () => {
     expect(tree[1].children.map((n) => n.pageNumber)).toEqual([401]);
   });
 
+  it('files a subsubcategory under the subcategory above it', () => {
+    const [sport] = buildDirectory([
+      { pageNumber: 300, title: 'Sport', kind: 'category' },
+      { pageNumber: 310, title: 'Football', kind: 'subcategory' },
+      { pageNumber: 311, title: 'Primeira Liga', kind: 'subsubcategory' },
+      { pageNumber: 312, title: 'Results', kind: 'page' },
+      { pageNumber: 320, title: 'Cycling', kind: 'subcategory' },
+    ]);
+
+    const football = sport.children[0];
+    expect(football.pageNumber).toBe(310);
+    const liga = football.children[0];
+    expect(liga.pageNumber).toBe(311);
+    // The page after it belongs to the innermost heading still open.
+    expect(liga.children.map((c) => c.pageNumber)).toEqual([312]);
+    // And the next subcategory closes it rather than nesting inside it.
+    expect(sport.children.map((c) => c.pageNumber)).toEqual([310, 320]);
+  });
+
+  it('promotes a subsubcategory with no heading above it at all', () => {
+    const tree = buildDirectory([
+      { pageNumber: 200, title: 'Orphan', kind: 'subsubcategory' },
+      { pageNumber: 201, title: 'Child', kind: 'page' },
+    ]);
+
+    expect(tree.map((n) => n.pageNumber)).toEqual([200]);
+    expect(tree[0].children.map((n) => n.pageNumber)).toEqual([201]);
+  });
+
+  it('lets a category close every level beneath it', () => {
+    const tree = buildDirectory([
+      { pageNumber: 300, title: 'Sport', kind: 'category' },
+      { pageNumber: 310, title: 'Football', kind: 'subcategory' },
+      { pageNumber: 311, title: 'Primeira Liga', kind: 'subsubcategory' },
+      { pageNumber: 400, title: 'Finance', kind: 'category' },
+      { pageNumber: 401, title: 'Shares', kind: 'page' },
+    ]);
+
+    expect(tree.map((n) => n.pageNumber)).toEqual([300, 400]);
+    // 401 must land under Finance, not under the subsubcategory left open.
+    expect(tree[1].children.map((n) => n.pageNumber)).toEqual([401]);
+  });
+
   it('promotes a subcategory that has no category above it', () => {
     const tree = buildDirectory([
       { pageNumber: 200, title: 'Orphan', kind: 'subcategory' },

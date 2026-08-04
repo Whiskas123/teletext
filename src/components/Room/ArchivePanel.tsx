@@ -119,6 +119,8 @@ export function ArchivePanel({
         onStart={state.setBatchStart}
         onClear={state.clearBatch}
         onRemove={state.toggleBatch}
+        kind={state.batchKind}
+        onKind={state.setBatchKind}
         onPublish={onPublishBatch}
         busy={publishBusy}
         publishedPages={publishedPages}

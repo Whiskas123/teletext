@@ -2193,6 +2193,19 @@
 }
 
 /*
+ * The third level. Still a heading, so still capitals — but lighter and smaller
+ * than the subcategory above it, since the indentation alone stops carrying the
+ * hierarchy once there are three levels of it.
+ */
+.yellow-pages-entry-subsubcategory .yellow-pages-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  font-style: italic;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+/*
  * An ordinary listing: smaller and lighter, and left exactly as it was typed.
  *
  * No `text-transform` at all. Whoever titled the page chose that capitalisation,

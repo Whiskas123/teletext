@@ -12,6 +12,7 @@ import {
   IconBlock,
   IconDoubleHeight,
   IconExport,
+  IconPipette,
   IconPixel,
   IconTextCursor,
   IconTrash,
@@ -28,6 +29,8 @@ import {
   ROWS,
   rowColFromIndex,
   setSixelBit,
+  sixelBit,
+  SIXEL_BITS,
   SIXEL_MAX,
   sixelPartAt,
   resolveDoubleHeightCursor,
@@ -236,8 +239,17 @@ export function Editor({
   /** When on, typed characters render at double the row height (text only — not the block/pixel brushes). */
   const [doubleHeightOn, setDoubleHeightOn] = useState(false);
   const [clearConfirmShown, setClearConfirmShown] = useState(false);
-  type BrushMode = "off" | "block" | "pixel" | "blink";
+  type BrushMode = "off" | "block" | "pixel" | "blink" | "picker";
   const [brushMode, setBrushMode] = useState<BrushMode>("off");
+  /**
+   * Which sub-cells the block brush lights, 0-63.
+   *
+   * `SIXEL_MAX` — the whole cell — until the eyedropper lifts a shape off the
+   * page. Picking a motif puts it back, because a motif is a colour arrangement
+   * for a full cell and painting it as somebody else's half-filled shape would be
+   * two decisions in one control.
+   */
+  const [blockPattern, setBlockPattern] = useState<number>(SIXEL_MAX);
   const [motifColors, setMotifColors] = useState<(SixelColors | undefined)[]>(
     () => MOTIF_PATTERNS.map(() => undefined),
   );
@@ -283,7 +295,7 @@ export function Editor({
         char: " ",
         fg: "white",
         bg: "black",
-        graphics: SIXEL_MAX,
+        graphics: blockPattern,
         graphicsColors: [...brushColors],
       });
       setCursorIndex(index);
@@ -291,10 +303,12 @@ export function Editor({
         kind: "block",
         motifIndex: selectedMotifIndex,
         colors: [...brushColors] as SixelColors,
+        pattern: blockPattern,
       });
     },
     [
       brushColors,
+      blockPattern,
       writeCell,
       page,
       setCursorIndex,
@@ -380,6 +394,9 @@ export function Editor({
 
   const selectMotif = useCallback((index: number) => {
     setSelectedMotifIndex(index);
+    // A motif is a colour arrangement for a whole cell, so choosing one clears
+    // any shape the eyedropper had lifted.
+    setBlockPattern(SIXEL_MAX);
   }, []);
 
   /**
@@ -398,6 +415,7 @@ export function Editor({
       n[brush.motifIndex] = [...brush.colors] as SixelColors;
       return n;
     });
+    setBlockPattern(brush.pattern);
     setBrushMode("block");
   }, []);
 
@@ -444,6 +462,69 @@ export function Editor({
   }, []);
 
   /**
+   * The eyedropper: take a cell's appearance and become the tool that made it.
+   *
+   * Which tool that is follows from the cell, because a teletext cell is either a
+   * character or a mosaic and never both — `graphics` being a number is exactly
+   * that distinction (see `Cell` in `types/teletext.ts`). So the mode the picker
+   * lands in is read off the page rather than chosen separately:
+   *
+   * - **A character cell** hands its colours to the text tool and puts the cursor
+   *   where it was picked, ready to type in the style just lifted. A blank cell
+   *   counts: its background is a real choice worth copying.
+   * - **A graphics cell** hands its six colours *and* its shape to the block
+   *   brush, so the next click stamps what was picked rather than a solid block.
+   *
+   * Either way the brush is remembered, so it lands in the recent-brushes strip
+   * alongside the ones chosen by hand.
+   */
+  const pickFromCell = useCallback(
+    (index: number) => {
+      const cell = page[index];
+      if (cell == null) return;
+
+      if (typeof cell.graphics === "number") {
+        const pattern = cell.graphics & 0x3f;
+        // Falls back to the cell's own foreground, which is what `SixelBlock`
+        // renders a lit part with when no per-part colour was stored.
+        const colors = [
+          ...(cell.graphicsColors ??
+            (Array(SIXEL_BITS).fill(cell.fg) as TeletextColor[])),
+        ] as unknown as SixelColors;
+
+        setMotifColors((prev) => {
+          const next = [...prev];
+          next[selectedMotifIndex] = colors;
+          return next;
+        });
+        setBlockPattern(pattern);
+        setBrushMode("block");
+        rememberBrush({
+          kind: "block",
+          motifIndex: selectedMotifIndex,
+          colors,
+          pattern,
+        });
+        return;
+      }
+
+      setFg(cell.fg);
+      setBg(cell.bg);
+      setDoubleHeightOn(cell.doubleHeight === true);
+      setBrushMode("off");
+      setCursorIndex(index);
+      focusHiddenInput();
+    },
+    [
+      page,
+      selectedMotifIndex,
+      rememberBrush,
+      setCursorIndex,
+      focusHiddenInput,
+    ],
+  );
+
+  /**
    * Which sixth of a cell the pointer is over, from the event's position within
    * the cell element. Returns null when the position can't be determined.
    */
@@ -464,6 +545,10 @@ export function Editor({
   const handleCellClick = useCallback(
     (index: number, e?: React.MouseEvent) => {
       if (index < COLS) return;
+      if (brushMode === "picker") {
+        pickFromCell(index);
+        return;
+      }
       if (brushMode === "block" && e?.altKey) {
         pickMotifFromCell(index);
         return;
@@ -491,6 +576,7 @@ export function Editor({
       paintSixelPart,
       partFromEvent,
       pickMotifFromCell,
+      pickFromCell,
       focusHiddenInput,
       setCursorIndex,
     ],
@@ -499,6 +585,9 @@ export function Editor({
   const handleCellMouseDown = useCallback(
     (index: number, e?: React.MouseEvent) => {
       if (index < COLS) return;
+      // Picking happens on click, not on mousedown: there is nothing to drag, and
+      // starting a draw would leave `isDrawingRef` set with no painter to clear.
+      if (brushMode === "picker") return;
       if (brushMode === "block" && e?.altKey) {
         e?.preventDefault();
         e?.stopPropagation();
@@ -535,7 +624,10 @@ export function Editor({
         setHoveredPartIndex(null);
         return;
       }
-      if (brushMode === "block") {
+      if (brushMode === "picker") {
+        // Highlight what would be picked, without touching it.
+        setHoveredCellIndex(index);
+      } else if (brushMode === "block") {
         setHoveredCellIndex(index);
         if (isDrawingRef.current) paintCell(index);
       } else if (brushMode === "pixel") {
@@ -891,9 +983,54 @@ export function Editor({
               <IconBlink className="sidebar-toggle-icon" />
               <span>Blink</span>
             </button>
+            <button
+              type="button"
+              className={`sidebar-toggle ${brushMode === "picker" ? "active" : ""}`}
+              onClick={() => setBrushMode("picker")}
+              title="Click a cell to copy what made it: its colours if it holds a character, its shape and colours if it is a mosaic."
+            >
+              <IconPipette className="sidebar-toggle-icon" />
+              <span>Pick</span>
+            </button>
           </div>
+          {brushMode === "picker" && (
+            <p className="sidebar-hint">
+              Click any cell to copy what made it. A cell with a character hands
+              its colours to the text tool and puts the cursor there; a mosaic
+              cell hands its shape and its six colours to the block brush.
+            </p>
+          )}
           {brushMode === "block" && (
             <div className="brush-options">
+              {/*
+                * A lifted shape is otherwise invisible state: the motif previews
+                * all show full cells, so a half-filled brush would look identical
+                * to a solid one right up until it painted.
+                */}
+              {blockPattern !== SIXEL_MAX && (
+                <div className="brush-picked-pattern">
+                  <div className="brush-picked-preview" aria-hidden>
+                    {([0, 1, 2, 3, 4, 5] as const).map((i) => (
+                      <span
+                        key={i}
+                        className={`preset-motif-dot teletext-bg-${
+                          sixelBit(blockPattern, i) ? brushColors[i] : "black"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <div className="brush-picked-text">
+                    <span className="sidebar-field-label">Picked shape</span>
+                    <button
+                      type="button"
+                      className="sidebar-toggle"
+                      onClick={() => setBlockPattern(SIXEL_MAX)}
+                    >
+                      <span>Fill the whole cell</span>
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="color-block">
                 <div className="preset-motifs">
                   {MOTIF_PATTERNS.map((pattern, idx) => {
@@ -1193,7 +1330,13 @@ export function Editor({
       <div className="editor-main">
         <div
           ref={gridRef}
-          className={`teletext-screen-wrapper${isBrushActive ? " brush-cursor" : ""}`}
+          className={`teletext-screen-wrapper${
+            brushMode === "picker"
+              ? " picker-cursor"
+              : isBrushActive
+                ? " brush-cursor"
+                : ""
+          }`}
           tabIndex={0}
           onFocus={focusHiddenInput}
           onBlur={handleGridBlur}

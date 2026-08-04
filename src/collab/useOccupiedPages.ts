@@ -22,7 +22,7 @@ import { pageToArray } from '../domain/pageEncoding';
 import { PAGES_CHANNEL } from './useEditPage';
 import { TITLES_CHANNEL } from './useGuide';
 import { PAGE_KINDS_CHANNEL } from './usePageKinds';
-import type { PageKinds } from '../domain/directory';
+import { isHeadingKind, isPageKind, type PageKinds } from '../domain/directory';
 import type { PagesData, TitlesData } from './types';
 
 /** Ascending page numbers that hold content, a title, or a heading role. */
@@ -62,7 +62,7 @@ export function useOccupiedPages(): number[] {
       // Only a heading claims a page. `page` is the default and `setKind`
       // removes the key rather than storing it, but counting a stored `page`
       // as occupancy would make a page impossible to free again.
-      if (pageNumber != null && (kind === 'category' || kind === 'subcategory')) {
+      if (pageNumber != null && isPageKind(kind) && isHeadingKind(kind)) {
         occupied.add(pageNumber);
       }
     }

@@ -73,6 +73,34 @@ export function IconPixel({ className }: IconProps) {
   );
 }
 
+/** Eyedropper: a pipette on the diagonal, with a drop at the tip. */
+export function IconPipette({ className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      width={ICON_SIZE}
+      height={ICON_SIZE}
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
+      {/* Barrel, from the squeeze bulb down to the nozzle. */}
+      <path
+        d="M13.6 2.4a1.9 1.9 0 0 0-2.7 0L9.6 3.7l2.7 2.7 1.3-1.3a1.9 1.9 0 0 0 0-2.7Z"
+        fill="currentColor"
+      />
+      <path
+        d="M8.9 4.4 4.1 9.2l-.7 3.4 3.4-.7 4.8-4.8"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+      {/* The drop it has just lifted. */}
+      <circle cx="3.1" cy="13.5" r="1.3" fill="currentColor" />
+    </svg>
+  );
+}
+
 export function IconBlink({ className }: IconProps) {
   return (
     <svg

@@ -430,15 +430,14 @@ describe('confirming what cannot be undone', () => {
     expect(data.deletePage).not.toHaveBeenCalled();
   });
 
-  it('asks before unpublishing too, which nothing used to do', async () => {
-    const user = userEvent.setup();
+  it('offers no separate unpublish, since delete is the one way off air', () => {
     renderManage();
 
+    // On a published page unpublish did exactly what delete does — clear the
+    // record, the content, the title, the description and the directory role —
+    // so it was two names and two confirmations for one action.
     const cards = screen.getAllByRole('listitem');
-    await user.click(within(cards[0]).getByRole('button', { name: /unpublish/i }));
-
-    expect(screen.getByRole('dialog')).toHaveAccessibleName(/unpublish page 204/i);
-    expect(data.unpublish).not.toHaveBeenCalled();
+    expect(within(cards[0]).queryByRole('button', { name: /unpublish/i })).toBeNull();
   });
 
   it('keeps Tab inside the dialog', async () => {

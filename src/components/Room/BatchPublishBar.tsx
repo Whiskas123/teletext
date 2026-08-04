@@ -18,6 +18,7 @@
 
 import type { CaptureSummary } from '../../collab/useArchiveAdmin';
 import { PLAYGROUND_MIN_PAGE } from '../../domain/access';
+import { PAGE_KINDS, type PageKind } from '../../domain/directory';
 import { MIN_PAGE } from '../../domain/pageOps';
 import { blockedReason } from './captureMeta';
 
@@ -30,6 +31,9 @@ export interface BatchPublishBarProps {
   onStart(value: string): void;
   onClear(): void;
   onRemove(capture: CaptureSummary): void;
+  /** Directory role for every page in the run. */
+  kind: PageKind;
+  onKind(kind: PageKind): void;
   onPublish(startPage: number): void;
   busy: boolean;
   /** Pages that already hold a publication, so the bar can say what it replaces. */
@@ -42,6 +46,8 @@ export function BatchPublishBar({
   onStart,
   onClear,
   onRemove,
+  kind,
+  onKind,
   onPublish,
   busy,
   publishedPages,
@@ -85,6 +91,24 @@ export function BatchPublishBar({
             value={start}
             onChange={(event) => onStart(event.target.value)}
           />
+        </span>
+        {/* One role for the whole run: a section is a heading and then its pages,
+            so the pages get published together and the heading on its own. */}
+        <span className="manage-reorder-field">
+          <label className="sidebar-field-label" htmlFor="manage-batch-kind">
+            Directory role
+          </label>
+          <select
+            id="manage-batch-kind"
+            value={kind}
+            onChange={(event) => onKind(event.target.value as PageKind)}
+          >
+            {PAGE_KINDS.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
         </span>
         <button
           type="button"
