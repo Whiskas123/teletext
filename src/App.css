@@ -2186,6 +2186,7 @@
   margin-top: 0.35rem;
 }
 
+/* Second level: italic is what marks it, and nothing else uses italic. */
 .yellow-pages-entry-subcategory .yellow-pages-name {
   font-weight: 700;
   font-style: italic;
@@ -2193,16 +2194,27 @@
 }
 
 /*
- * The third level. Still a heading, so still capitals — but lighter and smaller
- * than the subcategory above it, since the indentation alone stops carrying the
- * hierarchy once there are three levels of it.
+ * Third level: upright, letterspaced, and marked with a ‣.
+ *
+ * Distinguished from the subcategory by *kind* rather than degree. A first
+ * attempt at this only dropped the weight from 700 to 600 and the size from 1rem
+ * to 0.95rem, which in a condensed face at this size is no difference at all —
+ * and indentation cannot pick up the slack, because the blocks are laid out in
+ * columns, so a third-level heading is rarely sitting under the thing it belongs
+ * to. The type has to carry the level on its own.
  */
 .yellow-pages-entry-subsubcategory .yellow-pages-name {
   font-weight: 600;
-  font-size: 0.95rem;
-  font-style: italic;
-  letter-spacing: 0.03em;
+  font-size: 0.85rem;
+  font-style: normal;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
+}
+
+.yellow-pages-entry-subsubcategory .yellow-pages-name::before {
+  content: '‣ ';
+  /* Not letterspaced like the name, or the marker drifts off the word. */
+  letter-spacing: 0;
 }
 
 /*
