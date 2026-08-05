@@ -28,8 +28,16 @@ import { Link, useParams } from 'react-router-dom';
 import { useEditPage } from '../../collab/useEditPage';
 import { useGuide } from '../../collab/useGuide';
 import { useIsModerator } from '../../collab/useIsModerator';
+import { useSubpages } from '../../collab/useSubpages';
 import { canEditPage, PLAYGROUND_MIN_PAGE } from '../../domain/access';
 import { inPageRange } from '../../domain/pageOps';
+import {
+  MAX_SUBPAGE,
+  MIN_SUBPAGE,
+  clampSubpage,
+  normalizeSubpage,
+  stepSubpage,
+} from '../../domain/subpages';
 import { Editor } from '../Editor/Editor';
 
 /** Default Page_Number for a moderator when none is provided or invalid. */
@@ -58,15 +66,25 @@ function resolveInitialPageNumber(
  * Standalone solo editor for a single global Page_Number.
  */
 export function SoloEditor() {
-  const params = useParams<{ pageNumber: string }>();
+  const params = useParams<{ pageNumber: string; subpage: string }>();
   const isModerator = useIsModerator();
   const [pageNumber, setPageNumber] = useState<number>(() =>
     resolveInitialPageNumber(params.pageNumber, isModerator),
   );
   const [pageError, setPageError] = useState<string | null>(null);
 
+  // Which screen of the page's carousel is being edited. Held as a request and
+  // clamped on read, so a page losing a subpage under a second editor moves
+  // this one to the last real screen instead of onto nothing.
+  const { countOf, addSubpage, removeLastSubpage } = useSubpages();
+  const [requestedSubpage, setRequestedSubpage] = useState<number>(() =>
+    normalizeSubpage(params.subpage),
+  );
+  const subpageCount = countOf(pageNumber);
+  const subpage = clampSubpage(requestedSubpage, subpageCount);
+
   // Solo editing of the global page: injected page + cell-level writes.
-  const { page, editCell, saveError } = useEditPage(pageNumber);
+  const { page, editCell, saveError } = useEditPage(pageNumber, subpage);
 
   // Global TV_Guide title editing for the current page (Req 9.3).
   const { title, setTitle } = useGuide();
@@ -88,6 +106,10 @@ export function SoloEditor() {
     setTitleDraft(title(pageNumber));
     setTitleError(null);
     setPageError(null);
+    // A new page starts at the top of its carousel: staying on screen 3 because
+    // that is where the last page was left would open a screen the operator
+    // never asked for, on a page that may not even have one.
+    setRequestedSubpage(MIN_SUBPAGE);
     // `title` is intentionally not a dependency: we only reseed on page change,
     // not on every store update, so typing is never clobbered mid-edit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -152,6 +174,18 @@ export function SoloEditor() {
     [editCell],
   );
 
+  const handleAddSubpage = useCallback(() => {
+    const added = addSubpage(pageNumber);
+    // Straight onto the new screen — adding one and then having to press › to
+    // reach it is two gestures for one intention.
+    if (added != null) setRequestedSubpage(added);
+  }, [addSubpage, pageNumber]);
+
+  const handleRemoveSubpage = useCallback(() => {
+    const remaining = removeLastSubpage(pageNumber);
+    if (remaining != null) setRequestedSubpage(Math.min(subpage, remaining));
+  }, [removeLastSubpage, pageNumber, subpage]);
+
   // The "Page" section rendered at the top of the editor sidebar so the whole
   // screen is one cohesive editor.
   const sidebarHeader = (
@@ -195,6 +229,74 @@ export function SoloEditor() {
           )}
         </div>
 
+        {/*
+          * The carousel. A page number can hold several screens (see
+          * `domain/subpages.ts`); this is which of them the grid is editing.
+          *
+          * The arrows wrap and are always live, matching the TV's own subpage
+          * knobs — the same control in the same order, so what is learned on
+          * one screen works on the other. "Remove last" takes the *last*
+          * screen rather than the one being edited: subpages are numbered by
+          * position, so removing from the middle would renumber everything
+          * after it under the operator's cursor.
+          */}
+        <div className="sidebar-field">
+          <span className="sidebar-field-label" id="solo-editor-subpage-label">
+            Subpage
+          </span>
+          <div className="editor-subpage-row" role="group" aria-labelledby="solo-editor-subpage-label">
+            <button
+              type="button"
+              className="manage-mini-btn"
+              aria-label="Previous subpage"
+              disabled={subpageCount <= 1}
+              onClick={() => setRequestedSubpage(stepSubpage(subpage, subpageCount, -1))}
+            >
+              ‹
+            </button>
+            <output className="editor-subpage-count" aria-live="polite">
+              {subpage}/{subpageCount}
+            </output>
+            <button
+              type="button"
+              className="manage-mini-btn"
+              aria-label="Next subpage"
+              disabled={subpageCount <= 1}
+              onClick={() => setRequestedSubpage(stepSubpage(subpage, subpageCount, 1))}
+            >
+              ›
+            </button>
+          </div>
+          <div className="editor-subpage-row">
+            <button
+              type="button"
+              className="manage-mini-btn"
+              disabled={subpageCount >= MAX_SUBPAGE}
+              title={
+                subpageCount >= MAX_SUBPAGE
+                  ? `A page holds at most ${MAX_SUBPAGE} subpages.`
+                  : 'Add an empty subpage at the end and go to it'
+              }
+              onClick={handleAddSubpage}
+            >
+              + Add subpage
+            </button>
+            <button
+              type="button"
+              className="manage-mini-btn manage-mini-btn-danger"
+              disabled={subpageCount <= 1}
+              title={
+                subpageCount <= 1
+                  ? 'Subpage 1 is the page itself.'
+                  : `Delete subpage ${subpageCount} and its content`
+              }
+              onClick={handleRemoveSubpage}
+            >
+              − Remove last
+            </button>
+          </div>
+        </div>
+
         <div className="sidebar-field">
           <label className="sidebar-field-label" htmlFor="page-title-input">
             Title
@@ -231,6 +333,8 @@ export function SoloEditor() {
   return (
     <Editor
       pageNumber={pageNumber}
+      subpage={subpage}
+      subpageCount={subpageCount}
       page={page}
       onEditCell={handleEditCell}
       sidebarHeader={sidebarHeader}

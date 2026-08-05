@@ -770,6 +770,24 @@
   margin-bottom: 0.75rem;
 }
 
+/* The editor's subpage controls: a ‹ X/Y › stepper, then add / remove. */
+.editor-subpage-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+/* Fixed width so the arrows do not shuffle sideways when the count reaches
+   two digits — the buttons are aimed at by position, not read. */
+.editor-subpage-count {
+  min-width: 3.5ch;
+  text-align: center;
+  font-family: monospace;
+  font-size: 0.95rem;
+  color: #0ff;
+}
+
 .sidebar-input {
   background: #000;
   color: #fff;
@@ -991,12 +1009,33 @@
   border: 1px solid #0d0802;
 }
 
+/*
+ * The two rows of knobs: pages on top, subpages under them.
+ *
+ * Stacked rather than strung out along the chassis, because the second pair
+ * moves *within* whatever the first pair landed on. Right-aligned so both rows
+ * hang off the same edge and the small pair reads as subordinate to the big one
+ * rather than as a separate cluster.
+ */
+.tv-knob-stack {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
 /* Knob cluster */
 .tv-knobs {
   flex: 0 0 auto;
   display: flex;
   gap: 10px;
   align-items: center;
+}
+
+/* Closer together as well as smaller: one pair, not two controls. */
+.tv-knobs-sub {
+  gap: 4px;
 }
 
 .tv-knob {
@@ -1071,6 +1110,31 @@
 .tv-knob-btn:focus-visible {
   outline: 2px solid #4cf;
   outline-offset: 3px;
+}
+
+/*
+ * The subpage knobs. Two thirds the size, with the moulding rings scaled to
+ * match — copying the shadow from `.tv-knob` unchanged would leave a 5px collar
+ * around an 18px knob, which is what makes a shrunk control look like a mistake
+ * rather than a smaller version of the same thing.
+ */
+.tv-knob-btn-sm {
+  width: 18px;
+  height: 18px;
+  font-size: 0.7rem;
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 70%),
+    inset 0 1px 1px rgb(255 255 255 / 15%),
+    0 0 0 1px #1a1a1a,
+    0 0 0 2px #444;
+}
+
+.tv-knob-btn-sm:hover {
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 70%),
+    inset 0 1px 1px rgb(255 255 255 / 25%),
+    0 0 0 1px #1a1a1a,
+    0 0 0 2px #6a6a6a;
 }
 
 /* Bottom foot / base of the TV */
@@ -1259,6 +1323,14 @@
     width: 44px;
     height: 44px;
     font-size: 1.25rem;
+  }
+
+  /* Still the smaller pair, but past the 24px floor a finger can actually hit.
+     The proportion is what carries the hierarchy on a phone, not the size. */
+  .tv-knob-btn-sm {
+    width: 30px;
+    height: 30px;
+    font-size: 0.9rem;
   }
 
   .object-bar {
@@ -1978,6 +2050,54 @@
    gap. The button's accessible name says so too. */
 .manage-swap-mark {
   color: #4cf;
+}
+
+/*
+ * The carousel strip on a page card: ‹ X/Y ›, add, remove, and a way into the
+ * editor on the screen being looked at.
+ *
+ * `Edit content` is a Link wearing the mini-button's clothes, so it lines up
+ * with the buttons beside it rather than sitting in the row as bare underlined
+ * text — the row is one set of controls whatever each one is made of.
+ */
+.manage-subpages {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  margin: 0.35rem 0;
+}
+
+.manage-subpages .manage-mini-btn {
+  text-decoration: none;
+}
+
+/* Fixed width so the arrows keep their positions as the count reaches two
+   digits — they are aimed at, not read. */
+.manage-subpage-count {
+  min-width: 3.5ch;
+  text-align: center;
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: #0ff;
+}
+
+/* Page and subpage sit side by side in the publish panel: one destination, two
+   fields. The subpage stays narrow so it reads as a qualifier of the page
+   number rather than as an equal partner. */
+.manage-target-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.manage-target-row .manage-reorder-field:first-child {
+  flex: 1 1 8rem;
+}
+
+.manage-target-row .manage-reorder-field:last-child {
+  flex: 0 1 9rem;
 }
 
 .manage-show-content {

@@ -201,6 +201,13 @@ export interface EditorRemoteCursor {
 interface EditorProps {
   /** Page number used for header/export (does not by itself render a back button). */
   pageNumber?: number;
+  /**
+   * Which screen of the page's carousel is being edited, and how many there
+   * are — shown in the grid's header as `X/Y`, exactly as a viewer sees it, so
+   * the editor is never ambiguous about which subpage the keystrokes land on.
+   */
+  subpage?: number;
+  subpageCount?: number;
   /** When set, renders a "Back to grid" button in the sidebar actions that calls this. */
   onBackToGrid?: () => void | Promise<void>;
   /**
@@ -231,6 +238,8 @@ interface EditorProps {
 
 export function Editor({
   pageNumber,
+  subpage = 1,
+  subpageCount = 1,
   onBackToGrid,
   sidebarHeader,
   page,
@@ -1487,6 +1496,8 @@ export function Editor({
           <TeletextGrid
             page={page}
             pageNumber={pageNumber ?? 100}
+            subpage={subpage}
+            subpageCount={subpageCount}
             cursorIndex={isBrushActive ? hoveredCellIndex : cursorIndex}
             hoverPartIndex={brushMode === "pixel" ? hoveredPartIndex : null}
             cursorDoubleHeight={brushMode === "off" && doubleHeightOn}

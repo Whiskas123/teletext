@@ -81,6 +81,7 @@ export function ManageArchivePage() {
 
     actions.publish({
       pageNumber: Number(archive.draft.pageNumber),
+      subpage: Number(archive.draft.subpage) || 1,
       captureId: capture.id,
       title: archive.draft.title,
       description: archive.draft.description,
@@ -116,25 +117,28 @@ export function ManageArchivePage() {
    * shift and the menu move. The title comes from the live document rather than
    * the record, so an edit made since publication is not reverted by a change to
    * the menu strip.
+   *
+   * Driven off the records rather than the page numbers, so a page with a
+   * carousel contributes one item per screen: a menu strip changed on page 220
+   * has to land on all of 220's screens, or the last row would disagree with
+   * itself as you arrow through them.
    */
   const handleApplyTransforms = useCallback(
     (pageNumbers: readonly number[], patch: TransformPatch) => {
-      const items = pageNumbers.flatMap((pageNumber) => {
-        const entry = data.publishedByPage.get(pageNumber);
-        if (entry == null) return [];
-        return [
-          {
-            pageNumber,
-            captureId: entry.capture_id,
-            title: data.titleOf(pageNumber) || entry.title,
-            description: data.descriptionOf(pageNumber) || entry.description,
-            transforms: {
-              shiftDown: patch.shiftDown ?? entry.shift_down,
-              menuId: patch.menuId === 'keep' ? entry.menu_id : patch.menuId,
-            },
+      const chosen = new Set(pageNumbers);
+      const items = data.published
+        .filter((entry) => chosen.has(entry.page_number))
+        .map((entry) => ({
+          pageNumber: entry.page_number,
+          subpage: entry.subpage ?? 1,
+          captureId: entry.capture_id,
+          title: data.titleOf(entry.page_number) || entry.title,
+          description: data.descriptionOf(entry.page_number) || entry.description,
+          transforms: {
+            shiftDown: patch.shiftDown ?? entry.shift_down,
+            menuId: patch.menuId === 'keep' ? entry.menu_id : patch.menuId,
           },
-        ];
-      });
+        }));
 
       actions.republish(items);
     },
@@ -242,6 +246,10 @@ export function ManageArchivePage() {
             descriptionOf={data.descriptionOf}
             kindOf={kindOf}
             livePage={data.livePage}
+            publicationAt={data.publicationAt}
+            subpageCountOfPage={data.subpageCountOfPage}
+            onAddSubpage={actions.addSubpage}
+            onRemoveLastSubpage={actions.removeLastSubpage}
             onNudge={actions.nudge}
             onMoveTo={actions.moveTo}
             onDelete={(pageNumber, title) =>
@@ -274,6 +282,8 @@ export function ManageArchivePage() {
             livePage={data.livePage}
             transform={data.transform}
             publicationsByPage={data.publishedByPage}
+            publicationAt={data.publicationAt}
+            subpageCountOfPage={data.subpageCountOfPage}
             publishBusy={actions.inFlight.publishBusy}
             onPublish={handlePublish}
             onPublishBatch={handlePublishBatch}

@@ -38,7 +38,14 @@ import {
   normalizePage,
   prevNonEmptyPage,
 } from '../domain/pageOps';
+import {
+  MIN_SUBPAGE,
+  clampSubpage,
+  pageKey,
+  stepSubpage,
+} from '../domain/subpages';
 import { useRoomId } from './RoomContext';
+import { useSubpages } from './useSubpages';
 import type { PagesData, RoomSyncData, TeletextPage } from './types';
 
 /**
@@ -67,6 +74,17 @@ export type NavigationResult = 'ok' | 'none-available';
 export interface RoomSyncApi {
   /** The room's currently displayed Page_Number (defaults to 100 when unset). */
   displayedPageNumber: number;
+  /**
+   * Which screen of that page's carousel the room is on, from 1.
+   *
+   * Shared like the page number, so a room watching page 220 is watching the
+   * same *screen* of it — but changed without a vote, unlike the page number.
+   * A vote decides what the room is watching; stepping through the screens of
+   * the page it already agreed on is reading it, not changing it.
+   */
+  displayedSubpage: number;
+  /** How many screens the displayed page holds. Always at least 1. */
+  subpageCount: number;
   /** Normalized 960-cell page for the displayed Page_Number (Req 7.4). */
   page: TeletextPage;
   /**
@@ -97,6 +115,8 @@ export interface RoomSyncApi {
    * Non_Empty_Page exists (Req 3.7, 3.8).
    */
   gotoPrevNonEmpty(): NavigationResult;
+  /** Step the whole room through the page's carousel, wrapping at both ends. */
+  stepSubpageBy(delta: number): void;
 }
 
 /**
@@ -112,6 +132,7 @@ export function useRoomSync(): RoomSyncApi {
     displayedPageNumber: DEFAULT_DISPLAYED_PAGE,
   });
   const [pages] = usePageData<PagesData>(PAGES_CHANNEL, {});
+  const { countOf } = useSubpages();
 
   // Guard against a malformed/absent sync value (e.g. before first sync), so the
   // default page 100 is always presented (Req 3.4).
@@ -120,19 +141,44 @@ export function useRoomSync(): RoomSyncApi {
       ? sync.displayedPageNumber
       : DEFAULT_DISPLAYED_PAGE;
 
+  const subpageCount = countOf(displayedPageNumber);
+  // Clamped on read, like the page number is guarded: a room can be sitting on
+  // screen 3 of a carousel an editor then shortens to two.
+  const displayedSubpage = clampSubpage(sync?.displayedSubpage ?? MIN_SUBPAGE, subpageCount);
+
   // Normalize the stored page (or absent entry) to a valid 960-cell page (Req 7.4).
   const page = useMemo<TeletextPage>(
-    () => normalizePage(pages ? pages[displayedPageNumber] : undefined),
-    [pages, displayedPageNumber],
+    () =>
+      normalizePage(
+        pages ? pages[pageKey(displayedPageNumber, displayedSubpage) as number] : undefined,
+      ),
+    [pages, displayedPageNumber, displayedSubpage],
   );
 
   const setDisplayedPageDirect = useCallback(
     (n: number) => {
       setSync((draft) => {
         draft.displayedPageNumber = n;
+        // A new page starts at the top of its carousel. Without this, an
+        // accepted vote for a one-screen page while the room sat on screen 3
+        // would land everyone on a subpage that page does not have.
+        draft.displayedSubpage = MIN_SUBPAGE;
       });
     },
     [setSync],
+  );
+
+  const stepSubpageBy = useCallback(
+    (delta: number) => {
+      setSync((draft) => {
+        draft.displayedSubpage = stepSubpage(
+          draft.displayedSubpage ?? MIN_SUBPAGE,
+          subpageCount,
+          delta,
+        );
+      });
+    },
+    [setSync, subpageCount],
   );
 
   const setDisplayedPage = useCallback(
@@ -160,10 +206,13 @@ export function useRoomSync(): RoomSyncApi {
 
   return {
     displayedPageNumber,
+    displayedSubpage,
+    subpageCount,
     page,
     setDisplayedPage,
     setDisplayedPageDirect,
     gotoNextNonEmpty,
     gotoPrevNonEmpty,
+    stepSubpageBy,
   };
 }

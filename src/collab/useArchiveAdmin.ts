@@ -40,6 +40,15 @@ import { TITLES_CHANNEL } from './useGuide';
 import { PAGE_KINDS_CHANNEL } from './usePageKinds';
 import { DESCRIPTIONS_CHANNEL, type DescriptionsData } from './usePageText';
 import { useOccupiedPages } from './useOccupiedPages';
+import { useSubpages } from './useSubpages';
+import {
+  MIN_SUBPAGE,
+  SUBPAGE_COUNTS_CHANNEL,
+  pageKey,
+  pageKeys,
+  subpageCountOf,
+  type SubpageCounts,
+} from '../domain/subpages';
 import { DEFAULT_PAGE_KIND, type PageKinds } from '../domain/directory';
 import type { PagesData, TeletextPage, TitlesData } from './types';
 
@@ -74,6 +83,12 @@ export interface CaptureSummary {
 /** One published slot, joined with the capture behind it. */
 export interface PublishedEntry {
   page_number: number;
+  /**
+   * Which screen of the page's carousel this record is for; 1 is the page
+   * itself. Optional on the way in, because a record written before subpages
+   * existed has no column value the client can rely on until it reloads.
+   */
+  subpage?: number;
   capture_id: number;
   title: string;
   description: string;
@@ -162,8 +177,24 @@ export interface ArchiveAdminApi {
   captures: CaptureSummary[];
   total: number;
   published: PublishedEntry[];
-  /** Publication records by page number, derived once for every reader. */
+  /**
+   * Publication records by page number, derived once for every reader.
+   *
+   * One record per page — the *first* screen's — because every existing reader
+   * asks this map a question about a page: is it from the archive, may it join
+   * a bulk transform, what capture is behind it. A carousel's later screens are
+   * reached through {@link publicationAt} instead, so adding subpages did not
+   * change what any of those readers were already asking.
+   */
   publishedByPage: ReadonlyMap<number, PublishedEntry>;
+  /** The record for one screen of a page, or null when that screen is not published. */
+  publicationAt(pageNumber: number, subpage: number): PublishedEntry | null;
+  /** How many screens `pageNumber` holds in the live document. Always at least 1. */
+  subpageCountOfPage(pageNumber: number): number;
+  /** Append an empty screen to a page; returns its number, or null at the cap. */
+  addSubpage(pageNumber: number): number | null;
+  /** Drop a page's last screen and its record; returns the new count, or null at 1. */
+  removeLastSubpage(pageNumber: number): Promise<number | null>;
   menus: CustomMenu[];
   loading: boolean;
   error: string | null;
@@ -187,7 +218,7 @@ export interface ArchiveAdminApi {
    * the database, so it reflects any collaborative edits since publication.
    * `null` when the page is empty.
    */
-  livePage(pageNumber: number): TeletextPage | null;
+  livePage(pageNumber: number, subpage?: number): TeletextPage | null;
   /**
    * Apply the publish-time transforms to a page, exactly as the server will.
    * Lets the screen preview the real outcome before anything is written.
@@ -196,12 +227,14 @@ export interface ArchiveAdminApi {
   /** Record the assignment, then write the cells into playhtml. */
   publish(input: {
     pageNumber: number;
+    /** Screen of the page's carousel to publish onto, defaulting to the first. */
+    subpage?: number;
     captureId: number;
     title: string;
     description: string;
     transforms: PublishTransforms;
   }): Promise<{ ok: true } | { ok: false; error: string }>;
-  /** Clear the record and blank the page in playhtml. */
+  /** Clear the records and blank every screen of the page in playhtml. */
   unpublish(pageNumber: number): Promise<{ ok: true } | { ok: false; error: string }>;
   /** Create or update a saved menu. */
   saveMenu(draft: MenuDraft & { id?: number }): Promise<{ ok: true } | { ok: false; error: string }>;
@@ -273,6 +306,14 @@ export function useArchiveAdmin({
     DESCRIPTIONS_CHANNEL,
     {},
   );
+  // How many screens each page holds. Read here for renumbering (a carousel
+  // travels with its page) and written through `useSubpages`, which owns the
+  // add / remove rules.
+  const [liveSubpageCounts, setSubpageCounts] = usePageData<SubpageCounts>(
+    SUBPAGE_COUNTS_CHANNEL,
+    {},
+  );
+  const subpages = useSubpages();
 
   /** The query as a string; also the identity of the result that answers it. */
   const queryKey = queryString(filters, PAGE_SIZE, offset);
@@ -384,10 +425,42 @@ export function useArchiveAdmin({
     [menus],
   );
 
-  /** Records by page number, derived once here rather than in each reader. */
-  const publishedByPage = useMemo(
-    () => new Map(published.map((entry) => [entry.page_number, entry])),
+  /**
+   * Records by page number, derived once here rather than in each reader.
+   *
+   * The list arrives ordered by page then subpage, so the *first* record seen
+   * for a page is its first screen — which is the one every reader of this map
+   * means. Later screens do not overwrite it.
+   */
+  const publishedByPage = useMemo(() => {
+    const map = new Map<number, PublishedEntry>();
+    for (const entry of published) {
+      if (!map.has(entry.page_number)) map.set(entry.page_number, entry);
+    }
+    return map;
+  }, [published]);
+
+  /** Records by page *and* screen, for the controls that name a subpage. */
+  const publishedBySubpage = useMemo(
+    () =>
+      new Map(
+        published.map((entry) => [
+          String(pageKey(entry.page_number, entry.subpage ?? MIN_SUBPAGE)),
+          entry,
+        ]),
+      ),
     [published],
+  );
+
+  const publicationAt = useCallback(
+    (pageNumber: number, subpage: number): PublishedEntry | null =>
+      publishedBySubpage.get(String(pageKey(pageNumber, subpage))) ?? null,
+    [publishedBySubpage],
+  );
+
+  const subpageCountOfPage = useCallback(
+    (pageNumber: number): number => subpageCountOf(liveSubpageCounts, pageNumber),
+    [liveSubpageCounts],
   );
 
   /**
@@ -410,8 +483,8 @@ export function useArchiveAdmin({
   );
 
   const livePage = useCallback(
-    (pageNumber: number): TeletextPage | null => {
-      const stored = livePages?.[pageNumber];
+    (pageNumber: number, subpage: number = MIN_SUBPAGE): TeletextPage | null => {
+      const stored = livePages?.[pageKey(pageNumber, subpage) as number];
       if (stored == null) return null;
       const page = pageToArray(stored);
       // An entry that normalises to nothing is an empty slot, not content.
@@ -471,12 +544,17 @@ export function useArchiveAdmin({
       setKinds((draft) => {
         draft[pageNumber] = DEFAULT_PAGE_KIND;
       });
+      // Back to a carousel of one, or the page would keep claiming screens it
+      // no longer has and the viewer would show `1/4` on an empty page.
+      setSubpageCounts((draft) => {
+        draft[pageNumber] = MIN_SUBPAGE;
+      });
     },
-    [setTitles, setDescriptions, setKinds],
+    [setTitles, setDescriptions, setKinds, setSubpageCounts],
   );
 
   const publish = useCallback<ArchiveAdminApi['publish']>(
-    async ({ pageNumber, captureId, title, description, transforms }) => {
+    async ({ pageNumber, subpage = MIN_SUBPAGE, captureId, title, description, transforms }) => {
       try {
         const response = await fetch('/api/published', {
           method: 'PUT',
@@ -484,6 +562,7 @@ export function useArchiveAdmin({
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
             pageNumber,
+            subpage,
             captureId,
             title,
             description,
@@ -503,13 +582,23 @@ export function useArchiveAdmin({
         // failure here leaves the page recorded but not showing — recoverable
         // by re-publishing, and reported rather than swallowed.
         const written = importPages([
-          { pageNumber, page: pageToArray(body.cells) },
+          { pageNumber, subpage, page: pageToArray(body.cells) },
         ]);
         if (written === 0) {
           return {
             ok: false,
             error: 'Recorded, but the page could not be written to the live document. Try publishing again.',
           };
+        }
+
+        // Publishing onto a screen the carousel does not reach yet grows it, so
+        // the arrows can actually get to what was just published. Never
+        // shrinks: publishing to screen 2 of a four-screen page is a
+        // replacement, not a truncation.
+        if (subpage > subpageCountOf(liveSubpageCounts, pageNumber)) {
+          setSubpageCounts((draft) => {
+            draft[pageNumber] = subpage;
+          });
         }
 
         setTitle(pageNumber, title);
@@ -522,7 +611,14 @@ export function useArchiveAdmin({
         return { ok: false, error: 'Could not reach the server.' };
       }
     },
-    [importPages, setTitle, setDescriptions, reloadPublished],
+    [
+      importPages,
+      setTitle,
+      setDescriptions,
+      reloadPublished,
+      liveSubpageCounts,
+      setSubpageCounts,
+    ],
   );
 
   const unpublish = useCallback<ArchiveAdminApi['unpublish']>(
@@ -540,8 +636,16 @@ export function useArchiveAdmin({
           };
         }
 
-        // Blank the live page too, so an unpublished slot stops showing content.
-        importPages([{ pageNumber, page: pageToArray(undefined) }]);
+        // Blank every screen, so an unpublished slot stops showing content.
+        // Blanking only the first would leave the rest of a carousel on air
+        // under a page number the archive no longer claims.
+        const blank = pageToArray(undefined);
+        importPages(
+          Array.from(
+            { length: subpageCountOf(liveSubpageCounts, pageNumber) },
+            (_, index) => ({ pageNumber, subpage: index + 1, page: blank }),
+          ),
+        );
         clearPageText(pageNumber);
         reloadPublished();
         return { ok: true };
@@ -549,7 +653,33 @@ export function useArchiveAdmin({
         return { ok: false, error: 'Could not reach the server.' };
       }
     },
-    [importPages, clearPageText, reloadPublished],
+    [importPages, clearPageText, reloadPublished, liveSubpageCounts],
+  );
+
+  /**
+   * Take a page's last screen off air: its record, then its content.
+   *
+   * The record goes first for the same reason a delete does — a screen still
+   * recorded as published but blank is a lie the screen cannot see, whereas a
+   * removed record with content still live is visible and fixable from here.
+   * A missing record is not a failure: a screen added by hand never had one.
+   */
+  const removeLastSubpage = useCallback<ArchiveAdminApi['removeLastSubpage']>(
+    async (pageNumber) => {
+      const count = subpageCountOf(liveSubpageCounts, pageNumber);
+      if (count <= MIN_SUBPAGE) return null;
+
+      if (publicationAt(pageNumber, count) != null) {
+        await fetch(`/api/published/${pageNumber}?subpage=${count}`, {
+          method: 'DELETE',
+          credentials: 'same-origin',
+        }).catch(() => undefined);
+        reloadPublished();
+      }
+
+      return subpages.removeLastSubpage(pageNumber);
+    },
+    [liveSubpageCounts, publicationAt, reloadPublished, subpages],
   );
 
   const saveMenu = useCallback<ArchiveAdminApi['saveMenu']>(
@@ -648,15 +778,53 @@ export function useArchiveAdmin({
         }
       };
 
-      setPages((draft) => replayInto(draft, {}));
+      /**
+       * The same replay over a page's whole carousel.
+       *
+       * A page's later screens live under composite keys (`"220.2"`), so the
+       * plain replay above — which reads `draft[220]` — would move screen 1 and
+       * leave the rest sitting at the old number, where the next page to arrive
+       * there would inherit them. How many screens to carry is read from the
+       * counts map *before* it is itself replayed, since that map is what says
+       * how long each carousel is.
+       */
+      const replayPageContent = (draft: Record<number, unknown>) => {
+        const keysOf = (page: number) =>
+          pageKeys(page, subpageCountOf(liveSubpageCounts, page));
+        const held = new Map<number, unknown[]>();
+
+        for (const page of plan.lifts) {
+          const keys = keysOf(page);
+          held.set(page, keys.map((key) => detach(draft[key as number]) ?? {}));
+          for (const key of keys) draft[key as number] = {};
+        }
+        for (const { from, to } of plan.moves) {
+          const keys = keysOf(from);
+          const carried = keys.map((key) => detach(draft[key as number]) ?? {});
+          for (const key of keys) draft[key as number] = {};
+          carried.forEach((cells, index) => {
+            draft[pageKey(to, index + 1) as number] = cells;
+          });
+        }
+        for (const { from, to } of plan.drops) {
+          (held.get(from) ?? []).forEach((cells, index) => {
+            draft[pageKey(to, index + 1) as number] = cells;
+          });
+        }
+      };
+
+      setPages((draft) => replayPageContent(draft as Record<number, unknown>));
       setTitles((draft) => replayInto(draft, ''));
       setDescriptions((draft) => replayInto(draft, ''));
       // Kinds are keyed by page number like titles, so a heading that moves
       // stays a heading — otherwise a renumbering would quietly flatten the
       // directory. Its empty value is the default kind, not a missing key.
       setKinds((draft) => replayInto(draft, DEFAULT_PAGE_KIND));
+      // And the carousel lengths, or a moved page would arrive with its screens
+      // and no record of having them.
+      setSubpageCounts((draft) => replayInto(draft, MIN_SUBPAGE));
     },
-    [setPages, setTitles, setKinds, setDescriptions],
+    [setPages, setTitles, setKinds, setDescriptions, setSubpageCounts, liveSubpageCounts],
   );
 
   const reorder = useCallback(
@@ -751,9 +919,11 @@ export function useArchiveAdmin({
         }
 
         // Every channel keyed by page number, so nothing is left behind to
-        // make the page look occupied afterwards.
+        // make the page look occupied afterwards — and every screen of the
+        // carousel, not only the first, or the rest would still be dialable.
+        const keys = pageKeys(pageNumber, subpageCountOf(liveSubpageCounts, pageNumber));
         setPages((draft) => {
-          draft[pageNumber] = {};
+          for (const key of keys) draft[key as number] = {};
         });
         clearPageText(pageNumber);
         return { ok: true };
@@ -770,7 +940,7 @@ export function useArchiveAdmin({
         };
       }
     },
-    [publishedByPage, unpublish, setPages, clearPageText],
+    [publishedByPage, unpublish, setPages, clearPageText, liveSubpageCounts],
   );
 
   return {
@@ -778,6 +948,10 @@ export function useArchiveAdmin({
     total,
     published,
     publishedByPage,
+    publicationAt,
+    subpageCountOfPage,
+    addSubpage: subpages.addSubpage,
+    removeLastSubpage,
     menus,
     loading,
     error,

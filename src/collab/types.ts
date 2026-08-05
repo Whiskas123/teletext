@@ -41,6 +41,12 @@ export type PageCellMap = Record<number, Cell>;
  */
 export interface RoomSyncData {
   displayedPageNumber: number;
+  /**
+   * Which screen of that page's carousel the room is on (see
+   * `domain/subpages.ts`). Optional: rooms that have not been on a page with
+   * subpages have never written it, and an absent value means the first.
+   */
+  displayedSubpage?: number;
 }
 
 /**
@@ -48,6 +54,11 @@ export interface RoomSyncData {
  *
  * Maps a Page_Number (`1..999`) to its {@link PageCellMap}. Absent keys denote
  * pages with no stored content (treated as empty).
+ *
+ * Subpages 2 and up of a page live under a composite `"220.2"` key in the same
+ * map rather than nested inside the page's entry — see `domain/subpages.ts` for
+ * why, and for the guarantee that a subpage-unaware reader skips those keys
+ * instead of misreading them.
  */
 export type PagesData = Record<number, PageCellMap>;
 

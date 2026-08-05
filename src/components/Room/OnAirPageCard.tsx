@@ -21,8 +21,10 @@
  */
 
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import { MAX_PAGE, MIN_PAGE } from '../../domain/pageOps';
+import { MAX_SUBPAGE, MIN_SUBPAGE, stepSubpage } from '../../domain/subpages';
 import { PAGE_KINDS, type PageKind } from '../../domain/directory';
 import type { PageActionName } from '../../domain/inFlight';
 import { actionProgress, type Notice } from '../../domain/manageMessages';
@@ -48,6 +50,8 @@ export interface OnAirCardDraft {
 
 export interface OnAirCardCallbacks {
   nudge(delta: -1 | 1): void;
+  addSubpage(): void;
+  removeLastSubpage(): void;
   remove(): void;
   saveText(): void;
   setRole(kind: PageKind): void;
@@ -63,10 +67,17 @@ export interface OnAirCardCallbacks {
 
 export interface OnAirPageCardProps {
   row: OnAirRow;
-  entry: PublishedEntry | null;
+  /** The publication record for one screen of this page, or null when it has none. */
+  publicationAt(subpage: number): PublishedEntry | null;
   kind: PageKind;
-  /** Read the live content, called only when the operator asks to see it. */
-  readContent(): TeletextPage | null;
+  /** How many screens this page's carousel holds. Always at least 1. */
+  subpageCount: number;
+  /**
+   * Read the live content of one screen, called only when the operator asks to
+   * see it. The card passes the screen it is showing, so stepping the carousel
+   * changes the preview without re-reading the other screens.
+   */
+  readContent(subpage: number): TeletextPage | null;
   /** Every page number holding something, for working out what a nudge hits. */
   occupied: ReadonlySet<number>;
   draft: OnAirCardDraft | null;
@@ -89,8 +100,9 @@ export interface OnAirPageCardProps {
 
 export function OnAirPageCard({
   row,
-  entry,
+  publicationAt,
   kind,
+  subpageCount,
   readContent,
   occupied,
   draft,
@@ -105,8 +117,18 @@ export function OnAirPageCard({
   on,
 }: OnAirPageCardProps) {
   const [showContent, setShowContent] = useState(false);
+  // Which screen of the carousel this card is looking at. Card-local rather
+  // than in `useOnAirState`, unlike the editor and the mover: those are
+  // one-at-a-time slots the panel arbitrates, while looking at screen 2 of one
+  // page says nothing about what you want to see on another.
+  const [shownSubpage, setShownSubpage] = useState(MIN_SUBPAGE);
   const { pageNumber } = row;
   const disabled = busy != null;
+  // Clamped on read: the count is shared, so another moderator removing a
+  // screen must not leave this card pointing at one that is gone.
+  const subpage = Math.min(shownSubpage, subpageCount);
+  const hasCarousel = subpageCount > MIN_SUBPAGE;
+  const entry = publicationAt(subpage);
   const moverOpen = destination != null;
   const canMove = movePreview?.ok === true;
 
@@ -117,7 +139,10 @@ export function OnAirPageCard({
 
   const nudgeButton = (delta: -1 | 1) => {
     const destination = pageNumber + delta;
-    const refusal = nudgeRefusal(pageNumber, delta, entry != null);
+    // Asked of the page, not of the screen on show: a nudge moves the whole
+    // carousel, and whether it may land in the playground is a fact about the
+    // page rather than about which of its screens is being looked at.
+    const refusal = nudgeRefusal(pageNumber, delta, row.published);
     const swaps = refusal == null && occupied.has(destination);
     const label =
       refusal != null
@@ -146,10 +171,17 @@ export function OnAirPageCard({
   return (
     <li className="manage-published-card">
       {entry != null ? (
-        <CaptureImage captureId={entry.capture_id} label={`Page ${pageNumber}`} />
+        <CaptureImage
+          captureId={entry.capture_id}
+          label={
+            hasCarousel
+              ? `Page ${pageNumber}, subpage ${subpage}`
+              : `Page ${pageNumber}`
+          }
+        />
       ) : showContent ? (
         <div className="manage-preview">
-          <TeletextGrid page={readContent() ?? createEmptyPage()} readOnly />
+          <TeletextGrid page={readContent(subpage) ?? createEmptyPage()} readOnly />
         </div>
       ) : (
         <button
@@ -164,8 +196,9 @@ export function OnAirPageCard({
       <div className="manage-published-meta">
         <span className="manage-card-head">
           {/* Only a published page can be re-published, so only a published page
-              can join a bulk transform change. */}
-          {entry != null && (
+              can join a bulk transform change. Asked of the page rather than of
+              the screen on show: a bulk change applies to the whole carousel. */}
+          {row.published && (
             <label className="manage-card-pick">
               <input
                 type="checkbox"
@@ -188,13 +221,94 @@ export function OnAirPageCard({
         </span>
 
         <span className="manage-card-markers">
+          {/* Where the *page* came from, not the screen being looked at — a
+              carousel whose second screen was typed by hand is still an archive
+              page, and flipping this label as the arrows are pressed would say
+              otherwise. */}
           <span className="manage-marker">
-            {entry != null ? 'Published' : 'Made by hand'}
+            {row.published ? 'Published' : 'Made by hand'}
           </span>
           <span className="manage-marker">
             {row.group === 'curated' ? 'Curated 100–699' : 'Playground 700–999'}
           </span>
         </span>
+
+        {/*
+          * The carousel strip: which screen this card is showing, how to reach
+          * the others, and how to add or take one away.
+          *
+          * Always rendered, even on a page with one screen, and for the same
+          * reason the TV's header always shows `1/1`: "this page has one
+          * screen" is information, and a control that appears only on pages
+          * that already have subpages leaves no way to give one to a page that
+          * does not.
+          *
+          * "Remove last" takes the *last* screen rather than the one on show:
+          * subpages are numbered by position, so removing from the middle would
+          * renumber every screen after it and silently move content the
+          * operator never named.
+          */}
+        <div className="manage-subpages" role="group" aria-label={`Subpages of page ${pageNumber}`}>
+          <button
+            type="button"
+            className="manage-mini-btn"
+            aria-label={`Previous subpage of page ${pageNumber}`}
+            disabled={disabled || !hasCarousel}
+            onClick={() => setShownSubpage(stepSubpage(subpage, subpageCount, -1))}
+          >
+            ‹
+          </button>
+          <span className="manage-subpage-count">
+            {subpage}/{subpageCount}
+          </span>
+          <button
+            type="button"
+            className="manage-mini-btn"
+            aria-label={`Next subpage of page ${pageNumber}`}
+            disabled={disabled || !hasCarousel}
+            onClick={() => setShownSubpage(stepSubpage(subpage, subpageCount, 1))}
+          >
+            ›
+          </button>
+          <button
+            type="button"
+            className="manage-mini-btn"
+            disabled={disabled || subpageCount >= MAX_SUBPAGE}
+            title={
+              subpageCount >= MAX_SUBPAGE
+                ? `A page holds at most ${MAX_SUBPAGE} subpages.`
+                : `Add an empty subpage to page ${pageNumber}`
+            }
+            onClick={() => {
+              on.addSubpage();
+              setShownSubpage(subpageCount + 1);
+            }}
+          >
+            + Subpage
+          </button>
+          <button
+            type="button"
+            className="manage-mini-btn manage-mini-btn-danger"
+            disabled={disabled || !hasCarousel}
+            title={
+              hasCarousel
+                ? `Delete subpage ${subpageCount} of page ${pageNumber}`
+                : 'Subpage 1 is the page itself.'
+            }
+            onClick={on.removeLastSubpage}
+          >
+            − Last
+          </button>
+          {/* Straight into the editor on the screen being looked at, which is
+              the point of putting the carousel controls on the card at all. */}
+          <Link
+            className="manage-mini-btn"
+            to={`/edit/${pageNumber}/${subpage}`}
+            title={`Open page ${pageNumber} subpage ${subpage} in the editor`}
+          >
+            Edit content
+          </Link>
+        </div>
 
         {entry != null ? (
           <>
@@ -208,6 +322,10 @@ export function OnAirPageCard({
               {entry.menu_name != null ? ` · menu: ${entry.menu_name}` : ' · own menu row'}
             </span>
           </>
+        ) : row.published ? (
+          // The page came from the archive but this screen of it did not, which
+          // is what a subpage added by hand to a published page looks like.
+          <span className="manage-note">Subpage {subpage} was not published from the archive.</span>
         ) : (
           <span className="manage-note">Not from the archive.</span>
         )}

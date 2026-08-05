@@ -19,6 +19,8 @@ import { usePageData } from '@playhtml/react';
 
 import { useGuide } from '../../collab/useGuide';
 import { PAGES_CHANNEL } from '../../collab/useEditPage';
+import { useSubpages } from '../../collab/useSubpages';
+import { pageKeys } from '../../domain/subpages';
 import type { PagesData } from '../../collab/types';
 import {
   MIN_QUERY_LENGTH,
@@ -27,8 +29,13 @@ import {
 } from '../../domain/pageSearch';
 
 export interface PageSearchProps {
-  /** Called with a listing's page number when it is chosen. */
-  onSelect: (pageNumber: number) => void;
+  /**
+   * Called with a listing's page number when it is chosen, and the screen of
+   * its carousel the match was on. Watching solo goes straight there; a room
+   * votes on the page and starts it at the first screen, since the vote is
+   * about which page the room watches.
+   */
+  onSelect: (pageNumber: number, subpage: number) => void;
   /** Close the popup. */
   onClose: () => void;
 }
@@ -54,6 +61,7 @@ function Snippet({ hit }: { hit: SearchHit }) {
 export function PageSearch({ onSelect, onClose }: PageSearchProps) {
   const { entries } = useGuide();
   const [pages] = usePageData<PagesData>(PAGES_CHANNEL, {});
+  const { countOf } = useSubpages();
   const [query, setQuery] = useState('');
 
   useEffect(() => {
@@ -68,18 +76,25 @@ export function PageSearch({ onSelect, onClose }: PageSearchProps) {
    * Searched over the guide's listing rather than every key in the document, so
    * a page that is empty and untitled — a slot someone cleared — is not a
    * result. The guide is already the definition of "a page that exists".
+   *
+   * Each listing contributes every screen of its carousel, because a long story
+   * lives on the later ones and they are exactly what is hard to find by
+   * arrowing through pages.
    */
   const hits = useMemo(
     () =>
       searchPages(
-        entries.map((entry) => ({
-          pageNumber: entry.pageNumber,
-          title: entry.title,
-          page: pages?.[entry.pageNumber],
-        })),
+        entries.flatMap((entry) =>
+          pageKeys(entry.pageNumber, countOf(entry.pageNumber)).map((key, index) => ({
+            pageNumber: entry.pageNumber,
+            subpage: index + 1,
+            title: entry.title,
+            page: pages?.[key as number],
+          })),
+        ),
         query,
       ),
-    [entries, pages, query],
+    [entries, pages, countOf, query],
   );
 
   const tooShort = query.trim().length > 0 && query.trim().length < MIN_QUERY_LENGTH;
@@ -132,16 +147,19 @@ export function PageSearch({ onSelect, onClose }: PageSearchProps) {
         ) : (
           <>
             <p className="yellow-pages-tagline">
-              {hits.length} page{hits.length === 1 ? '' : 's'} found
+              {hits.length} result{hits.length === 1 ? '' : 's'} found
             </p>
             <ul className="page-search-list">
               {hits.map((hit) => (
-                <li key={hit.pageNumber} className="yellow-pages-entry">
+                <li
+                  key={`${hit.pageNumber}.${hit.subpage}`}
+                  className="yellow-pages-entry"
+                >
                   <button
                     type="button"
                     className="yellow-pages-entry-btn page-search-result"
                     onClick={() => {
-                      onSelect(hit.pageNumber);
+                      onSelect(hit.pageNumber, hit.subpage);
                       onClose();
                     }}
                   >
@@ -152,6 +170,10 @@ export function PageSearch({ onSelect, onClose }: PageSearchProps) {
                       <span className="yellow-pages-leader" aria-hidden="true" />
                       <span className="yellow-pages-number">
                         {formatPageNumber(hit.pageNumber)}
+                        {/* Only when there is one to name: `220` on a page with
+                            a single screen, `220-2` when the hit is on the
+                            second of several. */}
+                        {hit.subpage > 1 ? `-${hit.subpage}` : ''}
                       </span>
                     </span>
                     <span className="page-search-snippet">

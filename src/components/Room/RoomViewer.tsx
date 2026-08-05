@@ -66,7 +66,8 @@ function RoomViewerContent({
   chatSidebar,
 }: Required<Pick<RoomViewerProps, 'roomId'>> &
   Omit<RoomViewerProps, 'roomId'>) {
-  const { displayedPageNumber, page } = useRoomSync();
+  const { displayedPageNumber, displayedSubpage, subpageCount, page, stepSubpageBy } =
+    useRoomSync();
   const { submit, active } = useVoting();
 
   // Which object popup is open (remote control popover / yellow pages modal).
@@ -146,6 +147,8 @@ function RoomViewerContent({
               <TeletextGrid
                 page={shownPage}
                 pageNumber={displayNumber}
+                subpage={displayedSubpage}
+                subpageCount={subpageCount}
                 readOnly
                 onIndexPageSelect={handleRequestPage}
               />
@@ -153,9 +156,39 @@ function RoomViewerContent({
           </div>
           <div className="tv-controls">
             <div className="tv-speaker" aria-hidden="true" />
-            <div className="tv-knobs" aria-hidden="true">
-              <div className="tv-knob" />
-              <div className="tv-knob" />
+            <div className="tv-knob-stack">
+              {/* Decoration here, unlike the solo set: which page a room watches
+                  is the vote's to decide, not a knob's. */}
+              <div className="tv-knobs" aria-hidden="true">
+                <div className="tv-knob" />
+                <div className="tv-knob" />
+              </div>
+              {/*
+                * The subpage pair, which is not a vote. The room agreed on a
+                * page; turning to the next screen of it is reading what was
+                * agreed, so it applies at once — for everyone, since the
+                * subpage is part of the room's synchronized state.
+                */}
+              <div className="tv-knobs tv-knobs-sub">
+                <button
+                  type="button"
+                  className="tv-knob tv-knob-btn tv-knob-btn-sm"
+                  aria-label={`Previous subpage (showing ${displayedSubpage} of ${subpageCount})`}
+                  title="Previous subpage"
+                  onClick={() => stepSubpageBy(-1)}
+                >
+                  <span aria-hidden="true">‹</span>
+                </button>
+                <button
+                  type="button"
+                  className="tv-knob tv-knob-btn tv-knob-btn-sm"
+                  aria-label={`Next subpage (showing ${displayedSubpage} of ${subpageCount})`}
+                  title="Next subpage"
+                  onClick={() => stepSubpageBy(1)}
+                >
+                  <span aria-hidden="true">›</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

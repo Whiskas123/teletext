@@ -39,6 +39,15 @@ export const MIN_QUERY_LENGTH = 2;
 /** One page that matched, and where. */
 export interface SearchHit {
   pageNumber: number;
+  /**
+   * Which screen of the page's carousel the match is on, from 1.
+   *
+   * A carousel's later screens are whole pages of text that the reader can only
+   * reach with the subpage arrows, so a search that only read the first screen
+   * would quietly fail to find most of a long story — which is precisely the
+   * content someone is searching for.
+   */
+  subpage: number;
   title: string;
   /** The row the first match is on, 0-based, or `null` if only the title matched. */
   row: number | null;
@@ -112,6 +121,8 @@ function snippetAround(
 /** What to search: a page number, its title, and its cells. */
 export interface SearchablePage {
   pageNumber: number;
+  /** Screen of the page's carousel; absent means the page itself. */
+  subpage?: number;
   title: string;
   page: unknown;
 }
@@ -143,16 +154,21 @@ export function searchPages(
     )
     .map((entry) => ({
       pageNumber: entry.pageNumber,
+      subpage: Number.isInteger(entry.subpage) ? (entry.subpage as number) : 1,
       title: typeof entry.title === 'string' ? entry.title : '',
       page: entry.page,
     }))
-    .sort((a, b) => a.pageNumber - b.pageNumber);
+    .sort((a, b) => a.pageNumber - b.pageNumber || a.subpage - b.subpage);
 
-  for (const { pageNumber, title, page } of searchable) {
-    const titleIndex = foldForSearch(title).indexOf(needle);
+  for (const { pageNumber, subpage, title, page } of searchable) {
+    // A title belongs to the page, not to one of its screens, so it is matched
+    // once — on the first. Matching it per screen would return a three-screen
+    // page three times for one hit on its name.
+    const titleIndex = subpage === 1 ? foldForSearch(title).indexOf(needle) : -1;
     if (titleIndex !== -1) {
       hits.push({
         pageNumber,
+        subpage,
         title,
         row: null,
         inTitle: true,
@@ -161,24 +177,23 @@ export function searchPages(
       continue;
     }
 
-    // First hit only: a page is a result once, and the first line it appears on
-    // is the one worth showing.
+    // First hit only: a screen is a result once, and the first line it appears
+    // on is the one worth showing. Screens are counted separately, so a story
+    // spread over a carousel can be found by whichever part of it you remember.
     const rows = pageRows(page);
-    let found = false;
     for (const [row, text] of rows.entries()) {
       const index = foldForSearch(text).indexOf(needle);
       if (index === -1) continue;
       hits.push({
         pageNumber,
+        subpage,
         title,
         row,
         inTitle: false,
         ...snippetAround(text, index, index + needle.length),
       });
-      found = true;
       break;
     }
-    if (!found) continue;
   }
 
   return hits;

@@ -30,13 +30,22 @@
  *
  * ## Why the updates are one row at a time
  *
- * `page_number` is the primary key, so `update … set page_number = page_number
- * + 1` can transiently collide with a row it has not moved yet and fail on the
- * unique index. Postgres would only defer that check for a DEFERRABLE
- * constraint, which a primary key is not here. The plan is already ordered so
- * that each destination is free when written, so applying it row by row inside
- * one transaction is both correct and simple — and there are at most a few
- * hundred published pages.
+ * `page_number` is part of the primary key, so `update … set page_number =
+ * page_number + 1` can transiently collide with a row it has not moved yet and
+ * fail on the unique index. Postgres would only defer that check for a
+ * DEFERRABLE constraint, which a primary key is not here. The plan is already
+ * ordered so that each destination is free when written, so applying it row by
+ * row inside one transaction is both correct and simple — and there are at most
+ * a few hundred published pages.
+ *
+ * ## Subpages move as one
+ *
+ * A page can hold several subpages, each its own row (see
+ * `db/migrations/008_subpages.sql`). The plan is over page *numbers* and knows
+ * nothing about them, which is right: the subpages of a page are the page, and
+ * moving 220 to 305 has to take all of its screens along. So the statements
+ * here match on `page_number` alone and carry however many rows that is, and a
+ * lift reads and re-inserts the whole set rather than a single row.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -66,7 +75,10 @@ export default async function handler(
 
   try {
     const body = bodyObject(req);
-    const rows = await db()`select page_number from published_pages order by page_number`;
+    // Distinct: a page with three subpages is three rows and one position.
+    const rows = await db()`
+      select distinct page_number from published_pages order by page_number
+    `;
     const published = rows.map((row) => Number(row.page_number));
 
     // Everything holding content, from both stores. A page in one and not the
@@ -123,14 +135,15 @@ export default async function handler(
     //
     // Only pages the archive published have a row at all. A lifted page that is
     // purely a live one simply has nothing to carry here, and the client moves
-    // its content on its own.
-    const lifted = new Map<number, Record<string, unknown>>();
+    // its content on its own. Every subpage of a lifted page is held, not just
+    // its first screen.
+    const lifted = new Map<number, Record<string, unknown>[]>();
     for (const page of plan.lifts) {
       const found = await db()`
-        select capture_id, title, description, shift_down, menu_id
+        select subpage, capture_id, title, description, shift_down, menu_id
         from published_pages where page_number = ${page}
       `;
-      if (found[0] != null) lifted.set(page, found[0]);
+      if (found.length > 0) lifted.set(page, found);
     }
 
     // Replayed in the same order the client will replay it, inside one
@@ -146,15 +159,16 @@ export default async function handler(
         );
       }
       for (const { from, to } of plan.drops) {
-        const row = lifted.get(from);
-        if (row == null) continue;
-        statements.push(sql`
-          insert into published_pages
-            (page_number, capture_id, title, description, shift_down, menu_id, published_at)
-          values
-            (${to}, ${row.capture_id}, ${row.title}, ${row.description},
-             ${row.shift_down}, ${row.menu_id}, now())
-        `);
+        for (const row of lifted.get(from) ?? []) {
+          statements.push(sql`
+            insert into published_pages
+              (page_number, subpage, capture_id, title, description, shift_down,
+               menu_id, published_at)
+            values
+              (${to}, ${row.subpage}, ${row.capture_id}, ${row.title}, ${row.description},
+               ${row.shift_down}, ${row.menu_id}, now())
+          `);
+        }
       }
       return statements;
     });

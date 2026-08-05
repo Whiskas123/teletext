@@ -23,7 +23,15 @@ import {
   normalizePage,
   prevNonEmptyPage,
 } from '../domain/pageOps';
+import {
+  MIN_SUBPAGE,
+  clampSubpage,
+  normalizeSubpage,
+  pageKey,
+  stepSubpage,
+} from '../domain/subpages';
 import { DEFAULT_DISPLAYED_PAGE, PAGES_CHANNEL } from './useRoomSync';
+import { useSubpages } from './useSubpages';
 import type {
   NavigationResult,
   SetDisplayedPageRejection,
@@ -33,65 +41,107 @@ import type { PagesData, TeletextPage } from './types';
 export interface SoloViewApi {
   /** The Page_Number currently being watched. */
   displayedPageNumber: number;
-  /** Normalized 960-cell page for the displayed Page_Number. */
+  /** Which screen of that page's carousel is showing, from 1. */
+  subpage: number;
+  /** How many screens the displayed page holds. Always at least 1. */
+  subpageCount: number;
+  /** Normalized 960-cell page for the displayed Page_Number and subpage. */
   page: TeletextPage;
   /**
    * Change the displayed Page_Number. Applies and returns `null` for a valid
    * Page_Number; otherwise keeps the current page and returns the rejection.
+   *
+   * `subpage` may name a screen to land on, for a link or a search result that
+   * points into the middle of a carousel; it defaults to the first.
    */
-  setDisplayedPage(n: number): SetDisplayedPageRejection | null;
+  setDisplayedPage(n: number, subpage?: number): SetDisplayedPageRejection | null;
   /** Advance to the next higher non-empty page (wrapping 999 → 1). */
   gotoNextNonEmpty(): NavigationResult;
   /** Return to the next lower non-empty page (wrapping 1 → 999). */
   gotoPrevNonEmpty(): NavigationResult;
+  /** Step through the page's carousel, wrapping at both ends. */
+  stepSubpageBy(delta: number): void;
 }
 
 /**
  * Bind the solo watcher's local page selection to the global page content.
  *
  * @param initialPageNumber Page to open on, defaulting to page 100.
+ * @param initialSubpage Screen of that page to open on, defaulting to the first.
  */
 export function useSoloView(
   initialPageNumber: number = DEFAULT_DISPLAYED_PAGE,
+  initialSubpage: number = MIN_SUBPAGE,
 ): SoloViewApi {
   const [displayedPageNumber, setDisplayedPageNumber] = useState(() =>
     inPageRange(initialPageNumber) ? initialPageNumber : DEFAULT_DISPLAYED_PAGE,
   );
+  const [requestedSubpage, setRequestedSubpage] = useState(() =>
+    normalizeSubpage(initialSubpage),
+  );
   const [pages] = usePageData<PagesData>(PAGES_CHANNEL, {});
+  const { countOf } = useSubpages();
+
+  const subpageCount = countOf(displayedPageNumber);
+
+  // Clamped on read rather than corrected in an effect: the count is shared
+  // state, so a page can lose a subpage while it is being watched, and a
+  // second render pass to fix up the number would briefly show a blank screen.
+  const subpage = clampSubpage(requestedSubpage, subpageCount);
 
   const page = useMemo<TeletextPage>(
-    () => normalizePage(pages ? pages[displayedPageNumber] : undefined),
-    [pages, displayedPageNumber],
+    () => normalizePage(pages ? pages[pageKey(displayedPageNumber, subpage) as number] : undefined),
+    [pages, displayedPageNumber, subpage],
   );
 
   const setDisplayedPage = useCallback(
-    (n: number): SetDisplayedPageRejection | null => {
+    (n: number, target: number = MIN_SUBPAGE): SetDisplayedPageRejection | null => {
       if (!inPageRange(n)) return 'out-of-range';
       setDisplayedPageNumber(n);
+      // A new page starts at the top of its carousel unless the caller asked
+      // for a particular screen — arriving on subpage 3 because that is where
+      // you left the last page would be nobody's intent.
+      setRequestedSubpage(normalizeSubpage(target));
       return null;
     },
     [],
   );
 
-  const gotoNextNonEmpty = useCallback((): NavigationResult => {
-    const target = nextNonEmptyPage(displayedPageNumber, pages ?? {});
-    if (target === null) return 'none-available';
-    setDisplayedPageNumber(target);
-    return 'ok';
-  }, [displayedPageNumber, pages]);
+  const goto = useCallback(
+    (target: number | null): NavigationResult => {
+      if (target === null) return 'none-available';
+      setDisplayedPageNumber(target);
+      setRequestedSubpage(MIN_SUBPAGE);
+      return 'ok';
+    },
+    [],
+  );
 
-  const gotoPrevNonEmpty = useCallback((): NavigationResult => {
-    const target = prevNonEmptyPage(displayedPageNumber, pages ?? {});
-    if (target === null) return 'none-available';
-    setDisplayedPageNumber(target);
-    return 'ok';
-  }, [displayedPageNumber, pages]);
+  const gotoNextNonEmpty = useCallback(
+    (): NavigationResult => goto(nextNonEmptyPage(displayedPageNumber, pages ?? {})),
+    [goto, displayedPageNumber, pages],
+  );
+
+  const gotoPrevNonEmpty = useCallback(
+    (): NavigationResult => goto(prevNonEmptyPage(displayedPageNumber, pages ?? {})),
+    [goto, displayedPageNumber, pages],
+  );
+
+  const stepSubpageBy = useCallback(
+    (delta: number) => {
+      setRequestedSubpage((current) => stepSubpage(current, subpageCount, delta));
+    },
+    [subpageCount],
+  );
 
   return {
     displayedPageNumber,
+    subpage,
+    subpageCount,
     page,
     setDisplayedPage,
     gotoNextNonEmpty,
     gotoPrevNonEmpty,
+    stepSubpageBy,
   };
 }

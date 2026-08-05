@@ -28,9 +28,13 @@ export interface ArchivePanelProps {
   onSaveMenu(draft: MenuDraft & { id?: number }): Promise<{ ok: true } | { ok: false; error: string }>;
   onDeleteMenu(id: number): Promise<{ ok: true } | { ok: false; error: string }>;
   loadPage(captureId: number): Promise<TeletextPage | null>;
-  livePage(pageNumber: number): TeletextPage | null;
+  livePage(pageNumber: number, subpage?: number): TeletextPage | null;
   transform(page: TeletextPage, transforms: { shiftDown: boolean; menuId: number | null }): TeletextPage;
   publicationsByPage: ReadonlyMap<number, PublishedEntry>;
+  /** The record for one screen of a page, for the "what is there now" preview. */
+  publicationAt(pageNumber: number, subpage: number): PublishedEntry | null;
+  /** How many screens the target page already has, so the field can say so. */
+  subpageCountOfPage(pageNumber: number): number;
   publishBusy: boolean;
   onPublish(): void;
   onPublishBatch(startPage: number): void;
@@ -51,6 +55,8 @@ export function ArchivePanel({
   livePage,
   transform,
   publicationsByPage,
+  publicationAt,
+  subpageCountOfPage,
   publishBusy,
   onPublish,
   onPublishBatch,
@@ -93,7 +99,11 @@ export function ArchivePanel({
   );
 
   const target = Number(state.draft.pageNumber);
-  const current = Number.isInteger(target) ? livePage(target) : null;
+  const targetSubpage = Number(state.draft.subpage) || 1;
+  // Both previews follow the subpage: publishing to screen 2 replaces screen 2,
+  // so showing screen 1 beside the outgoing capture would compare it against
+  // something the publish is not going to touch.
+  const current = Number.isInteger(target) ? livePage(target, targetSubpage) : null;
 
   // A selection made before the filters moved is still perfectly publishable, so
   // it is kept rather than cleared — losing it would throw away the operator's
@@ -158,7 +168,12 @@ export function ArchivePanel({
           sourcePage={state.sourcePage}
           outgoing={outgoing}
           current={current}
-          targetEntry={publicationsByPage.get(target) ?? null}
+          targetEntry={
+            Number.isInteger(target) ? publicationAt(target, targetSubpage) : null
+          }
+          targetSubpageCount={
+            Number.isInteger(target) ? subpageCountOfPage(target) : 1
+          }
           draft={state.draft}
           onDraft={state.setDraft}
           menus={menus}

@@ -29,6 +29,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 import { DEFAULT_PAGE_KIND, isPageKind } from '../src/domain/directory';
 import { isCompletePageArray, pageToArray } from '../src/domain/pageEncoding';
+import { MIN_SUBPAGE, parsePageKey, subpageCountOf } from '../src/domain/subpages';
 import { db } from './_lib/db';
 import { bodyObject, fail, json, methodIs, serverError } from './_lib/http';
 import { isAdmin, isVercelCron } from './_lib/auth';
@@ -43,6 +44,10 @@ function inSnapshotRange(n: number): boolean {
 
 interface Accepted {
   pageNumber: number;
+  /** Which screen of the page's carousel this row is; 1 is the page itself. */
+  subpage: number;
+  /** How many screens the page holds, repeated on each of its rows. */
+  subpageCount: number;
   cells: unknown;
   title: string;
   kind: string;
@@ -92,15 +97,28 @@ function acceptable(body: Record<string, unknown>): {
     return typeof value === 'string' ? value.slice(0, 500) : '';
   };
 
+  // How many screens each page holds. Read from the client's own map rather
+  // than counted from the keys present: playhtml cannot delete a key, so a
+  // removed subpage leaves a blank one behind and counting would over-report.
+  const counts = body.subpageCounts;
+  const countFor = (pageNumber: number): number =>
+    counts != null && typeof counts === 'object'
+      ? subpageCountOf(counts as Record<number, number>, pageNumber)
+      : MIN_SUBPAGE;
+
   const accepted: Accepted[] = [];
   let rejected = 0;
 
   for (const [key, stored] of Object.entries(pages as Record<string, unknown>)) {
-    const pageNumber = Number(key);
-    if (!inSnapshotRange(pageNumber)) {
+    // A key is either a page number or `"220.2"` for a subpage of one. Anything
+    // else is rejected rather than guessed at — the backup is the copy of
+    // record, and a key nobody can read is a page nobody can restore.
+    const parsed = parsePageKey(key);
+    if (parsed == null || !inSnapshotRange(parsed.pageNumber)) {
       rejected += 1;
       continue;
     }
+    const { pageNumber, subpage } = parsed;
     // playhtml holds an index-keyed map; convert, then insist the result is a
     // page that was actually there rather than one conjured out of nothing.
     const cells = pageToArray(stored);
@@ -110,7 +128,13 @@ function acceptable(body: Record<string, unknown>): {
     }
     accepted.push({
       pageNumber,
+      subpage,
+      subpageCount: countFor(pageNumber),
       cells,
+      // Title, directory role and description belong to the page, not to one of
+      // its screens: a carousel is one entry in the Yellow Pages. Every row of
+      // a page therefore carries the same three, and a restore reads them off
+      // whichever row it likes.
       title: titleFor(pageNumber),
       kind: kindFor(pageNumber),
       description: descriptionFor(pageNumber),
@@ -167,23 +191,29 @@ export default async function handler(
     // part-way. Arrays are unnested rather than building a giant VALUES list so
     // the statement size stays constant regardless of page count.
     const numbers = accepted.map((page) => page.pageNumber);
+    const subpages = accepted.map((page) => page.subpage);
+    const subpageCounts = accepted.map((page) => page.subpageCount);
     const cells = accepted.map((page) => JSON.stringify(page.cells));
     const titles = accepted.map((page) => page.title);
     const kindValues = accepted.map((page) => page.kind);
     const descriptionValues = accepted.map((page) => page.description);
 
     await db()`
-      insert into live_pages (page_number, cells, title, kind, description, updated_at)
+      insert into live_pages
+        (page_number, subpage, subpage_count, cells, title, kind, description, updated_at)
       select * from unnest(
         ${numbers}::int[],
+        ${subpages}::int[],
+        ${subpageCounts}::int[],
         ${cells}::jsonb[],
         ${titles}::text[],
         ${kindValues}::text[],
         ${descriptionValues}::text[]
-      ) as t(page_number, cells, title, kind, description),
+      ) as t(page_number, subpage, subpage_count, cells, title, kind, description),
         lateral (select now()) as u(updated_at)
-      on conflict (page_number) do update
+      on conflict (page_number, subpage) do update
         set cells = excluded.cells,
+            subpage_count = excluded.subpage_count,
             title = excluded.title,
             kind = excluded.kind,
             description = excluded.description,

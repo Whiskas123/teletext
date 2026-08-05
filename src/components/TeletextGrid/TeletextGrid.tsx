@@ -9,6 +9,7 @@ import {
   ROWS,
   sixelBit,
 } from '../../types/teletext';
+import { formatSubpageIndicator } from '../../domain/subpages';
 
 const VALID_PAGE_NUMBERS = new Set([100, 200, 300, 400, 500, 600, 700, 800, 900]);
 
@@ -56,6 +57,17 @@ function formatPageNumber(n: number): string {
   return String(n).padStart(3).slice(-3);
 }
 
+/**
+ * Where the `X/Y` subpage counter sits in the header row.
+ *
+ * Column 4, one blank cell after the three-digit page number and well clear of
+ * the date and time at column 20 — a broadcast header put the subpage counter
+ * in exactly that gap, because it is the one part of the header that belongs to
+ * the page number rather than to the clock. At its widest (`26/26`) it reaches
+ * column 8.
+ */
+const SUBPAGE_COL = 4;
+
 function useLiveTime() {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -95,6 +107,13 @@ const INDEX_LINE_RANGES: { start: number; end: number; item: (typeof INDEX_LINE)
 interface TeletextGridProps {
   page: TeletextPage;
   pageNumber?: number;
+  /**
+   * Which screen of the page's carousel is showing, and how many there are.
+   * Rendered in the header as `X/Y` beside the page number — always, including
+   * `1/1`, the way a set showed it (see `domain/subpages.ts`).
+   */
+  subpage?: number;
+  subpageCount?: number;
   cursorIndex?: number | null;
   onCellClick?: (index: number, e?: React.MouseEvent) => void;
   onCellMouseDown?: (index: number, e?: React.MouseEvent) => void;
@@ -157,6 +176,8 @@ function SixelBlock({
 export function TeletextGrid({
   page,
   pageNumber = 100,
+  subpage = 1,
+  subpageCount = 1,
   cursorIndex = null,
   onCellClick,
   onCellMouseDown,
@@ -172,6 +193,7 @@ export function TeletextGrid({
   const now = useLiveTime();
   const blinkVisible = useBlinkPhase();
   const pageStr = formatPageNumber(pageNumber);
+  const subpageStr = formatSubpageIndicator(subpage, subpageCount);
   const dateTimeStr = formatHeaderDateTime(now);
   const showIndexLine = readOnly;
   const indexClickable = showIndexLine && onIndexPageSelect != null;
@@ -213,14 +235,26 @@ export function TeletextGrid({
 
           const isHeaderRow = row === 0;
           const isPageCell = isHeaderRow && col < 3;
+          const isSubpageCell =
+            isHeaderRow && col >= SUBPAGE_COL && col < SUBPAGE_COL + subpageStr.length;
           const isDateTimeCell = isHeaderRow && col >= 20;
-          const isHeaderOverlay = isPageCell || isDateTimeCell;
+          const isHeaderOverlay = isPageCell || isSubpageCell || isDateTimeCell;
           const headerChar = isPageCell
             ? pageStr[col]
-            : isDateTimeCell
-              ? dateTimeStr[col - 20]
-              : null;
-          const headerFg = isPageCell ? 'white' : isDateTimeCell ? 'yellow' : null;
+            : isSubpageCell
+              ? subpageStr[col - SUBPAGE_COL]
+              : isDateTimeCell
+                ? dateTimeStr[col - 20]
+                : null;
+          // Cyan, so the counter reads as a separate fact from the page number
+          // it sits beside rather than as more digits of it.
+          const headerFg = isPageCell
+            ? 'white'
+            : isSubpageCell
+              ? 'cyan'
+              : isDateTimeCell
+                ? 'yellow'
+                : null;
 
           const displayCell = headerChar !== null ? { ...cell, char: headerChar, fg: headerFg as typeof cell.fg } : cell;
           const hasGraphics = !isHeaderOverlay && typeof displayCell.graphics === 'number' && displayCell.graphics >= 0 && displayCell.graphics <= 63;

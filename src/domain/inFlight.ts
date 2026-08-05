@@ -32,7 +32,9 @@ export type PageActionName =
   | 'unpublish'
   | 'delete'
   | 'save-text'
-  | 'set-role';
+  | 'set-role'
+  | 'add-subpage'
+  | 'remove-subpage';
 
 /** What an in-flight action targets. */
 export type ActionScope =

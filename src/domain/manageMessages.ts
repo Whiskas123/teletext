@@ -59,6 +59,10 @@ export function actionLabel(action: PageActionName): string {
       return 'Save text';
     case 'set-role':
       return 'Set directory role';
+    case 'add-subpage':
+      return 'Add a subpage';
+    case 'remove-subpage':
+      return 'Remove the last subpage';
   }
 }
 
@@ -77,6 +81,10 @@ export function actionProgress(action: PageActionName): string {
       return 'Saving…';
     case 'set-role':
       return 'Setting role…';
+    case 'add-subpage':
+      return 'Adding a subpage…';
+    case 'remove-subpage':
+      return 'Removing the last subpage…';
   }
 }
 
@@ -95,6 +103,10 @@ export function actionDone(action: PageActionName): string {
       return 'text saved';
     case 'set-role':
       return 'directory role set';
+    case 'add-subpage':
+      return 'given another subpage';
+    case 'remove-subpage':
+      return 'one subpage shorter';
   }
 }
 

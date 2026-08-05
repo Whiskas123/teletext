@@ -25,6 +25,7 @@ import {
   describeRejection,
   isPublishablePage,
 } from '../../domain/publication';
+import { MAX_SUBPAGE, isSubpage } from '../../domain/subpages';
 import { createEmptyPage, type TeletextPage } from '../../types/teletext';
 import { TeletextGrid } from '../TeletextGrid/TeletextGrid';
 import { MenuEditor } from './MenuEditor';
@@ -32,6 +33,14 @@ import { blockedReason } from './captureMeta';
 
 export interface PublishDraft {
   pageNumber: string;
+  /**
+   * Which screen of the page's carousel to publish onto, as typed.
+   *
+   * A string like `pageNumber`, and for the same reason: a half-cleared field
+   * is not the number 0, and coercing early makes it fight back while it is
+   * being retyped.
+   */
+  subpage: string;
   title: string;
   description: string;
   shiftDown: boolean;
@@ -49,6 +58,8 @@ export interface PublishPanelProps {
   /** What is on the target page now, read live. */
   current: TeletextPage | null;
   targetEntry: PublishedEntry | null;
+  /** How many screens the target page already holds, so the field can say so. */
+  targetSubpageCount: number;
   draft: PublishDraft;
   onDraft(patch: Partial<PublishDraft>): void;
   menus: CustomMenu[];
@@ -64,6 +75,7 @@ export function PublishPanel({
   outgoing,
   current,
   targetEntry,
+  targetSubpageCount,
   draft,
   onDraft,
   menus,
@@ -84,6 +96,12 @@ export function PublishPanel({
 
   const target = Number(draft.pageNumber);
   const targetValid = Number.isInteger(target) && isPublishablePage(target);
+  const subpage = Number(draft.subpage);
+  const subpageValid = isSubpage(subpage);
+  // Publishing onto the screen after the last one extends the carousel;
+  // anything beyond that would leave a gap the arrows could never cross.
+  const subpageInReach = subpageValid && subpage <= targetSubpageCount + 1;
+  const extendsCarousel = subpageInReach && subpage > targetSubpageCount;
   const blocked = blockedReason(selected);
   const wouldLoseRow =
     sourcePage != null && draft.shiftDown && lastRowHasContent(sourcePage);
@@ -94,6 +112,7 @@ export function PublishPanel({
         <div>
           <h3 className="manage-compare-title">
             Will be published to {targetValid ? target : '—'}
+            {subpageValid && subpage > 1 ? ` · subpage ${subpage}` : ''}
           </h3>
           <div className="manage-preview">
             <TeletextGrid page={outgoing ?? createEmptyPage()} readOnly />
@@ -101,7 +120,11 @@ export function PublishPanel({
         </div>
         <div>
           <h3 className="manage-compare-title">
-            {current == null ? 'That page is empty' : 'That page shows now'}
+            {current == null
+              ? extendsCarousel
+                ? 'A new subpage'
+                : 'That page is empty'
+              : 'That page shows now'}
           </h3>
           <div
             className={`manage-preview${current == null ? ' manage-preview-empty' : ''}`}
@@ -156,21 +179,67 @@ export function PublishPanel({
         onDelete={onDeleteMenu}
       />
 
-      <label className="sidebar-field-label" htmlFor="manage-target">
-        Publish to page
-      </label>
-      <input
-        id="manage-target"
-        type="number"
-        min={100}
-        max={699}
-        className="landing-name-input"
-        value={draft.pageNumber}
-        onChange={(e) => onDraft({ pageNumber: e.target.value })}
-      />
+      {/*
+        * Page and subpage side by side, because they are one destination.
+        *
+        * The corpus already knows about subpages — `571-0002` is the second
+        * screen of page 571, and the capture's own `sub` is offered as the
+        * default — so publishing a multi-screen story is filling this in once
+        * per capture rather than flattening it onto separate page numbers.
+        */}
+      <div className="manage-target-row">
+        <span className="manage-reorder-field">
+          <label className="sidebar-field-label" htmlFor="manage-target">
+            Publish to page
+          </label>
+          <input
+            id="manage-target"
+            type="number"
+            min={100}
+            max={699}
+            className="landing-name-input"
+            value={draft.pageNumber}
+            onChange={(e) => onDraft({ pageNumber: e.target.value })}
+          />
+        </span>
+        <span className="manage-reorder-field">
+          <label className="sidebar-field-label" htmlFor="manage-target-subpage">
+            Subpage {targetValid ? `(page has ${targetSubpageCount})` : ''}
+          </label>
+          <input
+            id="manage-target-subpage"
+            type="number"
+            min={1}
+            max={MAX_SUBPAGE}
+            className="landing-name-input"
+            value={draft.subpage}
+            onChange={(e) => onDraft({ subpage: e.target.value })}
+          />
+        </span>
+      </div>
       {!targetValid && draft.pageNumber !== '' && (
         <p className="manage-note manage-note-error" role="status">
           {describeRejection('page-out-of-range')}
+        </p>
+      )}
+      {!subpageValid && draft.subpage !== '' && (
+        <p className="manage-note manage-note-error" role="status">
+          {describeRejection('subpage-out-of-range')}
+        </p>
+      )}
+      {subpageValid && !subpageInReach && (
+        // Refused rather than allowed and quietly renumbered: publishing to
+        // screen 5 of a two-screen page would leave screens 3 and 4 missing,
+        // and the arrows step one at a time, so nobody could ever reach it.
+        <p className="manage-note manage-note-error" role="status">
+          This page has {targetSubpageCount} subpage
+          {targetSubpageCount === 1 ? '' : 's'}, so the furthest you can publish
+          to is {targetSubpageCount + 1} — that one extends the carousel.
+        </p>
+      )}
+      {extendsCarousel && (
+        <p className="manage-note" role="status">
+          Publishing here adds subpage {subpage} to page {target}.
         </p>
       )}
 
@@ -224,7 +293,7 @@ export function PublishPanel({
       <button
         type="button"
         className="sidebar-action-btn"
-        disabled={publishBusy || blocked != null || !targetValid}
+        disabled={publishBusy || blocked != null || !targetValid || !subpageInReach}
         onClick={onPublish}
       >
         {publishBusy

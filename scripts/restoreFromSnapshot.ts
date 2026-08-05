@@ -23,10 +23,13 @@
 import { writeFile } from 'node:fs/promises';
 
 import { pageToCellMap } from '../src/domain/pageEncoding';
+import { MIN_SUBPAGE, pageKey } from '../src/domain/subpages';
 import { withPool } from './lib/pool';
 
 interface LivePageRow {
   page_number: number;
+  subpage: number;
+  subpage_count: number;
   cells: unknown;
   title: string;
   kind: string;
@@ -49,7 +52,8 @@ async function main(): Promise<void> {
 
   await withPool(async (pool) => {
     const { rows } = await pool.query<LivePageRow>(
-      'select page_number, cells, title, kind, description, updated_at from live_pages order by page_number',
+      'select page_number, subpage, subpage_count, cells, title, kind, description, updated_at' +
+        ' from live_pages order by page_number, subpage',
     );
 
     if (rows.length === 0) {
@@ -64,37 +68,54 @@ async function main(): Promise<void> {
       rows[0].updated_at,
     );
 
-    console.log(`${rows.length} pages in the backup, newest ${newest.toISOString()}`);
+    // A row is one screen; a page is one or more of them. Both counts are worth
+    // reporting — "418 pages" hides that some of them are carousels.
+    const pageNumbers = new Set(rows.map((row) => row.page_number));
+    const carousels = rows.filter((row) => row.subpage > MIN_SUBPAGE).length;
+    console.log(
+      `${pageNumbers.size} pages in the backup (${rows.length} screens, ` +
+        `${carousels} of them subpages), newest ${newest.toISOString()}`,
+    );
 
     // Split the report by range, because the two halves mean different things:
     // 100..699 can be re-published from the corpus, 700..999 is visitors' own
     // work and exists nowhere else.
-    const archive = rows.filter((r) => r.page_number < 700).length;
-    const playground = rows.length - archive;
+    const archive = [...pageNumbers].filter((page) => page < 700).length;
     console.log(`  archive (100-699):    ${archive}`);
-    console.log(`  playground (700-999): ${playground}`);
+    console.log(`  playground (700-999): ${pageNumbers.size - archive}`);
 
     if (out == null) {
       console.log('\nRe-run with --out <file> to write a restorable file.');
       return;
     }
 
-    const pages: Record<number, unknown> = {};
+    const pages: Record<string, unknown> = {};
     const titles: Record<number, string> = {};
     // Only headings are written: 'page' is the default, so storing it would
     // just be noise the import has to skip.
     const kinds: Record<number, string> = {};
     const descriptions: Record<number, string> = {};
+    // Restored explicitly rather than inferred from how many screens came back:
+    // a page whose last subpage was removed still has a blanked row in the
+    // document it was copied from, and guessing would resurrect it.
+    const subpageCounts: Record<number, number> = {};
     for (const row of rows) {
-      pages[row.page_number] = pageToCellMap(row.cells);
+      // Screens are keyed exactly as the live document keys them, so restoring
+      // stays a paste rather than a conversion.
+      pages[String(pageKey(row.page_number, row.subpage))] = pageToCellMap(row.cells);
+      // Title, role and description belong to the page: every one of its rows
+      // carries the same values, so writing them once per row is idempotent.
       if (row.title.length > 0) titles[row.page_number] = row.title;
       if (row.kind !== 'page') kinds[row.page_number] = row.kind;
       if (row.description.length > 0) descriptions[row.page_number] = row.description;
+      if (row.subpage_count > MIN_SUBPAGE) {
+        subpageCounts[row.page_number] = row.subpage_count;
+      }
     }
 
     await writeFile(
       out,
-      JSON.stringify({ pages, titles, kinds, descriptions }, null, 2),
+      JSON.stringify({ pages, titles, kinds, descriptions, subpageCounts }, null, 2),
       'utf8',
     );
     console.log(`\nWrote ${out} — load it from the app's import screen as admin.`);

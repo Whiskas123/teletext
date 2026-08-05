@@ -29,6 +29,7 @@ import { PAGES_CHANNEL } from './useEditPage';
 import { TITLES_CHANNEL } from './useGuide';
 import { PAGE_KINDS_CHANNEL } from './usePageKinds';
 import { DESCRIPTIONS_CHANNEL, type DescriptionsData } from './usePageText';
+import { SUBPAGE_COUNTS_CHANNEL, type SubpageCounts } from '../domain/subpages';
 import type { PageKinds } from '../domain/directory';
 import type { PagesData, TitlesData } from './types';
 
@@ -60,6 +61,10 @@ export function useSnapshot(): SnapshotApi {
   const [titles] = usePageData<TitlesData>(TITLES_CHANNEL, {});
   const [kinds] = usePageData<PageKinds>(PAGE_KINDS_CHANNEL, {});
   const [descriptions] = usePageData<DescriptionsData>(DESCRIPTIONS_CHANNEL, {});
+  // Sent alongside the pages: the cell maps carry a page's screens, but only
+  // this says how many of them the carousel actually has, and a restore that
+  // guessed from the keys would resurrect subpages that were removed.
+  const [subpageCounts] = usePageData<SubpageCounts>(SUBPAGE_COUNTS_CHANNEL, {});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<SnapshotOutcome | null>(null);
@@ -84,6 +89,7 @@ export function useSnapshot(): SnapshotApi {
           titles: titles ?? {},
           kinds: kinds ?? {},
           descriptions: descriptions ?? {},
+          subpageCounts: subpageCounts ?? {},
         }),
       });
 
@@ -109,7 +115,7 @@ export function useSnapshot(): SnapshotApi {
     } finally {
       setSaving(false);
     }
-  }, [pages, titles, kinds, descriptions, pageCount]);
+  }, [pages, titles, kinds, descriptions, subpageCounts, pageCount]);
 
   return { snapshot, saving, error, lastResult, pageCount };
 }

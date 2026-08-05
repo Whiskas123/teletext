@@ -64,15 +64,19 @@ const setDisplayedPage = vi.fn<RoomSyncApi['setDisplayedPage']>(() => null);
 const setDisplayedPageDirect = vi.fn<RoomSyncApi['setDisplayedPageDirect']>();
 const gotoNextNonEmpty = vi.fn<RoomSyncApi['gotoNextNonEmpty']>(() => 'ok');
 const gotoPrevNonEmpty = vi.fn<RoomSyncApi['gotoPrevNonEmpty']>(() => 'ok');
+const stepSubpageBy = vi.fn<RoomSyncApi['stepSubpageBy']>();
 
-function setRoomSync(displayedPageNumber: number) {
+function setRoomSync(displayedPageNumber: number, subpages = { subpage: 1, count: 1 }) {
   useRoomSyncMock.mockReturnValue({
     displayedPageNumber,
+    displayedSubpage: subpages.subpage,
+    subpageCount: subpages.count,
     page: createEmptyPage(),
     setDisplayedPage,
     setDisplayedPageDirect,
     gotoNextNonEmpty,
     gotoPrevNonEmpty,
+    stepSubpageBy,
   });
 }
 
@@ -90,6 +94,7 @@ describe('RoomViewer', () => {
     setDisplayedPageDirect.mockClear();
     gotoNextNonEmpty.mockClear();
     gotoPrevNonEmpty.mockClear();
+    stepSubpageBy.mockClear();
     submitMock.mockClear();
   });
 
@@ -102,7 +107,7 @@ describe('RoomViewer', () => {
     );
   });
 
-  it('shows the remote control and yellow pages objects (no prev/next)', () => {
+  it('shows the remote control and yellow pages objects, and no page stepping', () => {
     setRoomSync(100);
     renderViewer();
     expect(
@@ -111,8 +116,28 @@ describe('RoomViewer', () => {
     expect(
       screen.getByRole('button', { name: 'Yellow pages' }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /prev/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /next/i })).not.toBeInTheDocument();
+    // Which page a room watches is the vote's to decide, so the solo set's
+    // page knobs are decoration here. The *subpage* knobs are not stepping
+    // between pages and are asserted separately below.
+    expect(
+      screen.queryByRole('button', { name: /previous page/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /next page/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('steps the whole room through a page carousel without a vote', async () => {
+    const user = userEvent.setup();
+    setRoomSync(220, { subpage: 1, count: 3 });
+    renderViewer();
+
+    await user.click(screen.getByRole('button', { name: /next subpage/i }));
+
+    // Straight to the shared state: a subpage is part of the page the room
+    // already agreed on, so turning to it is reading rather than changing.
+    expect(stepSubpageBy).toHaveBeenCalledWith(1);
+    expect(setDisplayedPage).not.toHaveBeenCalled();
   });
 
   it('opens the yellow pages directory without changing the displayed page', async () => {

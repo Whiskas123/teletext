@@ -24,12 +24,19 @@ import { useCallback, useState } from 'react';
 import { usePageData } from '@playhtml/react';
 
 import { isValidCell } from '../domain/cellEdit';
+import { MIN_SUBPAGE, pageKey } from '../domain/subpages';
 import { TOTAL_CELLS, type Cell, type PagesData, type TeletextPage } from './types';
 import { PAGES_CHANNEL } from './useEditPage';
 
 /** One page's worth of import: where it goes, and what goes there. */
 export interface PageImport {
   pageNumber: number;
+  /**
+   * Which screen of the page's carousel to replace, defaulting to the first.
+   * A subpage is a whole page under its own key, so it is replaced wholesale
+   * like any other — only the key differs (see `domain/subpages.ts`).
+   */
+  subpage?: number;
   page: TeletextPage;
 }
 
@@ -71,14 +78,14 @@ export function useImportPages(): ImportPagesApi {
 
       try {
         setPages((draft) => {
-          for (const { pageNumber, page } of writable) {
+          for (const { pageNumber, subpage, page } of writable) {
             // A fresh map per page, replacing whatever was there: an imported
             // page is the render, not the render merged over the old content.
             const cellMap: Record<number, Cell> = {};
             for (let index = 0; index < TOTAL_CELLS; index += 1) {
               cellMap[index] = { ...page[index] };
             }
-            draft[pageNumber] = cellMap;
+            draft[pageKey(pageNumber, subpage ?? MIN_SUBPAGE) as number] = cellMap;
           }
         });
         setSaveError(null);

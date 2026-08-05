@@ -6,6 +6,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 
 import { OnAirPanel, type OnAirPanelProps } from './OnAirPanel';
 import { useOnAirState } from './useOnAirState';
@@ -57,6 +58,12 @@ function Harness(overrides: Partial<OnAirPanelProps> = {}) {
       descriptionOf={() => ''}
       kindOf={() => 'page'}
       livePage={() => null}
+      publicationAt={(pageNumber, subpage) =>
+        subpage === 1 ? (published.get(pageNumber) ?? null) : null
+      }
+      subpageCountOfPage={() => 1}
+      onAddSubpage={vi.fn()}
+      onRemoveLastSubpage={vi.fn()}
       onNudge={vi.fn()}
       onMoveTo={vi.fn()}
       onDelete={vi.fn()}
@@ -74,7 +81,13 @@ function Harness(overrides: Partial<OnAirPanelProps> = {}) {
 }
 
 const renderPanel = (overrides: Partial<OnAirPanelProps> = {}) =>
-  render(<Harness {...overrides} />);
+  // A card links straight into the editor on the subpage it is showing, and
+  // a <Link> needs a router around it.
+  render(
+    <MemoryRouter>
+      <Harness {...overrides} />
+    </MemoryRouter>,
+  );
 
 const filterInput = () => screen.getByLabelText(/find a page/i);
 const shownPages = () =>

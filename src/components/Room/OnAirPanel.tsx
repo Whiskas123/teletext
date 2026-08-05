@@ -57,7 +57,13 @@ export interface OnAirPanelProps {
   titleOf(pageNumber: number): string;
   descriptionOf(pageNumber: number): string;
   kindOf(pageNumber: number): PageKind;
-  livePage(pageNumber: number): TeletextPage | null;
+  livePage(pageNumber: number, subpage?: number): TeletextPage | null;
+  /** The record for one screen of a page, or null when that screen has none. */
+  publicationAt(pageNumber: number, subpage: number): PublishedEntry | null;
+  /** How many screens each page holds. */
+  subpageCountOfPage(pageNumber: number): number;
+  onAddSubpage(pageNumber: number): void;
+  onRemoveLastSubpage(pageNumber: number): void;
   onNudge(pageNumber: number, delta: -1 | 1): void;
   onMoveTo(pageNumber: number, destination: number): void;
   onDelete(pageNumber: number, title: string): void;
@@ -84,6 +90,10 @@ export function OnAirPanel({
   descriptionOf,
   kindOf,
   livePage,
+  publicationAt,
+  subpageCountOfPage,
+  onAddSubpage,
+  onRemoveLastSubpage,
   onNudge,
   onMoveTo,
   onDelete,
@@ -163,9 +173,13 @@ export function OnAirPanel({
       <OnAirPageCard
         key={row.pageNumber}
         row={row}
-        entry={publicationsByPage.get(row.pageNumber) ?? null}
+        // The card steps through the carousel itself, so it asks for the record
+        // and the content of the screen it is showing rather than being handed
+        // the page's. Which screen a card is on is the card's own business.
+        publicationAt={(subpage) => publicationAt(row.pageNumber, subpage)}
         kind={kindOf(row.pageNumber)}
-        readContent={() => livePage(row.pageNumber)}
+        subpageCount={subpageCountOfPage(row.pageNumber)}
+        readContent={(subpage) => livePage(row.pageNumber, subpage)}
         occupied={occupied}
         stored={stored}
         draft={editorOpen ? (state.editor?.draft ?? null) : null}
@@ -189,6 +203,8 @@ export function OnAirPanel({
         outcome={outcomes.get(row.pageNumber) ?? null}
         on={{
           nudge: (delta) => onNudge(row.pageNumber, delta),
+          addSubpage: () => onAddSubpage(row.pageNumber),
+          removeLastSubpage: () => onRemoveLastSubpage(row.pageNumber),
           openMover: () => state.openMover(row.pageNumber),
           closeMover: state.closeMover,
           setDestination: state.setDestination,

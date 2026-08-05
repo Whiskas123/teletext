@@ -180,6 +180,46 @@ describe('searchPages', () => {
     expect(searchPages(pages, 'zzzz')).toEqual([]);
   });
 
+  it('finds text on a later screen of a carousel', () => {
+    // The reason subpages are searched at all: a long story lives on screens
+    // 2 and 3, which a reader can only reach with the subpage arrows.
+    const carousel: SearchablePage[] = [
+      { pageNumber: 220, subpage: 1, title: 'Desporto', page: pageWith(2, 0, 'RESULTADOS') },
+      { pageNumber: 220, subpage: 2, title: 'Desporto', page: pageWith(3, 0, 'CLASSIFICACAO') },
+    ];
+    const [hit] = searchPages(carousel, 'CLASSIFICACAO');
+    expect(hit.pageNumber).toBe(220);
+    expect(hit.subpage).toBe(2);
+    expect(hit.row).toBe(3);
+  });
+
+  it('matches a title once per page, not once per screen', () => {
+    // The title belongs to the page. Returning a three-screen page three times
+    // for one hit on its name would bury everything else in the results.
+    const carousel: SearchablePage[] = [
+      { pageNumber: 220, subpage: 1, title: 'Desporto', page: createEmptyPage() },
+      { pageNumber: 220, subpage: 2, title: 'Desporto', page: createEmptyPage() },
+      { pageNumber: 220, subpage: 3, title: 'Desporto', page: createEmptyPage() },
+    ];
+    expect(searchPages(carousel, 'Desporto')).toHaveLength(1);
+  });
+
+  it('orders screens of a page after each other, in carousel order', () => {
+    const carousel: SearchablePage[] = [
+      { pageNumber: 220, subpage: 3, title: '', page: pageWith(0, 0, 'SAME') },
+      { pageNumber: 220, subpage: 1, title: '', page: pageWith(0, 0, 'SAME') },
+      { pageNumber: 210, subpage: 2, title: '', page: pageWith(0, 0, 'SAME') },
+    ];
+    expect(
+      searchPages(carousel, 'SAME').map((h) => `${h.pageNumber}.${h.subpage}`),
+    ).toEqual(['210.2', '220.1', '220.3']);
+  });
+
+  it('treats an entry with no subpage as the page itself', () => {
+    // Every caller written before carousels existed keeps meaning what it meant.
+    expect(searchPages(pages, 'BENFICA')[0].subpage).toBe(1);
+  });
+
   it('never throws, and drops entries that are not pages', () => {
     // The listing comes from playhtml, which any client can write to.
     fc.assert(

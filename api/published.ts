@@ -44,15 +44,15 @@ export default async function handler(
     if (req.method === 'GET') {
       const rows = await db()`
         select
-          p.page_number, p.title, p.description, p.published_at, p.capture_id,
-          p.shift_down, p.menu_id,
+          p.page_number, p.subpage, p.title, p.description, p.published_at,
+          p.capture_id, p.shift_down, p.menu_id,
           c.source, c.original_page, c.sub, c.topic, c.scheme,
           c.first_seen, c.manifest_title,
           m.name as menu_name
         from published_pages p
         join archive_captures c on c.id = p.capture_id
         left join custom_menus m on m.id = p.menu_id
-        order by p.page_number
+        order by p.page_number, p.subpage
       `;
       json(res, 200, { published: rows });
       return;
@@ -88,7 +88,7 @@ export default async function handler(
       return;
     }
 
-    const { pageNumber, title, description } = validated.value;
+    const { pageNumber, subpage, title, description } = validated.value;
 
     // The transforms, in the order they have to happen: shifting moves the
     // capture's own bottom row off the page, and only then is there a clean
@@ -114,11 +114,11 @@ export default async function handler(
 
     await db()`
       insert into published_pages
-        (page_number, capture_id, title, description, shift_down, menu_id, published_at)
+        (page_number, subpage, capture_id, title, description, shift_down, menu_id, published_at)
       values
-        (${pageNumber}, ${captureId}, ${title}, ${description},
+        (${pageNumber}, ${subpage}, ${captureId}, ${title}, ${description},
          ${shiftDown}, ${useMenu ? menuId : null}, now())
-      on conflict (page_number) do update
+      on conflict (page_number, subpage) do update
         set capture_id   = excluded.capture_id,
             title        = excluded.title,
             description  = excluded.description,
@@ -129,6 +129,7 @@ export default async function handler(
 
     json(res, 200, {
       pageNumber,
+      subpage,
       title,
       description,
       shiftDown,

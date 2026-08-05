@@ -87,6 +87,11 @@ function makeData(overrides: Partial<ArchiveAdminApi> = {}): ArchiveAdminApi {
     total: 0,
     published,
     publishedByPage: new Map(published.map((e) => [e.page_number, e])),
+    publicationAt: (pageNumber, subpage) =>
+      subpage === 1 ? (published.find((e) => e.page_number === pageNumber) ?? null) : null,
+    subpageCountOfPage: () => 1,
+    addSubpage: vi.fn().mockReturnValue(2),
+    removeLastSubpage: vi.fn().mockResolvedValue(null),
     menus: [],
     loading: false,
     error: null,

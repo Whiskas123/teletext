@@ -66,6 +66,8 @@ export interface ManageActionsInput {
 
 export interface PublishInput {
   pageNumber: number;
+  /** Screen of the page's carousel, defaulting to the first. */
+  subpage?: number;
   captureId: number;
   title: string;
   description: string;
@@ -95,6 +97,10 @@ export interface ManageActionsApi {
   closeConfirm(): void;
   confirmAction(): void;
   nudge(pageNumber: number, delta: -1 | 1): void;
+  /** Give a page one more screen. */
+  addSubpage(pageNumber: number): void;
+  /** Take a page's last screen away, with its publication record. */
+  removeLastSubpage(pageNumber: number): void;
   /** Send a page to a page number the operator chose. */
   moveTo(pageNumber: number, destination: number): void;
   setRole(pageNumber: number, kind: PageKind): void;
@@ -238,6 +244,45 @@ export function useManageActions({
       move(pageNumber, destination, 'move-to');
     },
     [move],
+  );
+
+  /**
+   * Lengthen or shorten a page's carousel.
+   *
+   * Run through `runAction` like everything else rather than called straight,
+   * even though adding a screen is one synchronous write: the card's controls
+   * disable off `pageBusy`, and a control that stayed live during its own action
+   * is exactly how a page ends up with two screens from one double-click.
+   *
+   * Refusals — at the cap, or down to the last screen — return `null` rather
+   * than throwing, and are reported as a failure with the reason rather than
+   * silently doing nothing.
+   */
+  const addSubpage = useCallback(
+    (pageNumber: number) => {
+      runPageAction(pageNumber, 'add-subpage', async () => {
+        const added = data.addSubpage(pageNumber);
+        return added == null
+          ? { ok: false as const, error: `Page ${pageNumber} is already at the maximum.` }
+          : { ok: true as const };
+      });
+    },
+    [runPageAction, data],
+  );
+
+  const removeLastSubpage = useCallback(
+    (pageNumber: number) => {
+      runPageAction(pageNumber, 'remove-subpage', async () => {
+        const remaining = await data.removeLastSubpage(pageNumber);
+        return remaining == null
+          ? {
+              ok: false as const,
+              error: `Page ${pageNumber} has only one subpage, which is the page itself.`,
+            }
+          : { ok: true as const };
+      });
+    },
+    [runPageAction, data],
   );
 
   const setRole = useCallback(
@@ -438,6 +483,8 @@ export function useManageActions({
     closeConfirm,
     confirmAction,
     nudge,
+    addSubpage,
+    removeLastSubpage,
     moveTo,
     setRole,
     saveText,

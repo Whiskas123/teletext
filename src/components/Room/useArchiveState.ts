@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { CaptureFilters, CaptureSummary } from '../../collab/useArchiveAdmin';
 import { DEFAULT_PAGE_KIND, type PageKind } from '../../domain/directory';
 import { MAX_TITLE_LENGTH } from '../../domain/publication';
+import { MAX_SUBPAGE, MIN_SUBPAGE } from '../../domain/subpages';
 import type { TeletextPage } from '../../types/teletext';
 import type { PublishDraft } from './PublishPanel';
 
@@ -27,6 +28,7 @@ const TERM_DEBOUNCE_MS = 300;
 
 const EMPTY_DRAFT: PublishDraft = {
   pageNumber: '',
+  subpage: '1',
   title: '',
   description: '',
   // On by default: most captures carry a menu strip on their bottom row that the
@@ -116,6 +118,19 @@ export function useArchiveState(): ArchiveState {
     setDraftState({
       ...EMPTY_DRAFT,
       pageNumber: String(capture.original_page),
+      // The capture already knows which screen of its story it was: RTP wrote
+      // `01`, SIC wrote `0001`, and `sub_index` is the parsed form. Offering it
+      // is what makes publishing a multi-screen story one field per capture
+      // instead of a decision to re-derive each time. Out-of-range values fall
+      // back to the first screen rather than pre-filling something refusable —
+      // a few captures carry sub numbers far past any sane carousel.
+      subpage: String(
+        capture.sub_index != null &&
+          capture.sub_index >= MIN_SUBPAGE &&
+          capture.sub_index <= MAX_SUBPAGE
+          ? capture.sub_index
+          : MIN_SUBPAGE,
+      ),
       title: capture.manifest_title?.slice(0, MAX_TITLE_LENGTH) ?? '',
     });
   }, []);

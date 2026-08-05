@@ -51,9 +51,12 @@ function App() {
           {/* Landing: watch solo, watch together, or edit. */}
           <Route path="/" element={<Landing />} />
 
-          {/* Watching on your own — no chat, no vote, no name needed. */}
+          {/* Watching on your own — no chat, no vote, no name needed. The
+              optional third segment is the subpage, so a link can point at one
+              screen of a carousel rather than only at the page it starts on. */}
           <Route path="/watch" element={<SoloViewer />} />
           <Route path="/watch/:pageNumber" element={<SoloViewer />} />
+          <Route path="/watch/:pageNumber/:subpage" element={<SoloViewer />} />
 
           {/* Watch-only co-watching in a room (Req 3–5, 9). */}
           <Route
@@ -68,6 +71,7 @@ function App() {
           {/* Solo editing of the global teletext pages/titles. */}
           <Route path="/edit" element={<SoloEditor />} />
           <Route path="/edit/:pageNumber" element={<SoloEditor />} />
+          <Route path="/edit/:pageNumber/:subpage" element={<SoloEditor />} />
 
           {/* Moderator sign-in (device-local; see collab/moderator.ts). */}
           <Route path="/moderator" element={<ModeratorLogin />} />

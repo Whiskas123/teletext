@@ -22,6 +22,7 @@
 
 import { isArchivePage } from './access';
 import { toInteger } from './coerce';
+import { MAX_SUBPAGE, MIN_SUBPAGE, isSubpage } from './subpages';
 import { MAX_TITLE_LENGTH, validateTitle } from './titles';
 
 /** Longest description accepted for a published page. */
@@ -32,6 +33,7 @@ export { MAX_TITLE_LENGTH };
 /** Why a publication request was refused. */
 export type PublicationRejection =
   | 'page-out-of-range'
+  | 'subpage-out-of-range'
   | 'capture-missing'
   | 'capture-not-decoded'
   | 'title-too-long'
@@ -40,6 +42,15 @@ export type PublicationRejection =
 /** A validated publication, with its text already trimmed. */
 export interface Publication {
   pageNumber: number;
+  /**
+   * Which screen of the page's carousel this goes on, from 1.
+   *
+   * Rejected rather than clamped, unlike the viewer's own handling of a stale
+   * subpage: a request to publish to screen 40 is a mistake, and quietly
+   * putting the capture on screen 26 instead would overwrite something the
+   * operator did not name.
+   */
+  subpage: number;
   captureId: number;
   title: string;
   description: string;
@@ -54,6 +65,8 @@ export function describeRejection(reason: PublicationRejection): string {
   switch (reason) {
     case 'page-out-of-range':
       return 'Page number must be between 100 and 699 — 700 and above is the open playground.';
+    case 'subpage-out-of-range':
+      return `Subpage must be between ${MIN_SUBPAGE} and ${MAX_SUBPAGE}.`;
     case 'capture-missing':
       return 'That capture is not in the archive.';
     case 'capture-not-decoded':
@@ -85,6 +98,13 @@ export function validatePublication(
     return { ok: false, reason: 'page-out-of-range' };
   }
 
+  // Absent means the page itself, so every caller written before subpages
+  // existed keeps meaning what it meant.
+  const subpage = input.subpage === undefined ? MIN_SUBPAGE : toInteger(input.subpage);
+  if (subpage == null || !isSubpage(subpage)) {
+    return { ok: false, reason: 'subpage-out-of-range' };
+  }
+
   const captureId = toInteger(input.captureId);
   if (captureId == null || captureId <= 0 || !capture.exists) {
     return { ok: false, reason: 'capture-missing' };
@@ -108,6 +128,7 @@ export function validatePublication(
     ok: true,
     value: {
       pageNumber,
+      subpage,
       captureId,
       title: title.value,
       description: rawDescription,

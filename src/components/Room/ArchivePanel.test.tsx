@@ -68,6 +68,8 @@ function Harness(overrides: Partial<ArchivePanelProps> = {}) {
       livePage={() => null}
       transform={(page) => page}
       publicationsByPage={new Map()}
+      publicationAt={() => null}
+      subpageCountOfPage={() => 1}
       publishBusy={false}
       onPublish={vi.fn()}
       onPublishBatch={vi.fn()}

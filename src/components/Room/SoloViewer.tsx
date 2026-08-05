@@ -108,15 +108,28 @@ function SoloRemote({
  * pages directory.
  */
 export function SoloViewer({ pageNumber: pageNumberProp }: SoloViewerProps) {
-  const params = useParams<{ pageNumber: string }>();
+  const params = useParams<{ pageNumber: string; subpage: string }>();
   const parsedParam = params.pageNumber
     ? parseInt(params.pageNumber, 10)
     : NaN;
   const initialPageNumber =
     pageNumberProp ?? (Number.isFinite(parsedParam) ? parsedParam : undefined);
 
-  const { displayedPageNumber, page, setDisplayedPage, gotoNextNonEmpty, gotoPrevNonEmpty } =
-    useSoloView(initialPageNumber);
+  const parsedSubpage = params.subpage ? parseInt(params.subpage, 10) : NaN;
+
+  const {
+    displayedPageNumber,
+    subpage,
+    subpageCount,
+    page,
+    setDisplayedPage,
+    gotoNextNonEmpty,
+    gotoPrevNonEmpty,
+    stepSubpageBy,
+  } = useSoloView(
+    initialPageNumber,
+    Number.isFinite(parsedSubpage) ? parsedSubpage : undefined,
+  );
 
   const { displayNumber, shownPage, skipRoll } = usePageRoll(displayedPageNumber, page);
 
@@ -157,10 +170,12 @@ export function SoloViewer({ pageNumber: pageNumberProp }: SoloViewerProps) {
     };
   }, [openObject]);
 
-  // No vote to route through: selections apply straight away.
+  // No vote to route through: selections apply straight away. A search result
+  // carries the screen it matched on, so choosing it lands on the words that
+  // were found rather than on the first screen of the carousel holding them.
   const handleSelectPage = useCallback(
-    (target: number) => {
-      setDisplayedPage(target);
+    (target: number, subpage?: number) => {
+      setDisplayedPage(target, subpage);
       setOpenObject(null);
     },
     [setDisplayedPage],
@@ -196,6 +211,8 @@ export function SoloViewer({ pageNumber: pageNumberProp }: SoloViewerProps) {
               <TeletextGrid
                 page={shownPage}
                 pageNumber={displayNumber}
+                subpage={subpage}
+                subpageCount={subpageCount}
                 readOnly
                 onIndexPageSelect={handleSelectPage}
               />
@@ -203,28 +220,59 @@ export function SoloViewer({ pageNumber: pageNumberProp }: SoloViewerProps) {
           </div>
           <div className="tv-controls">
             <div className="tv-speaker" aria-hidden="true" />
-            {/* The chassis knobs, which used to be decoration. A set's tuning
-                knobs stepped through channels, so stepping through pages is what
-                they should have done all along. */}
-            <div className="tv-knobs">
-              <button
-                type="button"
-                className="tv-knob tv-knob-btn"
-                aria-label="Previous page with content"
-                title="Previous page"
-                onClick={stepPrev}
-              >
-                <span aria-hidden="true">‹</span>
-              </button>
-              <button
-                type="button"
-                className="tv-knob tv-knob-btn"
-                aria-label="Next page with content"
-                title="Next page"
-                onClick={stepNext}
-              >
-                <span aria-hidden="true">›</span>
-              </button>
+            <div className="tv-knob-stack">
+              {/* The chassis knobs, which used to be decoration. A set's tuning
+                  knobs stepped through channels, so stepping through pages is
+                  what they should have done all along. */}
+              <div className="tv-knobs">
+                <button
+                  type="button"
+                  className="tv-knob tv-knob-btn"
+                  aria-label="Previous page with content"
+                  title="Previous page"
+                  onClick={stepPrev}
+                >
+                  <span aria-hidden="true">‹</span>
+                </button>
+                <button
+                  type="button"
+                  className="tv-knob tv-knob-btn"
+                  aria-label="Next page with content"
+                  title="Next page"
+                  onClick={stepNext}
+                >
+                  <span aria-hidden="true">›</span>
+                </button>
+              </div>
+              {/*
+                * The subpage pair: smaller, and tucked under the page knobs
+                * rather than beside them, because they are the same gesture at a
+                * smaller scale — a carousel is inside a page, not next to it.
+                * Left enabled on a page with one screen: the step is a no-op
+                * (see `stepSubpage`), and controls that vanish as you change
+                * page read as a fault rather than as information. The counter
+                * in the header already says whether there is anywhere to go.
+                */}
+              <div className="tv-knobs tv-knobs-sub">
+                <button
+                  type="button"
+                  className="tv-knob tv-knob-btn tv-knob-btn-sm"
+                  aria-label={`Previous subpage (showing ${subpage} of ${subpageCount})`}
+                  title="Previous subpage"
+                  onClick={() => stepSubpageBy(-1)}
+                >
+                  <span aria-hidden="true">‹</span>
+                </button>
+                <button
+                  type="button"
+                  className="tv-knob tv-knob-btn tv-knob-btn-sm"
+                  aria-label={`Next subpage (showing ${subpage} of ${subpageCount})`}
+                  title="Next subpage"
+                  onClick={() => stepSubpageBy(1)}
+                >
+                  <span aria-hidden="true">›</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -40,6 +40,7 @@ import { usePageData } from '@playhtml/react';
 
 import { isValidCell } from '../domain/cellEdit';
 import { normalizePage } from '../domain/pageOps';
+import { MIN_SUBPAGE, pageKey } from '../domain/subpages';
 import {
   TOTAL_CELLS,
   type Cell,
@@ -88,17 +89,26 @@ function isCellIndexInRange(index: number): boolean {
  * Bind solo editing of a single GLOBAL Page_Number to playhtml.
  *
  * @param pageNumber the Page_Number being edited (assumed a valid 1..999 page).
+ * @param subpage which screen of that page's carousel, defaulting to the first.
+ *   Only the key changes: a subpage is a whole page in its own right, so every
+ *   merge guarantee above holds per subpage rather than per page number (see
+ *   `domain/subpages.ts`).
  */
-export function useEditPage(pageNumber: number): EditPageApi {
+export function useEditPage(
+  pageNumber: number,
+  subpage: number = MIN_SUBPAGE,
+): EditPageApi {
   const [pages, setPages] = usePageData<PagesData>(PAGES_CHANNEL, {});
 
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  const key = pageKey(pageNumber, subpage) as number;
+
   // Normalize the stored cell-indexed map (or absent entry) into a valid
   // 960-cell page for rendering (Req 6.4, 7.4, 7.7).
   const page = useMemo<TeletextPage>(
-    () => normalizePage(pages ? pages[pageNumber] : undefined),
-    [pages, pageNumber],
+    () => normalizePage(pages ? pages[key] : undefined),
+    [pages, key],
   );
 
   const editCell = useCallback(
@@ -116,10 +126,10 @@ export function useEditPage(pageNumber: number): EditPageApi {
         // invariant (960 cells, other cells retained) is guaranteed on read by
         // normalizePage.
         setPages((draft) => {
-          let cellMap = draft[pageNumber];
+          let cellMap = draft[key];
           if (cellMap == null) {
             cellMap = {};
-            draft[pageNumber] = cellMap;
+            draft[key] = cellMap;
           }
           // Store a plain clone of the validated cell under its index key. This
           // persists the change to the Playhtml_Store (Req 6.1, 7.2, 7.3) and
@@ -138,7 +148,7 @@ export function useEditPage(pageNumber: number): EditPageApi {
 
       return 'ok';
     },
-    [setPages, pageNumber],
+    [setPages, key],
   );
 
   return { page, editCell, saveError };

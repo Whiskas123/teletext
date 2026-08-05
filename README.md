@@ -23,6 +23,57 @@ From the landing page:
 - **Blink brush** — set the teletext blink flag on cells; Alt+click removes it.
 - **Recent brushes** — the last 8 block/pixel brushes you painted with, with `◀` / `▶` (or `[` / `]`) to step back and forth through them and a strip to jump straight to one.
 - **Export PNG** downloads the current page (including double-height cells, rendered the same way); **Clear page** wipes it (with a confirm).
+- **Subpages** — the "Subpage" section steps through the page's carousel with `‹ X/Y ›` and adds or removes a screen. Everything else in the editor applies to the screen you are on, so each subpage is a page in its own right. See [Subpages](#subpages).
+
+## Subpages
+
+A teletext page could not be longer than 40×24, so a page with more to say than
+fits was broadcast as a **carousel**: page 220 cycling through 220-1, 220-2,
+220-3, each a whole page of its own, with the header saying which one you were
+looking at. The corpus records this already — `571-0002` is the second screen of
+page 571, not a second page — so until now it was information the archive held
+and the site threw away.
+
+- **Watching**, the header shows `X/Y` beside the page number, always, including
+  `1/1`. A second, smaller pair of knobs under the page knobs steps through the
+  carousel, wrapping at both ends. In a room the subpage is synchronized like the
+  page number but needs no vote: the room agreed on a page, and turning to the
+  next screen of it is reading what was agreed rather than changing it.
+- **Editing**, the "Subpage" section steps through the screens and adds or
+  removes one. "Remove last" takes the *last* screen rather than the one on show,
+  because subpages are numbered by position and removing from the middle would
+  renumber everything after it.
+- **Searching** covers every screen, since a long story lives on the later ones —
+  exactly the content that is hard to find by arrowing through pages. A result
+  from screen 2 of page 220 reads `220-2` and lands you there.
+- **`/manage`** carries the subpage into the publication: each card has the same
+  `‹ X/Y ›` strip with add / remove and a link straight into the editor, and the
+  publish panel has a subpage field beside the page number, pre-filled from the
+  capture's own `sub`.
+
+### How they are stored
+
+Subpage 1 keeps the plain page-number key it has always had, and subpages 2+ get
+a composite `"220.2"` key in the same `pages` channel — see
+[`src/domain/subpages.ts`](src/domain/subpages.ts). Nothing needed migrating,
+because every page in the document already *is* its own subpage 1, and every
+existing reader kept working and kept meaning what it meant: `pages[220]` is
+still what page 220 shows when you dial it. A reader with no notion of subpages
+*skips* the composite keys rather than misreading them, because `Number("220.2")`
+is not an integer and all of them already guard with `Number.isInteger` — which
+is asserted as a property test rather than assumed, since a regression there
+would corrupt pages silently instead of failing.
+
+How many screens a page has is **stored**, in its own channel, rather than
+counted from the keys present. Twice over that is what works: a subpage that has
+just been added is empty and would count as absent, and playhtml's draft is a
+Proxy with no `deleteProperty` trap — so removing a subpage can only blank its
+cells, never take the key away, and a derived count could rise and never fall.
+
+`published_pages` and `live_pages` are keyed by `(page_number, subpage)`
+([008](db/migrations/008_subpages.sql)). The backup one is not optional: without
+it a snapshot would store screen 1 of every carousel, report success, and drop
+the rest — a restore that looks fine and is quietly short.
 
 ## Archive vs. playground
 
@@ -53,9 +104,10 @@ The playhtml channels:
 
 | Channel | Scope | Contents |
 |---|---|---|
-| `pages` | global | `{ [pageNumber]: { [cellIndex]: Cell } }` — one Yjs key per cell, so concurrent edits to different cells merge and edits to the same cell converge last-writer-wins |
+| `pages` | global | `{ [pageNumber]: { [cellIndex]: Cell } }` — one Yjs key per cell, so concurrent edits to different cells merge and edits to the same cell converge last-writer-wins. Subpages 2+ live under a composite `"220.2"` key in the same map (see [Subpages](#subpages)) |
 | `titles` | global | page titles for the yellow pages directory |
 | `page-kinds` | global | whether each page is a category, subcategory, subsubcategory or ordinary page — the directory's shape |
+| `subpage-counts` | global | how many screens each page's carousel holds; absent means one |
 | `descriptions` | global | page descriptions, so pages made by hand can have one too |
 | `room-sync:<roomId>` | per room | the page the room is watching |
 | `chat:<roomId>` | per room | the room's messages |
@@ -69,9 +121,9 @@ Decision logic lives in `src/domain/` — framework-free and covered by ~20 [fas
 | Route | Screen |
 |---|---|
 | `/` | Landing — the three entry points |
-| `/watch`, `/watch/:pageNumber` | Solo viewer |
+| `/watch`, `/watch/:pageNumber`, `/watch/:pageNumber/:subpage` | Solo viewer |
 | `/room/:roomId` | Room viewer (chat, presence, voting) |
-| `/edit`, `/edit/:pageNumber` | Editor |
+| `/edit`, `/edit/:pageNumber`, `/edit/:pageNumber/:subpage` | Editor |
 | `/moderator` | Moderator sign-in |
 | `/import` | Decode archive renders into pages (admin) |
 | `/manage` | Choose which captures are published where (admin) |
@@ -134,7 +186,7 @@ Both are recorded on the publication rather than baked only into the cells, so a
 
 ### Searching
 
-The magnifying glass beside the Yellow Pages searches every page's **title and text**, case- and accent-insensitively — the archive is Portuguese, and nobody looking for `eleicoes` should have to type `eleições`. Results show the page number and the line the match is on, with the hit highlighted; choosing one requests that page the same way a directory listing does (straight away when watching solo, through the room vote when watching together).
+The magnifying glass beside the Yellow Pages searches every page's **title and text**, case- and accent-insensitively — the archive is Portuguese, and nobody looking for `eleicoes` should have to type `eleições`. Results show the page number (and the subpage, when the hit is on a later screen of a carousel) and the line the match is on, with the hit highlighted; choosing one requests that page the same way a directory listing does (straight away when watching solo, through the room vote when watching together).
 
 Reading text back out of a 40×24 grid has a few catches that decide whether the search is any use, so it lives in [`src/domain/pageSearch.ts`](src/domain/pageSearch.ts) with its own tests: a block-graphics cell keeps whatever character was last typed there and must read as a gap rather than splicing noise into a word, and teletext lays pages out with padding, so runs of blanks collapse to a single space or a row reads as one long line.
 
