@@ -553,7 +553,295 @@
   line-height: 1.4;
 }
 
-/* --- Landing page + fixed room picker --- */
+/* --- The front page --- */
+
+/*
+ * The teletext typeface itself, which was in the repo unused while every screen
+ * borrowed "Press Start 2P" from Google Fonts. That is an arcade font — uniform,
+ * square, 8x8 — and teletext's is not: SAA5050 glyphs are 6x10 with rounded
+ * bowls and a descending `g`, which is what the wordmark and the menu are set
+ * in. Bundled rather than fetched, so the front page's own lettering does not
+ * depend on a third party being up.
+ */
+@font-face {
+  font-family: "European Teletext";
+  src: url("./assets/EuropeanTeletext.ttf") format("truetype");
+  font-display: block;
+}
+
+/*
+ * A teletext service opened on a coloured index: the wordmark, the language
+ * switch, and four words down the left. Nothing else — the emptiness in the
+ * middle is the design, not a section still to be filled.
+ */
+.frontpage {
+  min-height: 100vh;
+  min-height: 100dvh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(1.5rem, 4vw, 3.75rem) clamp(2.5rem, 5vw, 4.25rem);
+  background: #111;
+  color: #fff;
+}
+
+.frontpage-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.frontpage-mark {
+  display: flex;
+  align-items: center;
+  gap: clamp(0.75rem, 2vw, 1.35rem);
+}
+
+/* The logo is a bitmap: scaled with `pixelated` so it stays the drawing it is
+   rather than being smoothed into a blur at 120px. */
+.frontpage-logo {
+  width: clamp(64px, 9vw, 120px);
+  height: clamp(64px, 9vw, 120px);
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  flex: 0 0 auto;
+}
+
+.frontpage-name {
+  margin: 0;
+  font-family: "European Teletext", "Press Start 2P", monospace;
+  font-size: clamp(2.25rem, 6.2vw, 4.85rem);
+  /* Set tight, so the two lines read as one wordmark the height of the logo
+     beside them rather than as a heading that happened to wrap. */
+  line-height: 0.92;
+  font-weight: 400;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+}
+
+.frontpage-name-line {
+  display: block;
+}
+
+/*
+ * `PT/EN` — one control, with the current language lit.
+ *
+ * Red for the live one is the palette's own emphasis, the same red the first
+ * menu entry uses; the other side stays white so the pair reads as a switch
+ * with a side chosen rather than as two links of different importance.
+ */
+.frontpage-lang {
+  flex: 0 0 auto;
+  background: none;
+  border: 0;
+  padding: 0.25rem;
+  cursor: pointer;
+  font-family: "European Teletext", "Press Start 2P", monospace;
+  font-size: clamp(1rem, 1.8vw, 1.5rem);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: #fff;
+}
+
+.frontpage-lang-on {
+  color: #f00;
+}
+
+.frontpage-lang-sep {
+  color: #fff;
+  padding: 0 0.15em;
+}
+
+.frontpage-lang-off {
+  color: #fff;
+}
+
+.frontpage-lang:hover .frontpage-lang-off,
+.frontpage-lang:focus-visible .frontpage-lang-off {
+  color: #ff0;
+}
+
+.frontpage-lang:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 4px;
+}
+
+/* Pushed to the foot of the screen: the menu is where the eye lands last and
+   stays, and the space above it is what makes four words feel like a service
+   rather than a list. */
+.frontpage-menu {
+  margin-top: auto;
+  padding-top: 3rem;
+}
+
+.frontpage-menu-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.frontpage-menu-item + .frontpage-menu-item {
+  margin-top: clamp(0.3rem, 1vh, 0.55rem);
+}
+
+.frontpage-menu-btn {
+  display: block;
+  position: relative;
+  background: none;
+  border: 0;
+  padding: 0.06em 0.12em;
+  cursor: pointer;
+  font-family: "European Teletext", "Press Start 2P", monospace;
+  font-size: clamp(1.75rem, 4vw, 3.15rem);
+  line-height: 1.12;
+  text-align: left;
+  /* Lowercase in the wordmark's own voice: the menu is spoken, not shouted. */
+  text-transform: lowercase;
+}
+
+/*
+ * Hover and focus put a `>` in front of the word, in its own colour.
+ *
+ * This replaced an inverted cell — `background: currentcolor; color: #111` —
+ * which was meant to be the fastext highlight and instead made the word vanish.
+ * `currentcolor` outside the `color` property resolves against the *computed*
+ * `color` of the same element, and that rule had just set it to `#111`: the fill
+ * and the text both became the page's own background. A palette-coloured
+ * inversion cannot be written in one rule for that reason, and a marker is the
+ * better answer anyway — it points at the word instead of covering it.
+ *
+ * Absolutely positioned outside the button, so the word never moves. A marker
+ * that pushed the text right would make four words jitter as the pointer
+ * crossed them, which is worse than no affordance at all.
+ */
+.frontpage-menu-btn:not([aria-disabled])::before {
+  content: '>';
+  position: absolute;
+  right: 100%;
+  margin-right: 0.28em;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+
+.frontpage-menu-btn:not([aria-disabled]):hover::before,
+.frontpage-menu-btn:not([aria-disabled]):focus-visible::before {
+  opacity: 1;
+}
+
+/*
+ * The marker is the whole hover state — no chrome behind it.
+ *
+ * `index.css` gives every button a grey `#2a2a2a` fill on hover, which is right
+ * for the editor's controls and wrong here: it draws a rectangle around a word
+ * that is meant to sit on black, and it wins on specificity (`button:hover`
+ * beats a bare class), so the front page has to say no explicitly. Repeated for
+ * the language switch, which is a word on black for the same reason.
+ */
+.frontpage-menu-btn:hover,
+.frontpage-menu-btn:focus-visible,
+.frontpage-lang:hover,
+.frontpage-lang:focus-visible {
+  background: none;
+}
+
+.frontpage-menu-btn:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+/*
+ * An entry that is rendered and has nowhere to go yet.
+ *
+ * It keeps its colour, because the index is four words and a dimmed one would
+ * read as broken rather than as forthcoming. What it does not keep is the
+ * pretence: the cursor says it cannot be pressed, hovering names it as coming
+ * soon, and its accessible name says the same — a word that takes a click and
+ * silently does nothing is the one thing worse than a word that is not there.
+ */
+.frontpage-menu-btn-pending {
+  cursor: not-allowed;
+}
+
+/* Taken out of flow, so an invisible hint does not widen the word it explains —
+   the button's hit area has to end where the letters do. */
+.frontpage-menu-soon {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 0.9rem;
+  white-space: nowrap;
+  font-family: monospace;
+  font-size: 0.75rem;
+  text-transform: none;
+  letter-spacing: 0.04em;
+  color: #777;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.frontpage-menu-btn-pending:hover .frontpage-menu-soon,
+.frontpage-menu-btn-pending:focus-visible .frontpage-menu-soon {
+  opacity: 1;
+}
+
+/* The watch choices, revealed under the first entry. Indented under the word
+   they belong to, and set small, so the menu keeps its shape when it opens. */
+.frontpage-submenu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.6rem 0 0.3rem 0.75rem;
+  max-width: 46rem;
+}
+
+.frontpage-sub-btn {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  background: #000;
+  border: 1px solid #333;
+  color: #ddd;
+  font-family: monospace;
+  font-size: 0.85rem;
+  padding: 0.5rem 0.7rem;
+  cursor: pointer;
+  transition: border-color 0.12s ease, color 0.12s ease;
+}
+
+.frontpage-sub-btn:hover,
+.frontpage-sub-btn:focus-visible {
+  background: #000;
+  border-color: #f00;
+  color: #fff;
+}
+
+.frontpage-sub-count {
+  font-size: 0.7rem;
+  color: #666;
+}
+
+/* A room with someone in it is the one worth joining, so it says so in the
+   palette's cyan rather than leaving the visitor to guess. */
+.frontpage-sub-count-live {
+  color: #0ff;
+}
+
+.frontpage-sub-count-live::before {
+  content: '● ';
+  font-size: 0.6rem;
+}
+
+/*
+ * Landing chrome, still worn by /moderator and /manage.
+ *
+ * The front page above stopped using these when it became four coloured words,
+ * but the two admin screens borrow the same centred header — they are the only
+ * readers left, which is why the option cards, the room picker and the footer
+ * that went with them are gone rather than kept "just in case".
+ */
 .landing {
   max-width: 900px;
   margin: 0 auto;
@@ -578,170 +866,10 @@
   letter-spacing: 1px;
 }
 
-.landing-description {
-  margin: 0 auto;
-  max-width: 620px;
-  color: #cfcfcf;
-  line-height: 1.6;
-  font-size: 0.95rem;
-}
-
-.landing-options,
-.landing-rooms {
+.landing-options {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-}
-
-/* The three ways in: watch solo, watch together, create/edit */
-.landing-option-grid {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1rem;
-}
-
-.landing-option {
-  display: flex;
-}
-
-.landing-option-card {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 0.75rem;
-  min-height: 150px;
-  padding: 1.25rem 1rem;
-  text-align: center;
-  background: #101010;
-  border: 2px solid #444;
-  color: #fff;
-  cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.landing-option-card:hover,
-.landing-option-card:focus-visible {
-  background: #161616;
-  border-color: #ffff00;
-}
-
-.landing-option-card-active {
-  border-color: #ffff00;
-  background: #161616;
-}
-
-.landing-option-title {
-  font-family: "Press Start 2P", monospace;
-  font-size: 0.8rem;
-  line-height: 1.5;
-  color: #ffff00;
-}
-
-.landing-option-description {
-  font-size: 0.85rem;
-  line-height: 1.5;
-  color: #cfcfcf;
-}
-
-.landing-footer {
-  display: flex;
-  justify-content: center;
-  gap: 1.5rem;
-  padding-top: 0.5rem;
-}
-
-.landing-footer-link {
-  font-size: 0.75rem;
-  color: #555;
-  text-decoration: none;
-}
-
-.landing-footer-link:hover {
-  color: #888;
-}
-
-.room-picker-grid {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-}
-
-.room-picker-item {
-  display: flex;
-}
-
-.room-picker-card {
-  flex: 1;
-  min-height: 120px;
-  background: #05193a;
-  border: 2px solid #2a4a7a;
-  color: #fff;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.85rem;
-  text-align: center;
-  padding: 1rem;
-}
-
-.room-picker-card-label {
-  font-family: "Press Start 2P", monospace;
-  font-size: 0.85rem;
-  line-height: 1.5;
-}
-
-.room-picker-occupancy {
-  font-family: monospace;
-  font-size: 0.75rem;
-  color: #666;
-  letter-spacing: 0.04em;
-}
-
-.room-picker-occupancy-active {
-  color: #4cf;
-}
-
-.room-picker-occupancy-active::before {
-  content: '● ';
-  font-size: 0.6rem;
-  color: #4cf;
-}
-
-.room-picker-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.room-picker-action {
-  font-family: monospace;
-  font-size: 0.8rem;
-  padding: 0.4rem 0.8rem;
-  border: 1px solid #2a4a7a;
-  background: #000;
-  color: #fff;
-  cursor: pointer;
-  transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
-}
-
-.room-picker-watch:hover {
-  background: #0a2a5a;
-  border-color: #4cf;
-  color: #cfe8ff;
-}
-
-.room-picker-edit:hover {
-  background: #3a2a05;
-  border-color: #ffff00;
-  color: #ffff99;
 }
 
 .room-picker-action:focus-visible {

@@ -1,7 +1,7 @@
-// Feature: collaborative-teletext-rooms — Landing page entry points.
-// Verifies: project title/description, the three ways in (watch solo, watch
-// together, create/edit), the six fixed rooms behind "Watch together", and that
-// nothing asks for a name up front.
+// Feature: the front page — a coloured teletext index.
+// Verifies: the wordmark, the PT/EN switch and what it changes, the four
+// coloured ways in, that "ver" is where the rooms live now, and that an entry
+// with nowhere to go says so instead of pretending.
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -10,6 +10,7 @@ import { MemoryRouter } from 'react-router-dom';
 
 import { Landing } from './Landing';
 import { ROOMS } from './rooms';
+import { LANGUAGE_STORAGE_KEY } from '../../domain/landing';
 
 const navigateMock = vi.fn();
 vi.mock('react-router-dom', async () => {
@@ -20,8 +21,8 @@ vi.mock('react-router-dom', async () => {
 
 /**
  * Which pages are already claimed, as the live document would report them.
- * Landing uses this to open the editor on a blank page rather than dropping
- * everyone on the same one.
+ * The front page uses this to open the editor on a blank page rather than
+ * dropping everyone on the same one.
  */
 let occupiedPages: number[] = [];
 vi.mock('../../collab/useOccupiedPages', () => ({
@@ -36,64 +37,70 @@ function renderLanding() {
   );
 }
 
-/** Open the "Watch together" option so the room grid is revealed. */
-async function openRooms(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(
-    screen.getByRole('button', { name: /watch teletext together/i }),
-  );
+/** Open "ver", which is where watching alone and the rooms both live. */
+async function openWatch(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: /ver teletexto/i }));
 }
 
-describe('Landing', () => {
+describe('the front page', () => {
   beforeEach(() => {
     navigateMock.mockReset();
     occupiedPages = [];
-    try {
-      window.sessionStorage.clear();
-    } catch {
-      /* ignore */
+    for (const store of [window.sessionStorage, window.localStorage]) {
+      try {
+        store.clear();
+      } catch {
+        /* ignore */
+      }
     }
   });
 
-  it('shows the project title and description', () => {
+  it('shows the wordmark', () => {
     renderLanding();
     expect(
-      screen.getByRole('heading', { name: /teletext rooms/i }),
+      screen.getByRole('heading', { name: /tele-textual/i }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/watch teletext on your own/i)).toBeInTheDocument();
   });
 
-  it('offers the three entry points without asking for a name', () => {
+  it('offers the four ways in, in the palette, without asking for a name', () => {
     renderLanding();
 
-    expect(
-      screen.getByRole('button', { name: /watch teletext solo/i }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /watch teletext together/i }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /create or edit teletext pages/i }),
-    ).toBeInTheDocument();
-
+    for (const word of ['ver', 'criar', 'sugerir', 'sobre']) {
+      expect(screen.getByText(word)).toBeInTheDocument();
+    }
     // Names are optional everywhere: no name prompt gates the entry screen.
-    expect(screen.queryByLabelText(/your name/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/your name|o seu nome/i)).not.toBeInTheDocument();
   });
 
-  it('watch solo opens the solo viewer', async () => {
+  it('opens in Portuguese, because the archive is', () => {
+    renderLanding();
+    expect(screen.getByText('ver')).toBeInTheDocument();
+    expect(screen.queryByText('watch')).not.toBeInTheDocument();
+  });
+
+  it('PT/EN switches the menu and remembers the choice', async () => {
+    const user = userEvent.setup();
+    const { unmount } = renderLanding();
+
+    await user.click(screen.getByRole('button', { name: /language|idioma/i }));
+
+    expect(screen.getByText('watch')).toBeInTheDocument();
+    expect(screen.queryByText('ver')).not.toBeInTheDocument();
+    expect(window.localStorage.getItem(LANGUAGE_STORAGE_KEY)).toBe('en');
+
+    // A language is a fact about the reader, not about this visit: coming back
+    // to Portuguese having chosen English is a small insult that reads as the
+    // toggle being broken.
+    unmount();
+    renderLanding();
+    expect(screen.getByText('watch')).toBeInTheDocument();
+  });
+
+  it('criar opens the first free playground page', async () => {
     const user = userEvent.setup();
     renderLanding();
 
-    await user.click(screen.getByRole('button', { name: /watch teletext solo/i }));
-    expect(navigateMock).toHaveBeenCalledWith('/watch');
-  });
-
-  it('create / edit opens the first free playground page', async () => {
-    const user = userEvent.setup();
-    renderLanding();
-
-    await user.click(
-      screen.getByRole('button', { name: /create or edit teletext pages/i }),
-    );
+    await user.click(screen.getByRole('button', { name: /criar e editar/i }));
     expect(navigateMock).toHaveBeenCalledWith('/edit/700');
   });
 
@@ -104,9 +111,7 @@ describe('Landing', () => {
     const user = userEvent.setup();
     renderLanding();
 
-    await user.click(
-      screen.getByRole('button', { name: /create or edit teletext pages/i }),
-    );
+    await user.click(screen.getByRole('button', { name: /criar e editar/i }));
     expect(navigateMock).toHaveBeenCalledWith('/edit/702');
   });
 
@@ -115,51 +120,59 @@ describe('Landing', () => {
     const user = userEvent.setup();
     renderLanding();
 
-    await user.click(
-      screen.getByRole('button', { name: /create or edit teletext pages/i }),
-    );
+    await user.click(screen.getByRole('button', { name: /criar e editar/i }));
     expect(navigateMock).toHaveBeenCalledWith('/edit');
   });
 
-  it('watch together reveals the six fixed rooms, each with a single Watch action', async () => {
+  it('ver reveals watching alone and the six rooms', async () => {
     const user = userEvent.setup();
     renderLanding();
 
-    // The rooms stay out of the way until "Watch together" is chosen.
+    // The choices stay out of the way until "ver" is chosen — the front page is
+    // four words, and a room list on it would not be.
     expect(screen.queryByText('Living Room')).not.toBeInTheDocument();
 
-    await openRooms(user);
+    await openWatch(user);
 
+    // Matched exactly, not by substring: "ver"'s own hint reads "Ver
+    // teletexto, sozinho ou numa sala", so a loose match finds the word that
+    // opened the menu as well as the choices inside it.
+    expect(screen.getByRole('button', { name: 'sozinho' })).toBeInTheDocument();
     for (const room of ROOMS) {
-      expect(screen.getByText(room.label)).toBeInTheDocument();
       expect(
-        screen.getByRole('button', {
-          name: new RegExp(`watch teletext in ${room.label}`, 'i'),
-        }),
+        screen.getByRole('button', { name: `numa sala: ${room.label}` }),
       ).toBeInTheDocument();
     }
-    // Six rooms × one Watch action = six watch buttons; no per-room edit or
-    // create-room control.
     expect(
-      screen.getAllByRole('button', { name: /watch teletext in/i }),
+      screen.getAllByRole('button', { name: /^numa sala: / }),
     ).toHaveLength(6);
-    expect(
-      screen.queryByRole('button', { name: /edit teletext in/i }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: /create room/i }),
-    ).not.toBeInTheDocument();
   });
 
-  it('Watch navigates into the room viewer', async () => {
+  it('ver leads to watching alone, and to a room', async () => {
     const user = userEvent.setup();
     renderLanding();
 
-    await openRooms(user);
-    await user.click(
-      screen.getByRole('button', { name: /watch teletext in kitchen/i }),
-    );
+    await openWatch(user);
+    await user.click(screen.getByRole('button', { name: 'sozinho' }));
+    expect(navigateMock).toHaveBeenCalledWith('/watch');
 
+    await user.click(screen.getByRole('button', { name: 'numa sala: Kitchen' }));
     expect(navigateMock).toHaveBeenCalledWith('/room/kitchen');
+  });
+
+  it('says so when an entry has nowhere to go yet, and goes nowhere', async () => {
+    const user = userEvent.setup();
+    renderLanding();
+
+    for (const name of [/sugerir/i, /sobre/i]) {
+      const entry = screen.getByRole('button', { name });
+      // A word that takes a click and silently does nothing is worse than one
+      // that is not there, so it is marked rather than left to be discovered.
+      expect(entry).toHaveAttribute('aria-disabled', 'true');
+      expect(entry).toHaveAccessibleName(/em breve/i);
+      await user.click(entry);
+    }
+
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 });

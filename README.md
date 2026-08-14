@@ -1,4 +1,4 @@
-# Teletext Rooms
+# Tele-textual
 
 A React app for a workshop on **nostalgia and digital communication before the web**. Watch **teletext** on your own or together with other people in a shared room, and create or edit the pages everyone watches — a 40×24 grid with period-accurate colors, block graphics and aesthetics.
 
@@ -6,13 +6,43 @@ A React app for a workshop on **nostalgia and digital communication before the w
 
 Teletext was a text-based information system broadcast in the vertical blanking interval of TV signals (1970s–1990s). Pages were 40 characters wide by 24 rows, with a limited color palette (black, red, green, yellow, blue, magenta, cyan, white) and block graphics — each character cell splittable into a 2×3 grid of six blocks ("sixels").
 
-## The three ways in
+## The front page
 
-From the landing page:
+A teletext service opened on a coloured index, and so does this: the wordmark
+top left, a `PT/EN` switch top right, and four words down the left in the
+palette's colours. Nothing else — a front page with cards and paragraphs on it
+is a website *about* teletext, whereas four coloured words on black is the thing
+itself. The menu is data ([`src/domain/landing.ts`](src/domain/landing.ts)), so
+the colour and the copy for both languages travel with the entry and a fifth way
+in is a line rather than a component.
+
+The lettering is `EuropeanTeletext.ttf`, bundled from `src/assets/` — the file
+was in the repo, unused, while every screen borrowed "Press Start 2P" from
+Google Fonts. That is an arcade face: uniform, square, 8×8. Teletext's is not,
+and the difference is the whole look.
+
+- **ver** — reveals the choice of watching **on your own** (`/watch`) or in one
+  of six fixed "house" rooms (`/room/:roomId`), each showing live occupancy.
+  Both are watching, so both live under one word instead of competing for the
+  front page.
+- **criar** — the editor (`/edit`, `/edit/:pageNumber`), opened on the **first
+  free playground page**, so two people creating a page at once don't land on
+  the same number and overwrite each other.
+- **sugerir** / **sobre** — rendered, with nowhere to go yet. They keep their
+  colour, because a dimmed word in a four-word index reads as broken rather than
+  as forthcoming; what they don't keep is the pretence, so the cursor, a hover
+  label and the accessible name all say *em breve*.
+
+The language switch is Portuguese-first — the archive is ~3,150 captures of RTP
+and SIC teletext, and the people most likely to want them read Portuguese — and
+the choice is remembered in `localStorage`. It currently translates the front
+page; the rest of the app is still English.
+
+### Watching, and editing
 
 - **Watch solo** (`/watch`) — the TV on your own. The remote control changes the page immediately, the yellow pages list what's out there, the magnifying glass searches every page by text, and three-digit page numbers in the content are clickable links. No chat, no vote, no name needed.
-- **Watch together** (`/room/:roomId`) — join one of six fixed "house" rooms (living room, bedrooms, kitchen, garage, dining room). Everyone in a room sees the same page, chats in the sidebar, and changing the page goes to a **vote**: a request stands for 60 s and needs a majority of the members present when it was raised. You join as `Guest-XXXX` and can rename yourself from the room sidebar.
-- **Create / edit pages** (`/edit`, `/edit/:pageNumber`) — the editor. Choosing it from the landing page opens the **first free playground page**, so two people creating a page at once don't land on the same number and overwrite each other. Edits are per-cell and shared, so a page being edited updates live wherever it's being watched. Pages 100–699 are a curated **archive** (only the moderator can edit them); 700–999 are the open **playground** — see [Archive vs. playground](#archive-vs-playground) below.
+- **Watch together** (`/room/:roomId`) — everyone in a room sees the same page, chats in the sidebar, and changing the page goes to a **vote**: a request stands for 60 s and needs a majority of the members present when it was raised. You join as `Guest-XXXX` and can rename yourself from the room sidebar.
+- **Create / edit pages** (`/edit/:pageNumber`) — edits are per-cell and shared, so a page being edited updates live wherever it's being watched. Pages 100–699 are a curated **archive** (only the moderator can edit them); 700–999 are the open **playground** — see [Archive vs. playground](#archive-vs-playground) below.
 
 ## Editing
 
@@ -86,7 +116,7 @@ Page numbers split into two ranges (`src/domain/access.ts`):
 
 Everyone can *watch* any page in either range; the split only gates the editor's page-number field, so a non-moderator simply can't select an archive page number there (a link straight to `/edit/:pageNumber` on an archive page falls back to the first playground page instead).
 
-**Moderator** is a real login now. Visit `/moderator` (a small link in the landing page's footer) and enter the password set in `ADMIN_PASSWORD`; the server checks it and issues an `HttpOnly` session cookie signed with `SESSION_SECRET`. Neither variable is `VITE_`-prefixed, so neither reaches the browser.
+**Moderator** is a real login now. Visit `/moderator` directly — the front page is four words and does not advertise it — and enter the password set in `ADMIN_PASSWORD`; the server checks it and issues an `HttpOnly` session cookie signed with `SESSION_SECRET`. Neither variable is `VITE_`-prefixed, so neither reaches the browser.
 
 This replaced a `VITE_MODERATOR_PASSCODE` compared in the client, which was inlined into the bundle and therefore readable by any visitor, backed by a `localStorage` flag anyone could set from the console. See `api/_lib/auth.ts`.
 
@@ -120,7 +150,7 @@ Decision logic lives in `src/domain/` — framework-free and covered by ~20 [fas
 
 | Route | Screen |
 |---|---|
-| `/` | Landing — the three entry points |
+| `/` | The front page — the coloured index |
 | `/watch`, `/watch/:pageNumber`, `/watch/:pageNumber/:subpage` | Solo viewer |
 | `/room/:roomId` | Room viewer (chat, presence, voting) |
 | `/edit`, `/edit/:pageNumber`, `/edit/:pageNumber/:subpage` | Editor |

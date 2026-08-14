@@ -3,37 +3,49 @@ import { useNavigate } from 'react-router-dom';
 import { useRoomOccupancy } from '../../collab/useRoomOccupancy';
 import { useOccupiedPages } from '../../collab/useOccupiedPages';
 import { firstFreePlaygroundPage } from '../../domain/access';
+import {
+  LANDING_COPY,
+  MENU,
+  PROJECT_NAME,
+  PROJECT_NAME_LINES,
+  type MenuEntry,
+} from '../../domain/landing';
 import { ROOMS } from './rooms';
+import { useLanguage } from './useLanguage';
+
 
 /**
  * Landing — the app's entry screen shown at `/`.
  *
- * Three ways in, none of which asks for anything up front:
- *  - **Watch solo** (`/watch`) — the TV on your own. No chat, no vote, so no
- *    name is needed.
- *  - **Watch together** — reveals the six fixed rooms, each with its live
- *    occupancy, and enters the room viewer (`/room/:roomId`). A name is
- *    optional here too: members start as `Guest-XXXX` and can rename themselves
- *    from the room sidebar.
- *  - **Create / edit pages** — the solo editor, opened on the first *free*
- *    playground page rather than on the editor's default. Landing everyone on
- *    the same number meant two people creating a page at once overwrote each
- *    other's work.
+ * A teletext service opened on a coloured index, and so does this: the wordmark
+ * top left, the language switch top right, and four words down the left in the
+ * palette's colours. Nothing else. The restraint is the design — a front page
+ * with cards and paragraphs on it is a website about teletext, whereas four
+ * coloured words on black is the thing itself.
+ *
+ * The ways in:
+ *  - **ver** — reveals the choice of watching alone (`/watch`) or in one of the
+ *    six fixed rooms (`/room/:roomId`). Both are watching, so both live under
+ *    one word rather than competing for the front page.
+ *  - **criar** — the solo editor, opened on the first *free* playground page
+ *    rather than the editor's default. Landing everyone on the same number
+ *    meant two people creating a page at once overwrote each other's work.
+ *  - **sugerir** / **sobre** — rendered, with nowhere to go yet. They say so
+ *    rather than pretending: see {@link MenuEntry.action}.
+ *
+ * Nothing here asks for a name. Members start as `Guest-XXXX` and rename
+ * themselves from the room sidebar if they care to.
  */
 
-const PROJECT_TITLE = 'TELETEXT ROOMS';
-const PROJECT_DESCRIPTION =
-  'Watch teletext on your own, gather in a room and watch it together in real time, or open the editor to create and change pages.';
-
-/** The entry options, in display order. */
-type Option = 'solo' | 'together' | 'edit';
+export { PROJECT_NAME };
 
 export function Landing() {
   const navigate = useNavigate();
+  const { language, other, toggle } = useLanguage();
+  const copy = LANDING_COPY[language];
 
-  // Which option's detail is expanded. Only "Watch together" has one (the room
-  // grid); the others navigate straight away.
-  const [expanded, setExpanded] = useState<Option | null>(null);
+  // Which entry has its detail open. Only "ver" has one — the watch choices.
+  const [openEntry, setOpenEntry] = useState<MenuEntry['id'] | null>(null);
 
   const occupancy = useRoomOccupancy(ROOMS.map((r) => r.id));
   const occupiedPages = useOccupiedPages();
@@ -55,116 +67,135 @@ export function Landing() {
     navigate(free == null ? '/edit' : `/edit/${free}`);
   }
 
-  function handleWatchRoom(roomId: string) {
-    navigate(`/room/${roomId}`);
+  function handleChoose(entry: MenuEntry) {
+    switch (entry.action) {
+      case 'watch':
+        setOpenEntry((open) => (open === entry.id ? null : entry.id));
+        return;
+      case 'create':
+        handleCreatePage();
+        return;
+      case 'pending':
+        // Deliberately nothing. The entry is marked `aria-disabled` below, so
+        // this is never reached by anyone who was told what it does.
+        return;
+    }
   }
 
   return (
-    <div className="landing">
-      <header className="landing-header">
-        <h1 className="landing-title">{PROJECT_TITLE}</h1>
-        <p className="landing-description">{PROJECT_DESCRIPTION}</p>
+    <div className="frontpage">
+      <header className="frontpage-head">
+        <div className="frontpage-mark">
+          <img src="/logo.png" alt="" className="frontpage-logo" aria-hidden="true" />
+          {/* The break is part of the wordmark, not the viewport's opinion. */}
+          <h1 className="frontpage-name">
+            <span className="sr-only">{PROJECT_NAME}</span>
+            {PROJECT_NAME_LINES.map((line) => (
+              <span key={line} className="frontpage-name-line" aria-hidden="true">
+                {line}
+              </span>
+            ))}
+          </h1>
+        </div>
+
+        {/*
+          * The language switch reads as one control, `PT/EN`, with the current
+          * language lit. One button rather than two, because with exactly two
+          * languages "switch" and "choose the other one" are the same act — and
+          * a pair of buttons would leave the visitor deciding which of them is
+          * already true.
+          */}
+        <button
+          type="button"
+          className="frontpage-lang"
+          onClick={toggle}
+          aria-label={`${copy.languageSwitch}: ${language.toUpperCase()} — ${other.toUpperCase()}`}
+        >
+          <span className="frontpage-lang-on">{language.toUpperCase()}</span>
+          <span className="frontpage-lang-sep" aria-hidden="true">
+            /
+          </span>
+          <span className="frontpage-lang-off">{other.toUpperCase()}</span>
+        </button>
       </header>
 
-      <section className="landing-options" aria-label="Choose how to start">
-        <ul className="landing-option-grid">
-          <li className="landing-option">
-            <button
-              type="button"
-              className="landing-option-card"
-              onClick={() => navigate('/watch')}
-              aria-label="Watch teletext solo"
-            >
-              <span className="landing-option-title">Watch solo</span>
-              <span className="landing-option-description">
-                Just you and the TV. Flip through pages whenever you like.
-              </span>
-            </button>
-          </li>
-
-          <li className="landing-option">
-            <button
-              type="button"
-              className={`landing-option-card${expanded === 'together' ? ' landing-option-card-active' : ''}`}
-              onClick={() =>
-                setExpanded((o) => (o === 'together' ? null : 'together'))
-              }
-              aria-expanded={expanded === 'together'}
-              aria-controls="landing-rooms"
-              aria-label="Watch teletext together"
-            >
-              <span className="landing-option-title">Watch together</span>
-              <span className="landing-option-description">
-                Join a room to watch with others, chat, and vote on the next
-                page.
-              </span>
-            </button>
-          </li>
-
-          <li className="landing-option">
-            <button
-              type="button"
-              className="landing-option-card"
-              onClick={handleCreatePage}
-              aria-label="Create or edit teletext pages"
-            >
-              <span className="landing-option-title">Create / edit pages</span>
-              <span className="landing-option-description">
-                Draw and write pages. Your edits show up wherever the page is
-                watched.
-              </span>
-            </button>
-          </li>
-        </ul>
-      </section>
-
-      {expanded === 'together' && (
-        <section
-          id="landing-rooms"
-          className="landing-section landing-watch"
-          aria-labelledby="landing-rooms-heading"
-        >
-          <h2
-            id="landing-rooms-heading"
-            className="sidebar-heading landing-section-heading"
-          >
-            Pick a room
-          </h2>
-          <p className="landing-section-description">
-            You'll join as a guest — you can change your name once you're in.
-          </p>
-          <ul className="room-picker-grid">
-            {ROOMS.map((room) => {
-              const count = occupancy[room.id] ?? 0;
-              return (
-                <li key={room.id} className="room-picker-item">
-                  <div className="room-picker-card">
-                    <span className="room-picker-card-label">{room.label}</span>
-                    <span
-                      className={`room-picker-occupancy${count > 0 ? ' room-picker-occupancy-active' : ''}`}
-                    >
-                      {count > 0 ? `${count} watching` : 'Empty'}
+      <nav className="frontpage-menu" aria-label={copy.menu}>
+        <ul className="frontpage-menu-list">
+          {MENU.map((entry) => {
+            const pending = entry.action === 'pending';
+            const open = openEntry === entry.id;
+            return (
+              <li key={entry.id} className="frontpage-menu-item">
+                <button
+                  type="button"
+                  className={`frontpage-menu-btn teletext-fg-${entry.color}${
+                    pending ? ' frontpage-menu-btn-pending' : ''
+                  }`}
+                  onClick={() => handleChoose(entry)}
+                  // The word alone is terse to hear read out, so the hint says
+                  // what choosing it does. A pending entry says that instead of
+                  // promising something it cannot do.
+                  aria-label={
+                    pending
+                      ? `${entry.label[language]} — ${copy.comingSoon}`
+                      : entry.hint[language]
+                  }
+                  aria-disabled={pending || undefined}
+                  aria-expanded={entry.action === 'watch' ? open : undefined}
+                  aria-controls={entry.action === 'watch' ? 'frontpage-watch' : undefined}
+                >
+                  {entry.label[language]}
+                  {/* A pending entry keeps its full colour, so the index reads
+                      as the four-word index it is — and says what it is on
+                      hover and focus, where a sighted visitor is about to find
+                      out the hard way. Screen readers get it from the label
+                      above, which is why this is decoration. */}
+                  {pending && (
+                    <span className="frontpage-menu-soon" aria-hidden="true">
+                      {copy.comingSoon}
                     </span>
-                    <div className="room-picker-actions">
-                      <button
-                        type="button"
-                        className="room-picker-action room-picker-watch"
-                        onClick={() => handleWatchRoom(room.id)}
-                        aria-label={`Watch teletext in ${room.label}`}
-                      >
-                        Watch
-                      </button>
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
+                  )}
+                </button>
 
-      <footer className="landing-footer">
-      </footer>
+                {open && entry.action === 'watch' && (
+                  <div id="frontpage-watch" className="frontpage-submenu">
+                    <button
+                      type="button"
+                      className="frontpage-sub-btn"
+                      onClick={() => navigate('/watch')}
+                    >
+                      {copy.watchAlone}
+                    </button>
+                    {ROOMS.map((room) => {
+                      const count = occupancy[room.id] ?? 0;
+                      return (
+                        <button
+                          key={room.id}
+                          type="button"
+                          className="frontpage-sub-btn"
+                          onClick={() => navigate(`/room/${room.id}`)}
+                          aria-label={`${copy.watchTogether}: ${room.label}`}
+                        >
+                          {room.label}
+                          {/* Live occupancy, so a room with people in it is the
+                              obvious one to join rather than a guess. */}
+                          <span
+                            className={`frontpage-sub-count${
+                              count > 0 ? ' frontpage-sub-count-live' : ''
+                            }`}
+                          >
+                            {count > 0 ? `${count} ${copy.watching}` : copy.empty}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
     </div>
   );
 }
