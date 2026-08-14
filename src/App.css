@@ -1785,11 +1785,6 @@
   min-width: 0;
 }
 
-.yellow-pages-caret {
-  flex: 0 0 auto;
-  font-size: 0.7em;
-  line-height: 1;
-}
 
 /* How many pages are filed under a closed heading. Without it a collapsed
    section looks like an ordinary listing wearing a triangle. */
@@ -1798,22 +1793,6 @@
   font-size: 0.75rem;
   font-weight: 700;
   opacity: 0.55;
-}
-
-.yellow-pages-number-btn {
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  padding: 0.15rem 0;
-  cursor: pointer;
-  color: inherit;
-  font-family: inherit;
-}
-
-/* Override the global `button:hover` grey (index.css), as the listing rows do. */
-.yellow-pages-number-btn:hover {
-  background: transparent;
-  text-decoration: underline;
 }
 
 /* The rows under a heading. A plain wrapper so the panel can be addressed by
@@ -1854,18 +1833,32 @@
   text-transform: uppercase;
 }
 
+/*
+ * A square box with the glyph centred in it. `×` sits above its own em-box
+ * centre, so a padded inline button leaves it looking high however the masthead
+ * aligns — centring it in a box of known size is what actually puts it in the
+ * middle.
+ */
 .yellow-pages-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
   background: transparent;
   border: none;
+  border-radius: 0;
   font-size: 1.6rem;
   line-height: 1;
   color: #141007;
   cursor: pointer;
-  padding: 0 0.25rem;
 }
 
+/* No hover state at all, including the global `button:hover` grey. */
 .yellow-pages-close:hover {
-  color: #6b3b00;
+  background: transparent;
+  color: #141007;
 }
 
 .yellow-pages-tagline {
@@ -1995,6 +1988,36 @@
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   font-size: 1rem;
+  /*
+   * Worn by a <span> inside an ordinary listing's button, and by a <button> of
+   * its own on a heading row — where the title opens the section and the number
+   * goes to the page, so they cannot be one control.
+   *
+   * The button reset lives here rather than in a second class so both spellings
+   * are the same object: `index.css` gives every <button> a grey pill with a
+   * border, which beside the spans would make one number in the directory look
+   * like a form control.
+   */
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* Beats the global `button:hover` grey: a class plus a pseudo-class outranks an
+   element plus one. */
+.yellow-pages-number:hover {
+  background: transparent;
+}
+
+/* Only the real button gets hover feedback — on a listing row the name already
+   underlines, and underlining the number as well would say there were two
+   things to click when there is one. */
+button.yellow-pages-number:hover {
+  text-decoration: underline;
 }
 
 /*
@@ -2014,10 +2037,21 @@
   min-width: 0;
 }
 
+/*
+ * The gutter every row keeps for its arrow, whether it has one or not.
+ *
+ * A fixed width rather than `auto`: headings with a section carry a caret and
+ * headings without one do not, so sizing to content started their titles at
+ * different offsets — which read as nesting, and made the ones with arrows look
+ * like children of the ones without. The space is the same on every row, so a
+ * title's indent means depth and nothing else.
+ */
 .yellow-pages-caret {
-  flex: 0 0 auto;
+  flex: 0 0 0.85rem;
+  width: 0.85rem;
   font-size: 0.7em;
   line-height: 1;
+  text-align: center;
 }
 
 /* How many pages are filed under a closed heading. Without it a collapsed
@@ -2027,22 +2061,6 @@
   font-size: 0.75rem;
   font-weight: 700;
   opacity: 0.55;
-}
-
-.yellow-pages-number-btn {
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  padding: 0.15rem 0;
-  cursor: pointer;
-  color: inherit;
-  font-family: inherit;
-}
-
-/* Override the global `button:hover` grey (index.css), as the listing rows do. */
-.yellow-pages-number-btn:hover {
-  background: transparent;
-  text-decoration: underline;
 }
 
 /* The rows under a heading. A plain wrapper so the panel can be addressed by

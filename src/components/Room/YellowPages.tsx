@@ -203,6 +203,9 @@ function Listing({
         className="yellow-pages-entry-btn"
         onClick={() => onPick(node.pageNumber)}
       >
+        {/* Empty, but present: every row keeps the same gutter so a title's
+            indent means depth rather than whether it happens to have an arrow. */}
+        <span className="yellow-pages-caret" aria-hidden="true" />
         <span className="yellow-pages-name">{titleOf(node)}</span>
         {count != null && (
           <span className="yellow-pages-count" aria-hidden="true">
@@ -274,7 +277,7 @@ function Heading({
       </button>
       <button
         type="button"
-        className="yellow-pages-number yellow-pages-number-btn"
+        className="yellow-pages-number"
         aria-label={`${titleOf(node)}, page ${node.pageNumber}`}
         onClick={() => onPick(node.pageNumber)}
       >
