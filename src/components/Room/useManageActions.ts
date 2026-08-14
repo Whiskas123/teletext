@@ -55,6 +55,8 @@ export interface ManageActionsInput {
    * open would aim it at something the operator did not choose.
    */
   onMoved(): void;
+  /** Called once a page has been folded in, so the chooser can close. */
+  onAbsorbed(): void;
   /**
    * The notice line, for the case where a confirmation's opening control has gone
    * with the page it deleted. Owned by the shell, which renders it — a ref handed
@@ -101,6 +103,8 @@ export interface ManageActionsApi {
   addSubpage(pageNumber: number): void;
   /** Take a page's last screen away, with its publication record. */
   removeLastSubpage(pageNumber: number): void;
+  /** Fold `source`'s carousel onto the end of `target`'s, emptying `source`. */
+  absorbPage(target: number, source: number): void;
   /** Send a page to a page number the operator chose. */
   moveTo(pageNumber: number, destination: number): void;
   setRole(pageNumber: number, kind: PageKind): void;
@@ -121,6 +125,7 @@ export function useManageActions({
   setKind,
   onTextSaved,
   onMoved,
+  onAbsorbed,
   noticeRef,
 }: ManageActionsInput): ManageActionsApi {
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -237,6 +242,24 @@ export function useManageActions({
       move(pageNumber, pageNumber + delta, delta < 0 ? 'nudge-lower' : 'nudge-higher');
     },
     [move],
+  );
+
+  /**
+   * Fold another page in as a subpage.
+   *
+   * Registered against the *target*, so the card that started it is the one
+   * that goes busy — and so a second click cannot start it again while the
+   * screens are still moving across.
+   */
+  const absorbPage = useCallback(
+    (target: number, source: number) => {
+      runPageAction(target, 'absorb-page', async () => {
+        const result = await data.absorbPage(target, source);
+        if (result.ok) onAbsorbed();
+        return result;
+      });
+    },
+    [runPageAction, data, onAbsorbed],
   );
 
   const moveTo = useCallback(
@@ -485,6 +508,7 @@ export function useManageActions({
     nudge,
     addSubpage,
     removeLastSubpage,
+    absorbPage,
     moveTo,
     setRole,
     saveText,

@@ -63,6 +63,8 @@ export function actionLabel(action: PageActionName): string {
       return 'Add a subpage';
     case 'remove-subpage':
       return 'Remove the last subpage';
+    case 'absorb-page':
+      return 'Fold a page in as a subpage';
   }
 }
 
@@ -85,6 +87,8 @@ export function actionProgress(action: PageActionName): string {
       return 'Adding a subpage…';
     case 'remove-subpage':
       return 'Removing the last subpage…';
+    case 'absorb-page':
+      return 'Folding the page in…';
   }
 }
 
@@ -107,6 +111,8 @@ export function actionDone(action: PageActionName): string {
       return 'given another subpage';
     case 'remove-subpage':
       return 'one subpage shorter';
+    case 'absorb-page':
+      return 'given the page as a subpage';
   }
 }
 

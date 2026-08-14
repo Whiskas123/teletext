@@ -72,6 +72,7 @@ export function ManageArchivePage() {
     setKind,
     onTextSaved: onAir.closeEditor,
     onMoved: onAir.closeMover,
+    onAbsorbed: onAir.closeAdder,
     noticeRef,
   });
 
@@ -250,6 +251,7 @@ export function ManageArchivePage() {
             subpageCountOfPage={data.subpageCountOfPage}
             onAddSubpage={actions.addSubpage}
             onRemoveLastSubpage={actions.removeLastSubpage}
+            onAbsorbPage={actions.absorbPage}
             onNudge={actions.nudge}
             onMoveTo={actions.moveTo}
             onDelete={(pageNumber, title) =>

@@ -34,7 +34,8 @@ export type PageActionName =
   | 'save-text'
   | 'set-role'
   | 'add-subpage'
-  | 'remove-subpage';
+  | 'remove-subpage'
+  | 'absorb-page';
 
 /** What an in-flight action targets. */
 export type ActionScope =

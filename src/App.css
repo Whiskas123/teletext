@@ -1985,6 +1985,19 @@
   /* Never shrinks and never wraps: the number is the one part of a listing that
      is useless partially shown. */
   flex: 0 0 auto;
+  /*
+   * `font: inherit` before the weight and size, not `font-family: inherit`.
+   *
+   * The book is set in a condensed face — `font-stretch: condensed` on
+   * `.yellow-pages-book` — and a <button> does not inherit that from the UA
+   * stylesheet. Inheriting the family alone left the heading rows' numbers at
+   * `font-stretch: normal`, where the condensed weight is unavailable and the
+   * browser synthesises one instead: visibly lighter than the identical number
+   * one row above, set in a <span>. The shorthand resets every font longhand at
+   * once, which is the only way to be sure none is left behind; the two that
+   * must differ are re-stated after it.
+   */
+  font: inherit;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   font-size: 1rem;
@@ -2003,7 +2016,6 @@
   border-radius: 0;
   padding: 0;
   color: inherit;
-  font-family: inherit;
   cursor: pointer;
 }
 

@@ -64,6 +64,7 @@ function Harness(overrides: Partial<OnAirPanelProps> = {}) {
       subpageCountOfPage={() => 1}
       onAddSubpage={vi.fn()}
       onRemoveLastSubpage={vi.fn()}
+      onAbsorbPage={vi.fn()}
       onNudge={vi.fn()}
       onMoveTo={vi.fn()}
       onDelete={vi.fn()}

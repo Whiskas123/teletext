@@ -195,6 +195,14 @@ export interface ArchiveAdminApi {
   addSubpage(pageNumber: number): number | null;
   /** Drop a page's last screen and its record; returns the new count, or null at 1. */
   removeLastSubpage(pageNumber: number): Promise<number | null>;
+  /**
+   * Fold `source`'s whole carousel onto the end of `target`'s, and leave
+   * `source` empty. A move, not a copy — see `domain/absorb.ts`.
+   */
+  absorbPage(
+    target: number,
+    source: number,
+  ): Promise<{ ok: true } | { ok: false; error: string }>;
   menus: CustomMenu[];
   loading: boolean;
   error: string | null;
@@ -906,6 +914,90 @@ export function useArchiveAdmin({
     [setTitle, setDescriptions],
   );
 
+  /**
+   * Fold one page's carousel onto the end of another's.
+   *
+   * Built out of `publish` and `unpublish` rather than a new endpoint, because
+   * the two halves of a publication — the record and the cells — are exactly
+   * what has to move, and those are the two calls that already know how to keep
+   * them in step. A screen with a publication record is re-published onto its
+   * new (page, subpage), so the archive still records which capture is where;
+   * a screen made by hand has no record and only its cells travel.
+   *
+   * The *target's* title and description go back in with each re-publish, never
+   * the source's: absorbing 118 into 117 must not retitle 117 as 118.
+   *
+   * Sequential, and the source is cleared only at the end. A failure part-way
+   * leaves the screens that did move sitting on the target and the source still
+   * intact — duplicated, which is visible and repairable, rather than lost.
+   */
+  const absorbPage = useCallback<ArchiveAdminApi['absorbPage']>(
+    async (target, source) => {
+      const from = subpageCountOf(liveSubpageCounts, target);
+      const moving = subpageCountOf(liveSubpageCounts, source);
+
+      const title = titleOf(target);
+      const description = descriptionOf(target);
+
+      for (let index = 0; index < moving; index += 1) {
+        const sourceSubpage = index + MIN_SUBPAGE;
+        const destination = from + index + MIN_SUBPAGE;
+        const record = publicationAt(source, sourceSubpage);
+
+        if (record != null) {
+          const result = await publish({
+            pageNumber: target,
+            subpage: destination,
+            captureId: record.capture_id,
+            title,
+            description,
+            transforms: { shiftDown: record.shift_down, menuId: record.menu_id },
+          });
+          if (!result.ok) return result;
+          continue;
+        }
+
+        const cells = livePage(source, sourceSubpage);
+        if (cells == null) continue;
+        if (importPages([{ pageNumber: target, subpage: destination, page: cells }]) === 0) {
+          return {
+            ok: false,
+            error: `Could not write subpage ${destination} of page ${target}.`,
+          };
+        }
+        // `publish` grows the carousel itself; a hand-made screen has to say so.
+        setSubpageCounts((draft) => {
+          draft[target] = destination;
+        });
+      }
+
+      // Everything is across, so the source can go: its records, its cells, its
+      // title, its description and its directory role.
+      const cleared = await unpublish(source);
+      if (!cleared.ok && publishedByPage.has(source)) return cleared;
+      setPages((draft) => {
+        for (const key of pageKeys(source, moving)) draft[key as number] = {};
+      });
+      clearPageText(source);
+
+      return { ok: true };
+    },
+    [
+      liveSubpageCounts,
+      titleOf,
+      descriptionOf,
+      publicationAt,
+      publish,
+      livePage,
+      importPages,
+      setSubpageCounts,
+      unpublish,
+      publishedByPage,
+      setPages,
+      clearPageText,
+    ],
+  );
+
   const deletePage = useCallback<ArchiveAdminApi['deletePage']>(
     async (pageNumber) => {
       try {
@@ -952,6 +1044,7 @@ export function useArchiveAdmin({
     subpageCountOfPage,
     addSubpage: subpages.addSubpage,
     removeLastSubpage,
+    absorbPage,
     menus,
     loading,
     error,

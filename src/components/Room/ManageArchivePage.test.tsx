@@ -92,6 +92,7 @@ function makeData(overrides: Partial<ArchiveAdminApi> = {}): ArchiveAdminApi {
     subpageCountOfPage: () => 1,
     addSubpage: vi.fn().mockReturnValue(2),
     removeLastSubpage: vi.fn().mockResolvedValue(null),
+    absorbPage: vi.fn().mockResolvedValue({ ok: true }),
     menus: [],
     loading: false,
     error: null,

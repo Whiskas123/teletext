@@ -39,6 +39,19 @@ export interface MoverState {
   destination: string;
 }
 
+/**
+ * The one open "add a subpage" chooser, and the page number typed into it.
+ *
+ * Held as the string as typed, like {@link MoverState}: a half-typed `2` is not
+ * page 2, and coercing early makes the field fight back while it is being
+ * filled in. Empty means "an empty subpage", which is the default the button
+ * had before it could also absorb a page.
+ */
+export interface AdderState {
+  pageNumber: number;
+  source: string;
+}
+
 export interface OnAirState {
   filter: OnAirFilter;
   setFilterText(text: string): void;
@@ -60,6 +73,11 @@ export interface OnAirState {
   toggleSelected(pageNumber: number): void;
   selectAll(pageNumbers: readonly number[]): void;
   clearSelection(): void;
+  /** The one open subpage chooser, and the page it would fold in. */
+  adder: AdderState | null;
+  openAdder(pageNumber: number): void;
+  closeAdder(): void;
+  setAdderSource(value: string): void;
   /** The one page being sent to a chosen number, and where to. */
   mover: MoverState | null;
   openMover(pageNumber: number): void;
@@ -77,6 +95,7 @@ export function useOnAirState(): OnAirState {
   const [filter, setFilter] = useState<OnAirFilter>(EMPTY_ON_AIR_FILTER);
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [mover, setMover] = useState<MoverState | null>(null);
+  const [adder, setAdder] = useState<AdderState | null>(null);
   const [selection, setSelection] = useState<ReadonlySet<number>>(new Set());
   const [focusFilterRequest, setFocusFilterRequest] = useState(0);
 
@@ -129,6 +148,18 @@ export function useOnAirState(): OnAirState {
     );
   }, []);
 
+  const openAdder = useCallback((pageNumber: number) => {
+    // Blank, not pre-filled: the common case is still an empty subpage, and a
+    // number already in the field would make absorbing a page the default.
+    setAdder({ pageNumber, source: '' });
+  }, []);
+
+  const closeAdder = useCallback(() => setAdder(null), []);
+
+  const setAdderSource = useCallback((source: string) => {
+    setAdder((current) => (current == null ? current : { ...current, source }));
+  }, []);
+
   const openMover = useCallback((pageNumber: number) => {
     // Pre-filled with the page's own number, so the field says what it wants and
     // typing over it is one gesture.
@@ -156,6 +187,10 @@ export function useOnAirState(): OnAirState {
     toggleSelected,
     selectAll,
     clearSelection,
+    adder,
+    openAdder,
+    closeAdder,
+    setAdderSource,
     mover,
     openMover,
     closeMover,

@@ -64,6 +64,8 @@ export interface OnAirPanelProps {
   subpageCountOfPage(pageNumber: number): number;
   onAddSubpage(pageNumber: number): void;
   onRemoveLastSubpage(pageNumber: number): void;
+  /** Fold `source`'s carousel onto the end of `target`'s, emptying `source`. */
+  onAbsorbPage(target: number, source: number): void;
   onNudge(pageNumber: number, delta: -1 | 1): void;
   onMoveTo(pageNumber: number, destination: number): void;
   onDelete(pageNumber: number, title: string): void;
@@ -94,6 +96,7 @@ export function OnAirPanel({
   subpageCountOfPage,
   onAddSubpage,
   onRemoveLastSubpage,
+  onAbsorbPage,
   onNudge,
   onMoveTo,
   onDelete,
@@ -179,6 +182,7 @@ export function OnAirPanel({
         publicationAt={(subpage) => publicationAt(row.pageNumber, subpage)}
         kind={kindOf(row.pageNumber)}
         subpageCount={subpageCountOfPage(row.pageNumber)}
+        subpageCountOf={subpageCountOfPage}
         readContent={(subpage) => livePage(row.pageNumber, subpage)}
         occupied={occupied}
         stored={stored}
@@ -186,6 +190,9 @@ export function OnAirPanel({
         editorOpen={editorOpen}
         selected={state.selection.has(row.pageNumber)}
         onToggleSelected={() => state.toggleSelected(row.pageNumber)}
+        adderSource={
+          state.adder?.pageNumber === row.pageNumber ? state.adder.source : null
+        }
         destination={destination}
         movePreview={
           destination == null
@@ -205,6 +212,10 @@ export function OnAirPanel({
           nudge: (delta) => onNudge(row.pageNumber, delta),
           addSubpage: () => onAddSubpage(row.pageNumber),
           removeLastSubpage: () => onRemoveLastSubpage(row.pageNumber),
+          openAdder: () => state.openAdder(row.pageNumber),
+          closeAdder: state.closeAdder,
+          setAdderSource: state.setAdderSource,
+          absorbPage: (source) => onAbsorbPage(row.pageNumber, source),
           openMover: () => state.openMover(row.pageNumber),
           closeMover: state.closeMover,
           setDestination: state.setDestination,

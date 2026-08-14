@@ -25,6 +25,7 @@ import { Link } from 'react-router-dom';
 
 import { MAX_PAGE, MIN_PAGE } from '../../domain/pageOps';
 import { MAX_SUBPAGE, MIN_SUBPAGE, stepSubpage } from '../../domain/subpages';
+import { describeAbsorb, previewAbsorb } from '../../domain/absorb';
 import { PAGE_KINDS, type PageKind } from '../../domain/directory';
 import type { PageActionName } from '../../domain/inFlight';
 import { actionProgress, type Notice } from '../../domain/manageMessages';
@@ -52,6 +53,10 @@ export interface OnAirCardCallbacks {
   nudge(delta: -1 | 1): void;
   addSubpage(): void;
   removeLastSubpage(): void;
+  openAdder(): void;
+  closeAdder(): void;
+  setAdderSource(value: string): void;
+  absorbPage(source: number): void;
   remove(): void;
   saveText(): void;
   setRole(kind: PageKind): void;
@@ -72,6 +77,8 @@ export interface OnAirPageCardProps {
   kind: PageKind;
   /** How many screens this page's carousel holds. Always at least 1. */
   subpageCount: number;
+  /** How many screens any page holds, for previewing what folding one in costs. */
+  subpageCountOf(pageNumber: number): number;
   /**
    * Read the live content of one screen, called only when the operator asks to
    * see it. The card passes the screen it is showing, so stepping the carousel
@@ -85,6 +92,11 @@ export interface OnAirPageCardProps {
   /** Whether this page is ticked for a bulk transform change. */
   selected: boolean;
   onToggleSelected(): void;
+  /**
+   * The page being typed into the subpage chooser, or null when this card's
+   * chooser is shut. Empty string means "an empty subpage".
+   */
+  adderSource: string | null;
   /** The destination being typed, or null when this card is not being moved. */
   destination: string | null;
   /** What sending this page to `destination` would do. */
@@ -103,12 +115,14 @@ export function OnAirPageCard({
   publicationAt,
   kind,
   subpageCount,
+  subpageCountOf,
   readContent,
   occupied,
   draft,
   editorOpen,
   selected,
   onToggleSelected,
+  adderSource,
   destination,
   movePreview,
   busy,
@@ -129,6 +143,22 @@ export function OnAirPageCard({
   const subpage = Math.min(shownSubpage, subpageCount);
   const hasCarousel = subpageCount > MIN_SUBPAGE;
   const entry = publicationAt(subpage);
+  const adderOpen = adderSource != null;
+
+  // What folding the typed page in would do — including that it empties that
+  // page, which is the part worth saying out loud before it happens.
+  const absorb =
+    adderSource == null
+      ? null
+      : previewAbsorb({
+          target: pageNumber,
+          source: adderSource.trim() === '' ? Number.NaN : Number(adderSource),
+          targetCount: subpageCount,
+          sourceCount: subpageCountOf(
+            adderSource.trim() === '' ? 0 : Number(adderSource),
+          ),
+          occupied,
+        });
   const moverOpen = destination != null;
   const canMove = movePreview?.ok === true;
 
@@ -273,18 +303,16 @@ export function OnAirPageCard({
           <button
             type="button"
             className="manage-mini-btn"
+            aria-expanded={adderOpen}
             disabled={disabled || subpageCount >= MAX_SUBPAGE}
             title={
               subpageCount >= MAX_SUBPAGE
                 ? `A page holds at most ${MAX_SUBPAGE} subpages.`
-                : `Add an empty subpage to page ${pageNumber}`
+                : `Add a subpage to page ${pageNumber}`
             }
-            onClick={() => {
-              on.addSubpage();
-              setShownSubpage(subpageCount + 1);
-            }}
+            onClick={() => (adderOpen ? on.closeAdder() : on.openAdder())}
           >
-            + Subpage
+            {adderOpen ? 'Cancel' : '+ Subpage'}
           </button>
           <button
             type="button"
@@ -309,6 +337,72 @@ export function OnAirPageCard({
             Edit content
           </Link>
         </div>
+
+        {/*
+          * Adding a subpage, which is two things wearing one control.
+          *
+          * Left blank it appends an empty screen — the behaviour the button had
+          * before. Given a page number it *folds that page in*: its screens move
+          * to the end of this carousel and the page is left empty. That is the
+          * curation the corpus actually needs, because teletext ran a long story
+          * across consecutive numbers (117, 118, 119) that were one story all
+          * along, and folding them back frees the numbers.
+          *
+          * One field rather than two buttons, with a line underneath saying what
+          * will happen: this empties another page, and a control that only
+          * mentions the half that gains something is how a page gets destroyed by
+          * someone who thought they were copying it.
+          */}
+        {adderOpen && absorb != null && (
+          <form
+            className="manage-move"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (adderSource.trim() === '') {
+                on.addSubpage();
+                setShownSubpage(subpageCount + 1);
+                on.closeAdder();
+                return;
+              }
+              if (absorb.ok) on.absorbPage(absorb.source);
+            }}
+          >
+            <label className="sidebar-field-label" htmlFor={`a-${pageNumber}`}>
+              Fold a page into {pageNumber} — or leave blank for an empty subpage
+            </label>
+            <div className="manage-move-row">
+              <input
+                id={`a-${pageNumber}`}
+                type="number"
+                min={MIN_PAGE}
+                max={MAX_PAGE}
+                placeholder="empty"
+                value={adderSource}
+                autoFocus
+                onChange={(event) => on.setAdderSource(event.target.value)}
+              />
+              <button
+                type="submit"
+                className="manage-mini-btn"
+                disabled={disabled || (adderSource.trim() !== '' && !absorb.ok)}
+              >
+                {adderSource.trim() === '' ? 'Add empty' : 'Fold in'}
+              </button>
+            </div>
+            <p
+              className={
+                adderSource.trim() === '' || absorb.ok
+                  ? 'manage-note'
+                  : 'manage-note manage-note-error'
+              }
+              role="status"
+            >
+              {adderSource.trim() === ''
+                ? `Adds an empty subpage ${subpageCount + 1}.`
+                : describeAbsorb(absorb)}
+            </p>
+          </form>
+        )}
 
         {entry != null ? (
           <>
