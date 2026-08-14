@@ -54,6 +54,16 @@ interface Row {
 interface Block {
   key: number;
   rows: Row[];
+  /**
+   * The headings this block is filed under, outermost first.
+   *
+   * A nested heading becomes a block of its own (see above), which means a
+   * category's subcategories are *siblings* of its block rather than rows in
+   * it. Collapsing therefore cannot work off a block's own rows alone: closing
+   * a category has to take away the blocks descended from it too, and this is
+   * the only record of that descent once the tree has been flattened.
+   */
+  ancestors: number[];
 }
 
 /**
@@ -91,14 +101,18 @@ function collapseRepeats(rows: readonly Row[]): Row[] {
 function directoryBlocks(nodes: readonly DirectoryNode[]): Block[] {
   const blocks: Block[] = [];
 
-  const walk = (list: readonly DirectoryNode[], depth: number): void => {
+  const walk = (
+    list: readonly DirectoryNode[],
+    depth: number,
+    ancestors: number[],
+  ): void => {
     /** Consecutive pages filed under no heading, gathered into one block. */
     let loose: Block | null = null;
 
     for (const node of list) {
       if (!isHeadingKind(node.kind)) {
         if (loose == null) {
-          loose = { key: node.pageNumber, rows: [] };
+          loose = { key: node.pageNumber, rows: [], ancestors };
           blocks.push(loose);
         }
         loose.rows.push({ node, depth });
@@ -114,12 +128,12 @@ function directoryBlocks(nodes: readonly DirectoryNode[]): Block[] {
         if (isHeadingKind(child.kind)) nested.push(child);
         else rows.push({ node: child, depth: depth + 1 });
       }
-      blocks.push({ key: node.pageNumber, rows });
-      walk(nested, depth + 1);
+      blocks.push({ key: node.pageNumber, rows, ancestors });
+      walk(nested, depth + 1, [...ancestors, node.pageNumber]);
     }
   };
 
-  walk(nodes, 0);
+  walk(nodes, 0, []);
   // Collapsed per block, after the rows are gathered: a run only counts as a run
   // if nothing separates it, and the block is what defines "next to each other".
   return blocks
@@ -127,13 +141,57 @@ function directoryBlocks(nodes: readonly DirectoryNode[]): Block[] {
     .filter((block) => block.rows.length > 0);
 }
 
+/**
+ * How many listings sit beneath each heading, counting all the way down.
+ *
+ * Not just the heading's own block: a category holding three subcategories has
+ * nothing in its block but itself, and reporting `0` there would be both a lie
+ * and the reason its toggle looked broken. Everything descended from the
+ * heading counts, nested headings included — they are lines in the directory
+ * too.
+ */
+function descendantCounts(blocks: readonly Block[]): Map<number, number> {
+  const counts = new Map<number, number>();
+
+  const add = (pageNumber: number, n: number) =>
+    counts.set(pageNumber, (counts.get(pageNumber) ?? 0) + n);
+
+  for (const block of blocks) {
+    const [first, ...rest] = block.rows;
+    const heading = isHeadingKind(first.node.kind) ? first : null;
+
+    // The block's own listings belong to the heading it starts with…
+    if (heading != null) add(heading.node.pageNumber, rest.length);
+    // …and every row of it, heading included, belongs to each heading above.
+    for (const ancestor of block.ancestors) add(ancestor, block.rows.length);
+  }
+
+  return counts;
+}
+
 /** The listing's name, or a stand-in when it has none. */
 function titleOf(node: DirectoryNode): string {
   return node.title.trim().length > 0 ? node.title : 'Untitled listing';
 }
 
-/** One listing row. */
-function Listing({ row, onPick }: { row: Row; onPick: (pageNumber: number) => void }) {
+/**
+ * One listing row, whose whole width goes to its page.
+ *
+ * Also how a heading with nothing filed under it renders: it is a page like any
+ * other, and giving it an arrow that opens an empty section would be a control
+ * that does nothing. It keeps its count — every heading carries one — but the
+ * click goes where the row says it goes.
+ */
+function Listing({
+  row,
+  onPick,
+  count,
+}: {
+  row: Row;
+  onPick: (pageNumber: number) => void;
+  /** Lines in this heading's section, itself included. Omitted for a page. */
+  count?: number;
+}) {
   const { node, depth } = row;
   return (
     <li
@@ -146,6 +204,11 @@ function Listing({ row, onPick }: { row: Row; onPick: (pageNumber: number) => vo
         onClick={() => onPick(node.pageNumber)}
       >
         <span className="yellow-pages-name">{titleOf(node)}</span>
+        {count != null && (
+          <span className="yellow-pages-count" aria-hidden="true">
+            {count}
+          </span>
+        )}
         <span className="yellow-pages-leader" aria-hidden="true" />
         <span className="yellow-pages-number">
           {formatPageNumber(node.pageNumber)}
@@ -173,7 +236,7 @@ function Heading({
   panelId,
 }: {
   row: Row;
-  /** How many pages are filed under it, for the affordance and the name. */
+  /** Lines in the section, the heading's own page included. */
   count: number;
   open: boolean;
   onToggle: () => void;
@@ -194,11 +257,7 @@ function Heading({
         // Named apart from the page number beside it, which carries the same
         // title: "TV Guide, 2 pages" opens the section, "TV Guide, page 200"
         // goes to it, and neither is mistakable for the other.
-        aria-label={
-          count > 0
-            ? `${titleOf(node)}, ${count} page${count === 1 ? '' : 's'}`
-            : titleOf(node)
-        }
+        aria-label={`${titleOf(node)}, ${count} page${count === 1 ? '' : 's'}`}
         onClick={onToggle}
       >
         <span className="yellow-pages-caret" aria-hidden="true">
@@ -208,11 +267,9 @@ function Heading({
         {/* The count is the whole affordance for a collapsed section: without it
             a closed heading looks like an ordinary listing that happens to have
             a triangle. */}
-        {count > 0 && (
-          <span className="yellow-pages-count" aria-hidden="true">
-            {count}
-          </span>
-        )}
+        <span className="yellow-pages-count" aria-hidden="true">
+          {count}
+        </span>
         <span className="yellow-pages-leader" aria-hidden="true" />
       </button>
       <button
@@ -290,6 +347,7 @@ export function YellowPages({ onSelect, onClose }: YellowPagesProps) {
   );
 
   const blocks = useMemo(() => directoryBlocks(tree), [tree]);
+  const counts = useMemo(() => descendantCounts(blocks), [blocks]);
 
   /**
    * Which sections are open, by their heading's page number.
@@ -402,9 +460,25 @@ export function YellowPages({ onSelect, onClose }: YellowPagesProps) {
               style={{ transform: `translateX(calc(${-sheet} * (100% + var(--yp-gap))))` }}
             >
               {blocks.map((block) => {
+                // A block descended from a closed heading is not rendered at
+                // all — that is what makes closing a *category* take its
+                // subcategories with it, and not merely the loose pages that
+                // happened to land in its own block.
+                if (!block.ancestors.every((page) => openSections.has(page))) {
+                  return null;
+                }
+
                 const [first, ...rest] = block.rows;
                 const heading = isHeadingKind(first.node.kind) ? first : null;
-                const open = heading == null || openSections.has(heading.node.pageNumber);
+                // A heading is a page in its own right, so its section counts
+                // itself: "World News, 5" is this page plus the four beneath it.
+                const below =
+                  heading == null ? 0 : (counts.get(heading.node.pageNumber) ?? 0);
+                const count = below + 1;
+                // Nothing under it means nothing to open, so it is an ordinary
+                // listing rather than a control that does nothing.
+                const collapsible = heading != null && below > 0;
+                const open = !collapsible || openSections.has(heading.node.pageNumber);
                 const panelId = `yp-section-${block.key}`;
                 const pick = (pageNumber: number) => {
                   onSelect(pageNumber);
@@ -413,29 +487,36 @@ export function YellowPages({ onSelect, onClose }: YellowPagesProps) {
 
                 return (
                   <ul key={block.key} className="yellow-pages-list">
-                    {heading != null && (
-                      <Heading
-                        row={heading}
-                        count={rest.length}
-                        open={open}
-                        onToggle={() => toggleSection(heading.node.pageNumber)}
-                        onPick={pick}
-                        panelId={panelId}
-                      />
-                    )}
+                    {heading != null &&
+                      (collapsible ? (
+                        <Heading
+                          row={heading}
+                          count={count}
+                          open={open}
+                          onToggle={() => toggleSection(heading.node.pageNumber)}
+                          onPick={pick}
+                          panelId={panelId}
+                        />
+                      ) : (
+                        <Listing row={heading} count={count} onPick={pick} />
+                      ))}
                     {/* Unmounted rather than hidden when closed: the flow is a
                         multi-column layout measured to decide how many sheets
                         it spills across, and rows that are merely invisible
                         still take their columns. */}
-                    {open && (
+                    {open && rest.length > 0 && (
                       <li className="yellow-pages-section" id={panelId}>
                         <ul className="yellow-pages-list">
-                          {(heading == null ? block.rows : rest).map((row) => (
+                          {rest.map((row) => (
                             <Listing key={row.node.pageNumber} row={row} onPick={pick} />
                           ))}
                         </ul>
                       </li>
                     )}
+                    {heading == null &&
+                      block.rows.map((row) => (
+                        <Listing key={row.node.pageNumber} row={row} onPick={pick} />
+                      ))}
                   </ul>
                 );
               })}
