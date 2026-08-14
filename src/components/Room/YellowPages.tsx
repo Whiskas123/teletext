@@ -127,6 +127,11 @@ function directoryBlocks(nodes: readonly DirectoryNode[]): Block[] {
     .filter((block) => block.rows.length > 0);
 }
 
+/** The listing's name, or a stand-in when it has none. */
+function titleOf(node: DirectoryNode): string {
+  return node.title.trim().length > 0 ? node.title : 'Untitled listing';
+}
+
 /** One listing row. */
 function Listing({ row, onPick }: { row: Row; onPick: (pageNumber: number) => void }) {
   const { node, depth } = row;
@@ -140,13 +145,83 @@ function Listing({ row, onPick }: { row: Row; onPick: (pageNumber: number) => vo
         className="yellow-pages-entry-btn"
         onClick={() => onPick(node.pageNumber)}
       >
-        <span className="yellow-pages-name">
-          {node.title.trim().length > 0 ? node.title : 'Untitled listing'}
-        </span>
+        <span className="yellow-pages-name">{titleOf(node)}</span>
         <span className="yellow-pages-leader" aria-hidden="true" />
         <span className="yellow-pages-number">
           {formatPageNumber(node.pageNumber)}
         </span>
+      </button>
+    </li>
+  );
+}
+
+/**
+ * A heading row, which opens and closes the pages filed under it.
+ *
+ * Two controls on one line, not one. A heading is *both* a section and a page of
+ * its own — 100 is the main index, and it is a real page someone may want to
+ * dial — so the title opens the section and the number goes to the page. Folding
+ * both into a single button would have meant choosing which of the two a click
+ * meant, and losing the other.
+ */
+function Heading({
+  row,
+  count,
+  open,
+  onToggle,
+  onPick,
+  panelId,
+}: {
+  row: Row;
+  /** How many pages are filed under it, for the affordance and the name. */
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+  onPick: (pageNumber: number) => void;
+  panelId: string;
+}) {
+  const { node, depth } = row;
+  return (
+    <li
+      className={`yellow-pages-entry yellow-pages-entry-${node.kind} yellow-pages-entry-heading`}
+      style={depth > 0 ? { paddingLeft: `${depth * 0.9}rem` } : undefined}
+    >
+      <button
+        type="button"
+        className="yellow-pages-entry-btn yellow-pages-toggle"
+        aria-expanded={open}
+        aria-controls={panelId}
+        // Named apart from the page number beside it, which carries the same
+        // title: "TV Guide, 2 pages" opens the section, "TV Guide, page 200"
+        // goes to it, and neither is mistakable for the other.
+        aria-label={
+          count > 0
+            ? `${titleOf(node)}, ${count} page${count === 1 ? '' : 's'}`
+            : titleOf(node)
+        }
+        onClick={onToggle}
+      >
+        <span className="yellow-pages-caret" aria-hidden="true">
+          {open ? '▾' : '▸'}
+        </span>
+        <span className="yellow-pages-name">{titleOf(node)}</span>
+        {/* The count is the whole affordance for a collapsed section: without it
+            a closed heading looks like an ordinary listing that happens to have
+            a triangle. */}
+        {count > 0 && (
+          <span className="yellow-pages-count" aria-hidden="true">
+            {count}
+          </span>
+        )}
+        <span className="yellow-pages-leader" aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        className="yellow-pages-number yellow-pages-number-btn"
+        aria-label={`${titleOf(node)}, page ${node.pageNumber}`}
+        onClick={() => onPick(node.pageNumber)}
+      >
+        {formatPageNumber(node.pageNumber)}
       </button>
     </li>
   );
@@ -216,8 +291,29 @@ export function YellowPages({ onSelect, onClose }: YellowPagesProps) {
 
   const blocks = useMemo(() => directoryBlocks(tree), [tree]);
 
+  /**
+   * Which sections are open, by their heading's page number.
+   *
+   * Closed is the default and the set holds the exceptions, so a directory that
+   * grows a section does not quietly open it. Closed by default is the point:
+   * the archive runs to hundreds of pages, and a directory that opens showing
+   * all of them is a wall to scroll rather than an index to read — headings
+   * first, then the pages under the one you chose.
+   */
+  const [openSections, setOpenSections] = useState<ReadonlySet<number>>(new Set());
+
+  const toggleSection = (pageNumber: number) => {
+    setOpenSections((current) => {
+      const next = new Set(current);
+      if (!next.delete(pageNumber)) next.add(pageNumber);
+      return next;
+    });
+  };
+
   const flowRef = useRef<HTMLDivElement>(null);
-  const { sheet, sheets, setSheet } = useSheets(flowRef, blocks);
+  // Opening a section changes how many columns the flow needs, so the sheet
+  // count is measured again — not just when the directory itself changes.
+  const { sheet, sheets, setSheet } = useSheets(flowRef, `${blocks.length}:${openSections.size}`);
 
   // Escape closes; the arrows turn the page.
   useEffect(() => {
@@ -305,20 +401,44 @@ export function YellowPages({ onSelect, onClose }: YellowPagesProps) {
               ref={flowRef}
               style={{ transform: `translateX(calc(${-sheet} * (100% + var(--yp-gap))))` }}
             >
-              {blocks.map((block) => (
-                <ul key={block.key} className="yellow-pages-list">
-                  {block.rows.map((row) => (
-                    <Listing
-                      key={row.node.pageNumber}
-                      row={row}
-                      onPick={(pageNumber) => {
-                        onSelect(pageNumber);
-                        onClose();
-                      }}
-                    />
-                  ))}
-                </ul>
-              ))}
+              {blocks.map((block) => {
+                const [first, ...rest] = block.rows;
+                const heading = isHeadingKind(first.node.kind) ? first : null;
+                const open = heading == null || openSections.has(heading.node.pageNumber);
+                const panelId = `yp-section-${block.key}`;
+                const pick = (pageNumber: number) => {
+                  onSelect(pageNumber);
+                  onClose();
+                };
+
+                return (
+                  <ul key={block.key} className="yellow-pages-list">
+                    {heading != null && (
+                      <Heading
+                        row={heading}
+                        count={rest.length}
+                        open={open}
+                        onToggle={() => toggleSection(heading.node.pageNumber)}
+                        onPick={pick}
+                        panelId={panelId}
+                      />
+                    )}
+                    {/* Unmounted rather than hidden when closed: the flow is a
+                        multi-column layout measured to decide how many sheets
+                        it spills across, and rows that are merely invisible
+                        still take their columns. */}
+                    {open && (
+                      <li className="yellow-pages-section" id={panelId}>
+                        <ul className="yellow-pages-list">
+                          {(heading == null ? block.rows : rest).map((row) => (
+                            <Listing key={row.node.pageNumber} row={row} onPick={pick} />
+                          ))}
+                        </ul>
+                      </li>
+                    )}
+                  </ul>
+                );
+              })}
             </div>
           </div>
         )}

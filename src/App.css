@@ -583,6 +583,9 @@
   padding: clamp(1.5rem, 4vw, 3.75rem) clamp(2.5rem, 5vw, 4.25rem);
   background: #111;
   color: #fff;
+  /* The containing block for the showcase, which on a wide screen is taken out
+     of the flow entirely — see `.frontpage-band`. */
+  position: relative;
 }
 
 .frontpage-head {
@@ -590,19 +593,40 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 1.5rem;
+  /* A safety net, not the plan: the sizes below keep the wordmark and the
+     language switch on one row down to ~360px. Below that they wrap rather than
+     pushing the switch off the right edge, which is what a phone reads as a
+     horizontal scrollbar on a page that has no horizontal content. */
+  flex-wrap: wrap;
 }
 
+/*
+ * A column of two things: the title row, and the line under it.
+ *
+ * The logo is centred against the name because they share that row, and the
+ * tagline starts at this column's own left edge — which is the logo's — so
+ * neither alignment needs a number that tracks the other.
+ */
 .frontpage-mark {
+  display: flex;
+  flex-direction: column;
+  /* Shrinkable, or on a narrow screen the wordmark holds its content width and
+     pushes the language switch off the right edge instead of wrapping. */
+  min-width: 0;
+}
+
+.frontpage-title {
   display: flex;
   align-items: center;
   gap: clamp(0.75rem, 2vw, 1.35rem);
+  min-width: 0;
 }
 
 /* The logo is a bitmap: scaled with `pixelated` so it stays the drawing it is
    rather than being smoothed into a blur at 120px. */
 .frontpage-logo {
-  width: clamp(64px, 9vw, 120px);
-  height: clamp(64px, 9vw, 120px);
+  width: clamp(56px, 9vw, 120px);
+  height: clamp(56px, 9vw, 120px);
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   flex: 0 0 auto;
@@ -611,7 +635,7 @@
 .frontpage-name {
   margin: 0;
   font-family: "European Teletext", "Press Start 2P", monospace;
-  font-size: clamp(2.25rem, 6.2vw, 4.85rem);
+  font-size: clamp(1.9rem, 6.2vw, 4.85rem);
   /* Set tight, so the two lines read as one wordmark the height of the logo
      beside them rather than as a heading that happened to wrap. */
   line-height: 0.92;
@@ -626,6 +650,23 @@
 }
 
 /*
+ * What this is, in one line, directly under the name.
+ *
+ * Monospace rather than the teletext face, and small: it is a caption on the
+ * wordmark, and setting it in the display face would make it a second heading
+ * competing with the four coloured words for the same glance. Grey for the same
+ * reason — the palette belongs to the menu.
+ */
+.frontpage-tagline {
+  margin: 0.7rem 0 0;
+  max-width: min(34ch, 100%);
+  font-family: monospace;
+  font-size: clamp(0.72rem, 1.05vw, 0.86rem);
+  line-height: 1.5;
+  color: #888;
+}
+
+/*
  * `PT/EN` — one control, with the current language lit.
  *
  * Red for the live one is the palette's own emphasis, the same red the first
@@ -634,6 +675,8 @@
  */
 .frontpage-lang {
   flex: 0 0 auto;
+  /* Stays at the right on the row it lands on, wrapped or not. */
+  margin-left: auto;
   background: none;
   border: 0;
   padding: 0.25rem;
@@ -666,6 +709,41 @@
 .frontpage-lang:focus-visible {
   outline: 2px solid #fff;
   outline-offset: 4px;
+}
+
+/*
+ * Where the page on air sits.
+ *
+ * Narrow, it is an ordinary block in the flow, centred between the wordmark and
+ * the menu — there is no empty right half on a phone to put it in.
+ */
+.frontpage-band {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem 0;
+}
+
+/*
+ * Wide, it leaves the flow and floats in the right half.
+ *
+ * This is the whole point of the composition: identity and navigation are one
+ * column down the left, and the showcase occupies space that column never uses.
+ * In the flow it was a third band competing for the same vertical budget, and
+ * there is not enough of it — a 24-row page is ~310px tall, the head takes 194
+ * and the menu 272, which on an 832px screen pushed `sobre` clean off the
+ * bottom. Out of flow, the left column keeps the geometry of the mockup exactly
+ * and the page still fits on one screen.
+ */
+@media (min-width: 900px) {
+  .frontpage-band {
+    position: absolute;
+    right: clamp(2.5rem, 5vw, 4.25rem);
+    bottom: clamp(1.5rem, 4vw, 3.75rem);
+    padding: 0;
+  }
 }
 
 /* Pushed to the foot of the screen: the menu is where the eye lands last and
@@ -828,6 +906,61 @@
 .frontpage-sub-count-live {
   color: #0ff;
 }
+
+/*
+ * One page on air, in the empty right half.
+ *
+ * The grid is 40 columns of `1em`, so its whole size is one font-size — set
+ * small enough that a 24-row page clears the band without pushing the menu off
+ * the foot of the screen. It renders nothing at all until the live document has
+ * something to show, so the space is simply empty rather than holding a
+ * placeholder for something nobody was promised.
+ */
+.frontpage-showcase {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.frontpage-showcase-btn {
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  cursor: pointer;
+  line-height: 0;
+}
+
+.frontpage-showcase-btn .teletext-screen {
+  font-size: clamp(4.5px, 1.05vw, 15px);
+  padding: 8px;
+  /* Not a TV here — no bezel, no glow. It is a page pinned to the wall beside
+     the menu, and chrome would make it a second object competing with the
+     wordmark. */
+  border-color: #262626;
+  box-shadow: none;
+  transition: border-color 0.12s ease;
+}
+
+/* Global `button:hover` would otherwise put its grey behind a black page. */
+.frontpage-showcase-btn:hover,
+.frontpage-showcase-btn:focus-visible {
+  background: none;
+}
+
+.frontpage-showcase-btn:hover .teletext-screen,
+.frontpage-showcase-btn:focus-visible .teletext-screen {
+  border-color: #f00;
+}
+
+.frontpage-showcase-btn:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
 
 .frontpage-sub-count-live::before {
   content: '● ';
@@ -1635,7 +1768,68 @@
     gap: 0.5rem;
   }
 
-  .yellow-pages-footnote {
+  /*
+ * A heading row: a toggle for the section, and the heading's own page number
+ * beside it. The row is the flex container now, because the two are separate
+ * controls — see `Heading` in `YellowPages.tsx`.
+ */
+.yellow-pages-entry-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+
+.yellow-pages-toggle {
+  /* Takes the room; the number keeps its own width at the end of the row. */
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.yellow-pages-caret {
+  flex: 0 0 auto;
+  font-size: 0.7em;
+  line-height: 1;
+}
+
+/* How many pages are filed under a closed heading. Without it a collapsed
+   section looks like an ordinary listing wearing a triangle. */
+.yellow-pages-count {
+  flex: 0 0 auto;
+  font-size: 0.75rem;
+  font-weight: 700;
+  opacity: 0.55;
+}
+
+.yellow-pages-number-btn {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0.15rem 0;
+  cursor: pointer;
+  color: inherit;
+  font-family: inherit;
+}
+
+/* Override the global `button:hover` grey (index.css), as the listing rows do. */
+.yellow-pages-number-btn:hover {
+  background: transparent;
+  text-decoration: underline;
+}
+
+/* The rows under a heading. A plain wrapper so the panel can be addressed by
+   `aria-controls`; it adds no indent of its own, since each row already carries
+   the depth the tree gave it. */
+.yellow-pages-section {
+  display: block;
+}
+
+.yellow-pages-section > .yellow-pages-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.yellow-pages-footnote {
     margin-top: 0.4rem;
     font-size: 0.75rem;
   }
@@ -1801,6 +1995,67 @@
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   font-size: 1rem;
+}
+
+/*
+ * A heading row: a toggle for the section, and the heading's own page number
+ * beside it. The row is the flex container now, because the two are separate
+ * controls — see `Heading` in `YellowPages.tsx`.
+ */
+.yellow-pages-entry-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+
+.yellow-pages-toggle {
+  /* Takes the room; the number keeps its own width at the end of the row. */
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.yellow-pages-caret {
+  flex: 0 0 auto;
+  font-size: 0.7em;
+  line-height: 1;
+}
+
+/* How many pages are filed under a closed heading. Without it a collapsed
+   section looks like an ordinary listing wearing a triangle. */
+.yellow-pages-count {
+  flex: 0 0 auto;
+  font-size: 0.75rem;
+  font-weight: 700;
+  opacity: 0.55;
+}
+
+.yellow-pages-number-btn {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0.15rem 0;
+  cursor: pointer;
+  color: inherit;
+  font-family: inherit;
+}
+
+/* Override the global `button:hover` grey (index.css), as the listing rows do. */
+.yellow-pages-number-btn:hover {
+  background: transparent;
+  text-decoration: underline;
+}
+
+/* The rows under a heading. A plain wrapper so the panel can be addressed by
+   `aria-controls`; it adds no indent of its own, since each row already carries
+   the depth the tree gave it. */
+.yellow-pages-section {
+  display: block;
+}
+
+.yellow-pages-section > .yellow-pages-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .yellow-pages-footnote {

@@ -11,6 +11,7 @@ import {
   type MenuEntry,
 } from '../../domain/landing';
 import { ROOMS } from './rooms';
+import { FrontpageShowcase } from './FrontpageShowcase';
 import { useLanguage } from './useLanguage';
 
 
@@ -85,17 +86,29 @@ export function Landing() {
   return (
     <div className="frontpage">
       <header className="frontpage-head">
+        {/*
+          * A column of two things: the title row, and the line under it.
+          *
+          * The logo is centred against the name because they share that row, and
+          * the tagline starts at the column's own left edge — which is the logo's
+          * — so neither alignment needs a number that tracks the other.
+          */}
         <div className="frontpage-mark">
-          <img src="/logo.png" alt="" className="frontpage-logo" aria-hidden="true" />
-          {/* The break is part of the wordmark, not the viewport's opinion. */}
-          <h1 className="frontpage-name">
-            <span className="sr-only">{PROJECT_NAME}</span>
-            {PROJECT_NAME_LINES.map((line) => (
-              <span key={line} className="frontpage-name-line" aria-hidden="true">
-                {line}
-              </span>
-            ))}
-          </h1>
+          <div className="frontpage-title">
+            <img src="/logo.png" alt="" className="frontpage-logo" aria-hidden="true" />
+            {/* The break is part of the wordmark, not the viewport's opinion. */}
+            <h1 className="frontpage-name">
+              <span className="sr-only">{PROJECT_NAME}</span>
+              {PROJECT_NAME_LINES.map((line) => (
+                <span key={line} className="frontpage-name-line" aria-hidden="true">
+                  {line}
+                </span>
+              ))}
+            </h1>
+          </div>
+          {/* An apposition to the name, so it reads as part of the wordmark
+              rather than as a paragraph the page has grown. */}
+          <p className="frontpage-tagline">{copy.tagline}</p>
         </div>
 
         {/*
@@ -118,6 +131,20 @@ export function Landing() {
           <span className="frontpage-lang-off">{other.toUpperCase()}</span>
         </button>
       </header>
+
+      {/*
+        * The band between the wordmark and the menu, which the mockup leaves
+        * empty on the left and wholly empty on the right. One real page on air
+        * goes there: the composition already had a page-shaped hole in it, and
+        * a page says what this is faster than a paragraph about teletext could.
+        */}
+      <div className="frontpage-band">
+        <FrontpageShowcase
+          label={copy.onAir}
+          pageWord={copy.pageWord}
+          onSelect={(pageNumber, subpage) => navigate(`/watch/${pageNumber}/${subpage}`)}
+        />
+      </div>
 
       <nav className="frontpage-menu" aria-label={copy.menu}>
         <ul className="frontpage-menu-list">

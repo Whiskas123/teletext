@@ -113,6 +113,14 @@ export const MENU: readonly MenuEntry[] = [
 export const LANDING_COPY: Record<
   Language,
   {
+    /**
+     * One line under the wordmark saying what this is.
+     *
+     * Under the name rather than in the middle of the page: it is an apposition
+     * to the wordmark, not a paragraph, and putting it in the empty band would
+     * make it compete with the four coloured words for the same attention.
+     */
+    tagline: string;
     /** Read to screen readers in place of the logo. */
     logoAlt: string;
     /** Names the language switch itself. */
@@ -126,9 +134,14 @@ export const LANDING_COPY: Record<
     watchTogether: string;
     watching: string;
     empty: string;
+    /** Names the showcase region, and its control. */
+    onAir: string;
+    /** The word before a page number, e.g. `página 220`. */
+    pageWord: string;
   }
 > = {
   pt: {
+    tagline: ' ',
     logoAlt: 'Tele-textual',
     languageSwitch: 'Idioma',
     menu: 'Menu',
@@ -137,8 +150,11 @@ export const LANDING_COPY: Record<
     watchTogether: 'numa sala',
     watching: 'a ver',
     empty: 'vazia',
+    onAir: 'No ar agora',
+    pageWord: 'página',
   },
   en: {
+    tagline: '',
     logoAlt: 'Tele-textual',
     languageSwitch: 'Language',
     menu: 'Menu',
@@ -147,6 +163,8 @@ export const LANDING_COPY: Record<
     watchTogether: 'in a room',
     watching: 'watching',
     empty: 'empty',
+    onAir: 'On air now',
+    pageWord: 'page',
   },
 };
 

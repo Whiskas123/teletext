@@ -21,6 +21,26 @@ was in the repo, unused, while every screen borrowed "Press Start 2P" from
 Google Fonts. That is an arcade face: uniform, square, 8×8. Teletext's is not,
 and the difference is the whole look.
 
+Under the wordmark, one line says what this is. Beside it, in the half the
+composition leaves empty, **one real page from the archive is on air**, changing
+every six seconds; choosing it opens that page. It reads the same live document
+the viewer reads, so it shows what is genuinely published rather than
+screenshots that go stale, and it cycles a carousel's screens the way a set did.
+Two rules decide what is eligible ([`src/domain/showcase.ts`](src/domain/showcase.ts)),
+and both matter: never the open playground, which any visitor may write anything
+on, and never a page that is claimed by a title or a heading but holds no ink.
+With nothing synced yet it renders nothing at all — the space is simply empty,
+which is what the front page looks like anyway.
+
+The showcase is taken *out of the flow* on a wide screen. In it, a 24-row page
+is a third band competing for the same vertical budget as the wordmark (194px)
+and the menu (272px), and on an 832px screen that pushed `sobre` off the bottom.
+Out of flow, the left column keeps the geometry of the mockup exactly and the
+page still fits on one screen. Narrow, there is no empty right half, so it goes
+back into the flow and centres. It also honours `prefers-reduced-motion` by
+holding on one page: auto-advancing content is precisely what that setting is
+about.
+
 - **ver** — reveals the choice of watching **on your own** (`/watch`) or in one
   of six fixed "house" rooms (`/room/:roomId`), each showing live occupancy.
   Both are watching, so both live under one word instead of competing for the
