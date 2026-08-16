@@ -6,6 +6,17 @@
  * - `PUT` (admin) assigns a capture to a page number with a title and
  *   description, and returns the capture's cells so the client can write them
  *   into playhtml.
+ * - `DELETE ?page=&subpage=` (admin) unpublishes. Without `subpage` it takes
+ *   the whole carousel off air, which is what "unpublish page 220" means —
+ *   leaving screens 2 and 3 recorded under a page that is no longer published
+ *   would be a map of something that is not there.
+ *
+ * ## Why DELETE lives here rather than at `/api/published/[page]`
+ *
+ * It had its own file, and its own serverless function with it. Vercel's Hobby
+ * plan caps a deployment at twelve, and this project reached thirteen — the
+ * same reason `api/captures/[id].ts` serves its images under `?format=image`
+ * instead of taking a route of its own. One resource, one function.
  *
  * ## Why PUT returns the cells
  *
@@ -29,16 +40,28 @@ import { toInteger } from '../src/domain/coerce';
 import { applyMenu, type MenuItem } from '../src/domain/menu';
 import { pageToArray, pageToCellMap } from '../src/domain/pageEncoding';
 import { shiftPageDown } from '../src/domain/pageTransform';
-import { describeRejection, validatePublication } from '../src/domain/publication';
+import {
+  describeRejection,
+  isPublishablePage,
+  validatePublication,
+} from '../src/domain/publication';
+import { isSubpage } from '../src/domain/subpages';
 import { db } from './_lib/db';
 import { isAdmin } from './_lib/auth';
-import { bodyObject, fail, json, methodIs, serverError } from './_lib/http';
+import {
+  bodyObject,
+  fail,
+  json,
+  methodIs,
+  queryValue,
+  serverError,
+} from './_lib/http';
 
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse,
 ): Promise<void> {
-  if (!methodIs(req, res, 'GET', 'PUT')) return;
+  if (!methodIs(req, res, 'GET', 'PUT', 'DELETE')) return;
 
   try {
     if (req.method === 'GET') {
@@ -60,6 +83,53 @@ export default async function handler(
 
     if (!isAdmin(req)) {
       fail(res, 401, 'Sign in to publish.');
+      return;
+    }
+
+    if (req.method === 'DELETE') {
+      const target = Number(queryValue(req, 'page'));
+      if (!isPublishablePage(target)) {
+        fail(res, 400, 'Page number must be between 100 and 699.');
+        return;
+      }
+
+      const rawSubpage = queryValue(req, 'subpage');
+      const subpage = rawSubpage == null ? null : Number(rawSubpage);
+      if (subpage != null && !isSubpage(subpage)) {
+        fail(res, 400, 'Subpage must be a whole number from 1.');
+        return;
+      }
+
+      const removed =
+        subpage == null
+          ? await db()`
+              delete from published_pages
+              where page_number = ${target}
+              returning page_number, subpage
+            `
+          : await db()`
+              delete from published_pages
+              where page_number = ${target} and subpage = ${subpage}
+              returning page_number, subpage
+            `;
+
+      if (removed.length === 0) {
+        fail(
+          res,
+          404,
+          subpage == null
+            ? `Page ${target} is not published.`
+            : `Page ${target} subpage ${subpage} is not published.`,
+        );
+        return;
+      }
+
+      json(res, 200, {
+        pageNumber: target,
+        subpage,
+        published: false,
+        removed: removed.length,
+      });
       return;
     }
 

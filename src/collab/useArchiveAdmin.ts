@@ -632,7 +632,7 @@ export function useArchiveAdmin({
   const unpublish = useCallback<ArchiveAdminApi['unpublish']>(
     async (pageNumber) => {
       try {
-        const response = await fetch(`/api/published/${pageNumber}`, {
+        const response = await fetch(`/api/published?page=${pageNumber}`, {
           method: 'DELETE',
           credentials: 'same-origin',
         });
@@ -678,7 +678,7 @@ export function useArchiveAdmin({
       if (count <= MIN_SUBPAGE) return null;
 
       if (publicationAt(pageNumber, count) != null) {
-        await fetch(`/api/published/${pageNumber}?subpage=${count}`, {
+        await fetch(`/api/published?page=${pageNumber}&subpage=${count}`, {
           method: 'DELETE',
           credentials: 'same-origin',
         }).catch(() => undefined);
