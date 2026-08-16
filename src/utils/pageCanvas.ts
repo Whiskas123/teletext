@@ -67,6 +67,7 @@ const INDEX_LINE_RANGES: { start: number; end: number; label: string; fg: string
 
 function drawSixel(
   ctx: CanvasRenderingContext2D,
+  px: (v: number) => number,
   x: number,
   y: number,
   pattern: number,
@@ -78,7 +79,7 @@ function drawSixel(
   const w = CELL_W / 2;
   const h = cellHeight / 3;
   ctx.fillStyle = bg;
-  ctx.fillRect(x, y, CELL_W, cellHeight);
+  fillSnapped(ctx, px, x, y, CELL_W, cellHeight);
   for (let i = 0; i < 6; i++) {
     const filled = sixelBit(pattern, i);
     if (!filled) continue;
@@ -86,8 +87,36 @@ function drawSixel(
     ctx.fillStyle = COLOR_HEX[color] ?? defaultFg;
     const col = i % 2;
     const row = Math.floor(i / 2);
-    ctx.fillRect(x + col * w, y + row * h, w, h);
+    // A sixel is a cell in thirds: 18/3 is whole, but 13.5/3 is not, so the
+    // sub-rects need snapping exactly as the cells do.
+    fillSnapped(ctx, px, x + col * w, y + row * h, w, h);
   }
+}
+
+/**
+ * Fill a rectangle on whole device pixels, so neighbours meet exactly.
+ *
+ * This is the fix for the thin black grid that appeared over a scaled page.
+ * Cells are 14x18 in page coordinates, which at a scale of 0.75 is 10.5x13.5 —
+ * fractional edges, which the canvas antialiases. Two antialiased edges meeting
+ * do not add up to an opaque pixel, so a seam of the backdrop showed through
+ * between every pair of cells.
+ *
+ * Snapping each edge with the *same* rounding means one cell's right edge and
+ * the next cell's left edge land on the same integer: the seam has nowhere to
+ * appear, and no cell is drawn twice.
+ */
+function fillSnapped(
+  ctx: CanvasRenderingContext2D,
+  px: (v: number) => number,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+) {
+  const x0 = px(x);
+  const y0 = px(y);
+  ctx.fillRect(x0, y0, px(x + w) - x0, px(y + h) - y0);
 }
 
 export interface DrawPageOptions {
@@ -99,6 +128,13 @@ export interface DrawPageOptions {
   showIndexLine?: boolean;
   /** Header clock. Passed in so a caller can freeze it, and tests can fix it. */
   now?: Date;
+  /**
+   * Device pixels per page pixel.
+   *
+   * Applied here rather than by the caller's `ctx.scale`, because the geometry
+   * has to be snapped to whole pixels *after* scaling — see {@link fillSnapped}.
+   */
+  scale?: number;
 }
 
 /**
@@ -117,8 +153,10 @@ export function drawPage(
     subpageCount = 1,
     showIndexLine = true,
     now = new Date(),
+    scale = 1,
   }: DrawPageOptions = {},
 ): void {
+  const px = (v: number) => Math.round(v * scale);
   ctx.font = `${FONT_PX}px ${FONT_STACK}`;
   ctx.textBaseline = 'top';
 
@@ -169,23 +207,72 @@ export function drawPage(
         cell.graphics >= 0 &&
         cell.graphics <= 63;
       if (isGraphics) {
-        drawSixel(ctx, x, y, cell.graphics! & 0x3f, cell.graphicsColors, fg, bg, cellHeight);
+        drawSixel(ctx, px, x, y, cell.graphics! & 0x3f, cell.graphicsColors, fg, bg, cellHeight);
       } else {
         ctx.fillStyle = bg;
-        ctx.fillRect(x, y, CELL_W, cellHeight);
+        fillSnapped(ctx, px, x, y, CELL_W, cellHeight);
         ctx.fillStyle = fg;
-        if (doubleHeight) {
-          // Stretch the glyph vertically to fill the doubled cell height,
-          // matching the live CSS rendering's `scaleY(2)`.
-          ctx.save();
-          ctx.translate(x, y);
-          ctx.scale(1, 2);
-          ctx.fillText(char, 0, 0);
-          ctx.restore();
-        } else {
-          ctx.fillText(char, x, y);
-        }
+        // The glyph is scaled by the transform while the box around it was
+        // snapped above; a character may be a fraction of a pixel off its cell,
+        // which is invisible, whereas a gap between cells is not.
+        ctx.save();
+        ctx.translate(px(x), px(y));
+        // Double height stretches the glyph to fill the doubled box, matching
+        // the live CSS rendering's `scaleY(2)`.
+        ctx.scale(scale, doubleHeight ? scale * 2 : scale);
+        ctx.fillText(char, 0, 0);
+        ctx.restore();
       }
     }
   }
+}
+
+/**
+ * Draw a page and hand back the picture, once.
+ *
+ * This is what makes the front page's strip free to look at: a moderator
+ * choosing a page runs this in their browser and uploads the result, and every
+ * visitor afterwards gets an image instead of a canvas redrawn from 960 cells.
+ *
+ * At natural size, so nothing is snapped away — a picture stored once is the
+ * one place there is no reason to economise on pixels.
+ */
+export async function renderPageBlob(
+  page: TeletextPage,
+  options: DrawPageOptions = {},
+  type: string = 'image/png',
+): Promise<Blob | null> {
+  const canvas = document.createElement('canvas');
+  canvas.width = PAGE_W;
+  canvas.height = PAGE_H;
+  const ctx = canvas.getContext('2d');
+  if (ctx == null) return null;
+
+  // The webfont has to be present before the glyphs are drawn: canvas text
+  // keeps whatever font existed at draw time, and this drawing is kept.
+  try {
+    await document.fonts?.ready;
+  } catch {
+    /* draw with whatever is available rather than not at all */
+  }
+
+  drawPage(ctx, page, options);
+
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), type);
+  });
+}
+
+/** A blob as the bare base64 the showcase endpoint expects. */
+export async function blobToBase64(blob: Blob): Promise<string> {
+  const buffer = await blob.arrayBuffer();
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  // Chunked: `String.fromCharCode(...bytes)` on a few hundred kilobytes blows
+  // the argument limit.
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
 }

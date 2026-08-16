@@ -23,6 +23,7 @@ import { useCallback, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 
 import { useArchiveAdmin } from '../../collab/useArchiveAdmin';
+import { useShowcase } from '../../collab/useShowcase';
 import { useConnection } from '../../collab/useConnection';
 import { useSnapshot } from '../../collab/useSnapshot';
 import { usePageKinds } from '../../collab/usePageKinds';
@@ -35,6 +36,7 @@ import { NoticeArea } from './NoticeArea';
 import { ConfirmDialog } from './ConfirmDialog';
 import { OnAirPanel, type TransformPatch } from './OnAirPanel';
 import { ArchivePanel } from './ArchivePanel';
+import { ShowcasePanel } from './ShowcasePanel';
 import { useArchiveState } from './useArchiveState';
 import { useManageActions } from './useManageActions';
 import { useManageTab } from './useManageTab';
@@ -60,6 +62,7 @@ export function ManageArchivePage() {
     offset: archive.offset,
   });
 
+  const showcase = useShowcase();
   const snapshot = useSnapshot();
   const { kindOf, setKind } = usePageKinds();
 
@@ -204,6 +207,7 @@ export function ManageArchivePage() {
           onSelect={tab.select}
           onAirCounts={onAirCounts}
           captureTotal={tab.archiveVisited && !data.loading ? data.total : null}
+          showcaseCount={showcase.loading ? null : showcase.entries.length}
           panelId={PANEL_ID}
           tabId={tabId}
         />
@@ -234,7 +238,14 @@ export function ManageArchivePage() {
       {/* One panel, the selected one. The other is not rendered at all, so it is
           absent from the accessibility tree rather than hidden inside it. */}
       <div id={PANEL_ID} role="tabpanel" aria-labelledby={tabId(tab.selected)}>
-        {tab.selected === 'on-air' ? (
+        {tab.selected === 'showcase' ? (
+          <ShowcasePanel
+            showcase={showcase}
+            occupiedPages={data.occupiedPages}
+            titleOf={data.titleOf}
+            subpageCountOfPage={data.subpageCountOfPage}
+          />
+        ) : tab.selected === 'on-air' ? (
           <OnAirPanel
             state={onAir}
             occupiedPages={data.occupiedPages}

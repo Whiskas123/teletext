@@ -56,8 +56,10 @@ export function TeletextThumbnail({
       if (cancelled) return;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.scale(scale, scale);
-      drawPage(ctx, page, { pageNumber, subpage, subpageCount, showIndexLine });
+      // The scale goes to `drawPage`, not to the context: the cell geometry has
+      // to be snapped to whole device pixels after scaling or thin seams show
+      // between the cells.
+      drawPage(ctx, page, { pageNumber, subpage, subpageCount, showIndexLine, scale });
     };
 
     // Drawn once now and again once the webfont has loaded. Canvas text takes

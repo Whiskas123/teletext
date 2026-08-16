@@ -958,6 +958,40 @@
   background: none;
 }
 
+.manage-showcase-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid #333;
+  background: #000;
+}
+
+/* One line per candidate page: number, title, and the control. */
+.manage-showcase-choices {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+  gap: 0.35rem;
+}
+
+.manage-showcase-choice {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid #222;
+}
+
+.manage-showcase-choice .manage-card-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .frontpage-strip-tile .teletext-thumbnail {
   display: block;
   width: clamp(220px, 24vw, 330px);

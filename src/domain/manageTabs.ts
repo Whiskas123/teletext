@@ -1,10 +1,11 @@
 /**
  * Which tab the manage screen is showing, and how that lives in the URL.
  *
- * `/manage` is two screens sharing a header: the pages on air, and the corpus
- * browser that puts pages there. Which one you are looking at belongs in the
- * URL so a link can open the one you mean — and once it is in the URL it has to
- * survive whatever arrives there, including a value someone typed by hand.
+ * `/manage` is three screens sharing a header: the pages on air, the corpus
+ * browser that puts pages there, and the strip chosen for the front page. Which
+ * one you are looking at belongs in the URL so a link can open the one you
+ * mean — and once it is in the URL it has to survive whatever arrives there,
+ * including a value someone typed by hand.
  *
  * Pure and framework-free, like the rest of `src/domain/`, so the parsing rules
  * are property-tested without a router or a rendered tab.
@@ -19,10 +20,10 @@
  */
 
 /** The identifier of a tab as it appears in the URL. */
-export type TabKey = 'on-air' | 'archive';
+export type TabKey = 'on-air' | 'archive' | 'showcase';
 
 /** Every tab, in the order the tab bar lists them. */
-export const TAB_KEYS: readonly TabKey[] = ['on-air', 'archive'];
+export const TAB_KEYS: readonly TabKey[] = ['on-air', 'archive', 'showcase'];
 
 /** The tab shown when the URL says nothing usable. */
 export const DEFAULT_TAB: TabKey = 'on-air';

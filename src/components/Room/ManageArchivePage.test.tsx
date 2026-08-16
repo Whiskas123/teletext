@@ -137,6 +137,7 @@ function renderManage(url = '/manage') {
 const url = () => screen.getByTestId('url').textContent;
 const onAirTab = () => screen.getByRole('tab', { name: /on air/i });
 const archiveTab = () => screen.getByRole('tab', { name: /archive/i });
+const showcaseTab = () => screen.getByRole('tab', { name: /front page/i });
 
 beforeEach(() => {
   admin = { admin: true, loading: false, configured: true };
@@ -250,13 +251,17 @@ describe('the tab strip from the keyboard', () => {
     expect(archiveTab()).toHaveFocus();
     expect(archiveTab()).toHaveAttribute('aria-selected', 'true');
 
+    await user.keyboard('{ArrowRight}');
+    expect(showcaseTab()).toHaveFocus();
+    expect(showcaseTab()).toHaveAttribute('aria-selected', 'true');
+
     // Wraps round rather than stopping.
     await user.keyboard('{ArrowRight}');
     expect(onAirTab()).toHaveFocus();
     expect(onAirTab()).toHaveAttribute('aria-selected', 'true');
 
     await user.keyboard('{ArrowLeft}');
-    expect(archiveTab()).toHaveFocus();
+    expect(showcaseTab()).toHaveFocus();
   });
 
   it('sends Home to the first tab and End to the last', async () => {
@@ -268,7 +273,7 @@ describe('the tab strip from the keyboard', () => {
     expect(onAirTab()).toHaveAttribute('aria-selected', 'true');
 
     await user.keyboard('{End}');
-    expect(archiveTab()).toHaveAttribute('aria-selected', 'true');
+    expect(showcaseTab()).toHaveAttribute('aria-selected', 'true');
   });
 
   it('leaves the tab selected on Enter, since activation follows focus', async () => {

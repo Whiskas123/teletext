@@ -38,6 +38,8 @@ export interface ManageTabBarProps {
   onAirCounts: OnAirCounts | null;
   /** Captures matching the current filters, or null before the first answer. */
   captureTotal: number | null;
+  /** How many pages are on the front page's strip. */
+  showcaseCount: number | null;
   /** Id of the rendered panel, for `aria-controls`. */
   panelId: string;
   tabId(tab: TabKey): string;
@@ -50,6 +52,7 @@ export function ManageTabBar({
   onSelect,
   onAirCounts,
   captureTotal,
+  showcaseCount,
   panelId,
   tabId,
 }: ManageTabBarProps) {
@@ -106,12 +109,21 @@ export function ManageTabBar({
                   </span>
                 )}
               </>
-            ) : (
+            ) : tab === 'archive' ? (
               <>
                 <span className="manage-tab-name">Archive</span>
                 {captureTotal != null && (
                   <span className="manage-tab-count">
                     {captureTotal} captures match
+                  </span>
+                )}
+              </>
+            ) : (
+              <>
+                <span className="manage-tab-name">Front page</span>
+                {showcaseCount != null && (
+                  <span className="manage-tab-count">
+                    {showcaseCount} on the strip
                   </span>
                 )}
               </>
