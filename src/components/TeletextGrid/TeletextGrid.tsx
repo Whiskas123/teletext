@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Cell, TeletextPage } from '../../types/teletext';
 import {
   COLS,
@@ -8,6 +8,7 @@ import {
   MIN_DOUBLE_HEIGHT_ROW,
   ROWS,
   sixelBit,
+  sixelPartAt,
 } from '../../types/teletext';
 import { formatSubpageIndicator } from '../../domain/subpages';
 
@@ -138,6 +139,30 @@ interface TeletextGridProps {
   onIndexPageSelect?: (page: number) => void;
   /** When set (and readOnly), clicking the top-left page number calls this so parent can open input */
   onPageNumberClick?: () => void;
+  /**
+   * Editing pointer, resolved from the grid's geometry rather than per cell.
+   *
+   * A touch drag does not visit the elements it passes over: the browser gives
+   * every event to whatever the finger first landed on, so `mouseenter` — which
+   * is how the brush used to follow a drag — never fires for the cells in
+   * between. Painting was therefore impossible on a phone whatever the layout.
+   *
+   * The grid is a uniform 40x24, so the cell and the sixth within it are simple
+   * arithmetic on the container's rectangle. That works for a mouse and a
+   * finger alike, and costs no per-cell handlers at all — 2,880 closures a
+   * render that the editor no longer builds.
+   *
+   * When this is set the grid takes over pointer handling; the per-cell mouse
+   * props are left for the viewer, which uses them for page links.
+   */
+  onPointerCell?: (
+    index: number,
+    part: number,
+    event: React.PointerEvent,
+    phase: 'down' | 'move',
+  ) => void;
+  /** The pointer left the grid or was lifted: end any stroke in progress. */
+  onPointerEnd?: () => void;
 }
 
 function SixelBlock({
@@ -325,8 +350,11 @@ export function TeletextGrid({
   showIndexLine: showIndexLineProp,
   onIndexPageSelect,
   onPageNumberClick,
+  onPointerCell,
+  onPointerEnd,
 }: TeletextGridProps) {
   const now = useLiveTime();
+  const gridRef = useRef<HTMLDivElement>(null);
   const pageStr = formatPageNumber(pageNumber);
   const subpageStr = formatSubpageIndicator(subpage, subpageCount);
   const dateTimeStr = formatHeaderDateTime(now);
@@ -334,6 +362,62 @@ export function TeletextGrid({
   const indexClickable = showIndexLine && onIndexPageSelect != null;
   const pageNumberClickable = readOnly && onPageNumberClick != null;
   const pageLinkMap = useMemo(() => (readOnly && onIndexPageSelect ? getPageLinkMap(page) : new Map<number, number>()), [page, readOnly, onIndexPageSelect]);
+
+  /**
+   * Which cell, and which sixth of it, a pointer is over.
+   *
+   * Measured off the grid's own box: 40 columns and 24 rows of equal size, so
+   * the arithmetic is exact and needs no lookup. Returns null outside the
+   * drawable area — including the header row, which is not a cell anyone edits.
+   */
+  const resolvePointer = useCallback(
+    (event: React.PointerEvent): { index: number; part: number } | null => {
+      const element = gridRef.current;
+      if (element == null) return null;
+      const rect = element.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return null;
+
+      const cellWidth = rect.width / COLS;
+      // The index line is an extra row in the same grid, so it has to be
+      // counted or every row below the first would be measured slightly short.
+      const cellHeight = rect.height / (showIndexLine ? ROWS + 1 : ROWS);
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+      const col = Math.floor(x / cellWidth);
+      const row = Math.floor(y / cellHeight);
+      if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return null;
+
+      return {
+        index: row * COLS + col,
+        part: sixelPartAt(x - col * cellWidth, y - row * cellHeight, cellWidth, cellHeight),
+      };
+    },
+    [showIndexLine],
+  );
+
+  const handlePointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (onPointerCell == null) return;
+      const hit = resolvePointer(event);
+      if (hit == null) return;
+      // Capture, so a stroke that wanders off the grid — or off the window —
+      // still reports its end, and a finger keeps painting after it leaves the
+      // element it started on.
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      onPointerCell(hit.index, hit.part, event, 'down');
+    },
+    [onPointerCell, resolvePointer],
+  );
+
+  const handlePointerMove = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (onPointerCell == null) return;
+      const hit = resolvePointer(event);
+      if (hit == null) return;
+      onPointerCell(hit.index, hit.part, event, 'move');
+    },
+    [onPointerCell, resolvePointer],
+  );
 
   // The double-height preview only makes sense on an actual cursor cell
   // within the valid double-height row range (matches `isEffectiveDoubleHeight`'s
@@ -348,7 +432,16 @@ export function TeletextGrid({
 
   return (
     <div className={`teletext-screen${compact ? ' teletext-screen-compact' : ''}${showIndexLine ? ' teletext-screen-with-index' : ''}`}>
-      <div className={`teletext-grid${showIndexLine ? ' teletext-grid-with-index' : ''}`}>
+      <div
+        ref={gridRef}
+        className={`teletext-grid${showIndexLine ? ' teletext-grid-with-index' : ''}${
+          onPointerCell != null ? ' teletext-grid-drawable' : ''
+        }`}
+        onPointerDown={onPointerCell == null ? undefined : handlePointerDown}
+        onPointerMove={onPointerCell == null ? undefined : handlePointerMove}
+        onPointerUp={onPointerEnd}
+        onPointerCancel={onPointerEnd}
+      >
         {/* All 24 rows of page content — no overlay on row 23 when we have a separate index row */}
         {page.map((cell, index) => {
           const row = Math.floor(index / COLS);
@@ -407,10 +500,10 @@ export function TeletextGrid({
               pageLinkTarget={headerChar === null ? pageLinkMap.get(index) : undefined}
               readOnly={readOnly}
               pageNumberClickable={pageNumberClickable}
-              onCellClick={onCellClick}
-              onCellMouseDown={onCellMouseDown}
-              onCellMouseEnter={onCellMouseEnter}
-              onCellMouseMove={onCellMouseMove}
+              onCellClick={onPointerCell == null ? onCellClick : undefined}
+              onCellMouseDown={onPointerCell == null ? onCellMouseDown : undefined}
+              onCellMouseEnter={onPointerCell == null ? onCellMouseEnter : undefined}
+              onCellMouseMove={onPointerCell == null ? onCellMouseMove : undefined}
               onIndexPageSelect={onIndexPageSelect}
               onPageNumberClick={onPageNumberClick}
             />

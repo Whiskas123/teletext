@@ -1308,77 +1308,140 @@
 }
 
 /* ===================================================================== *
- * The editor on a small screen.
+ * The editor on a phone.
  *
- * It was built as a desktop instrument and says so in its measurements: a
- * 20rem sidebar that cannot shrink, beside a grid fixed at 14px cells — 40 of
- * them, so 560px — inside a `100vh` row that hides its own overflow. That is
- * about 880px of content, and on a 390px phone the grid simply sat off the
- * side of the screen with no way to reach it.
+ * Not the desktop layout stacked. The desktop puts a 20rem column of tools
+ * beside the page, and there is no "beside" on a phone — stacking it gave a
+ * grid you could not reach and a column you scrolled forever. So the shape
+ * changes (see `isNarrow` in `Editor.tsx`):
  *
- * Three changes, in order of what actually breaks:
+ *   the page       takes the screen
+ *   the dock       five brushes, always under the thumb
+ *   the sheet      everything else, pulled up over the page when wanted
  *
- * 1. The row becomes a column, and the page scrolls. `overflow: hidden` on a
- *    fixed-height row is right when the sidebar has its own scrollbar and
- *    wrong the moment they stack.
- * 2. The grid is sized from the viewport instead of a constant, so 40 cells
- *    fit the width whatever the width is.
- * 3. The page goes first. On a desktop the tools sit beside the work; stacked,
- *    tools *above* the work would push the thing being edited off the bottom
- *    of the screen on every visit.
+ * Drawing works here because the grid listens for *pointer* events resolved
+ * from its own geometry, not per-cell mouse events — a touch drag reports only
+ * to the element the finger landed on, so the cells it crosses are never
+ * entered. `touch-action: none` on the grid is the other half: without it the
+ * browser takes the drag for scrolling before the page ever sees it.
  * ===================================================================== */
+
+/* The grid accepts a drag as drawing rather than losing it to the scroller. */
+.teletext-grid-drawable {
+  touch-action: none;
+}
+
 @media (max-width: 900px) {
-  .editor-layout {
+  .editor-layout-narrow {
     flex-direction: column;
-    height: auto;
-    max-height: none;
-    overflow: visible;
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
   }
 
-  /* The grid first, and kept in view while the tools are scrolled. */
-  .editor-main {
-    order: -1;
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    padding: 0.5rem;
-    background: #111;
-    border-bottom: 1px solid #333;
-    overflow: visible;
-  }
-
-  .editor-sidebar {
-    order: 0;
-    width: 100%;
-    min-width: 0;
-    max-width: none;
-    /* Its own scrollbar was for when it was a column of its own height; now the
-       page scrolls and a nested scroller would trap the gesture. */
-    overflow: visible;
-    border-right: 0;
-    border-top: 1px solid #333;
+  .editor-layout-narrow .editor-main {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 0.4rem;
+    overflow: hidden;
   }
 
   /*
-   * 40 cells across the viewport, whatever it is.
+   * 40 cells across the viewport, and 24 down whatever is left.
    *
-   * The grid is `repeat(40, 1em)`, so the font size *is* the width: 40 of them
-   * plus the screen's 12px padding and 2px border either side. The subtraction
-   * is that chrome plus `.editor-main`'s padding, and the 14px cap keeps a
-   * tablet at the size the desktop uses rather than blowing the cells up.
+   * The grid is `repeat(40, 1em)` by `repeat(24, 1.35em)`, so one font size
+   * decides both. Taking the smaller of the two fits means the page is whole on
+   * a tall phone and on a short one in landscape, instead of running off an
+   * edge in one of them.
    */
-  .editor-main .teletext-screen {
-    font-size: min(14px, calc((100vw - 3.5rem) / 40));
-    padding: 6px;
+  .editor-layout-narrow .teletext-screen {
+    font-size: min(
+      calc((100vw - 1.8rem) / 40),
+      calc((100dvh - 11rem) / 32.4)
+    );
+    padding: 4px;
+    border-width: 1px;
   }
 
-  /* A tap target, not a pointer target. */
-  .color-swatch {
-    width: 2.25rem;
-    height: 2.25rem;
+  /* The dock: always there, never scrolled away from. */
+  .editor-dock {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: stretch;
+    gap: 0.3rem;
+    padding: 0.4rem;
+    background: #1a1a1a;
+    border-top: 1px solid #333;
   }
 
-  .editor-toolbar {
-    justify-content: flex-start;
+  .editor-dock .brush-mode-toggles {
+    display: flex;
+    flex: 1 1 auto;
+    gap: 0.3rem;
+  }
+
+  .editor-dock .sidebar-toggle {
+    flex: 1 1 0;
+    min-width: 0;
+    /* A thumb, not a pointer. 44px is the smallest target worth offering. */
+    min-height: 44px;
+    padding: 0.35rem 0.15rem;
+    font-size: 0.6rem;
+  }
+
+  .editor-sheet-handle {
+    flex: 0 0 auto;
+    min-height: 44px;
+    padding: 0 0.8rem;
+    background: #2a2a2a;
+    border: 1px solid #444;
+    color: #eee;
+    font-family: monospace;
+    font-size: 0.75rem;
+    cursor: pointer;
+  }
+
+  /*
+   * The sheet. Bounded to most of the screen rather than all of it, so the page
+   * behind stays visible — what you are about to change should not disappear
+   * while you choose how to change it.
+   */
+  .editor-sheet {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    max-height: 78dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0.75rem 1rem 1.5rem;
+    background: #1a1a1a;
+    border-top: 2px solid #444;
+    border-radius: 12px 12px 0 0;
+    box-shadow: 0 -12px 32px rgb(0 0 0 / 55%);
+  }
+
+  .editor-sheet-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 19;
+    background: rgb(0 0 0 / 45%);
+  }
+
+  /* Inside the sheet the sections are the desktop ones, given room to be
+     tapped rather than clicked. */
+  .editor-sheet .sidebar-section {
+    padding: 0.75rem 0;
+  }
+
+  .editor-sheet .color-swatch {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .editor-sheet .sidebar-action-btn,
+  .editor-sheet .sidebar-toggle {
+    min-height: 44px;
   }
 }

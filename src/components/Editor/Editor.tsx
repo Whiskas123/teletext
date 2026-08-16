@@ -41,7 +41,6 @@ import {
   sixelBit,
   SIXEL_BITS,
   SIXEL_MAX,
-  sixelPartAt,
   resolveDoubleHeightCursor,
   slotColorsFromBrush,
   TELETEXT_COLOR_HEX,
@@ -54,6 +53,7 @@ import {
 } from "../../types/teletext";
 import { cellsBetween } from "../../domain/strokeLine";
 import { exportPageAsPng } from "../../utils/exportPng";
+import { useMediaQuery } from "../../utils/useMediaQuery";
 import { TeletextGrid } from "../TeletextGrid/TeletextGrid";
 
 const SIXEL_TOOLTIP_MARGIN = 8;
@@ -628,20 +628,6 @@ export function Editor({
    * Which sixth of a cell the pointer is over, from the event's position within
    * the cell element. Returns null when the position can't be determined.
    */
-  const partFromEvent = useCallback((e?: React.MouseEvent): number | null => {
-    const target = e?.currentTarget as HTMLElement | undefined;
-    if (!e || !target || typeof target.getBoundingClientRect !== "function") {
-      return null;
-    }
-    const rect = target.getBoundingClientRect();
-    return sixelPartAt(
-      e.clientX - rect.left,
-      e.clientY - rect.top,
-      rect.width,
-      rect.height,
-    );
-  }, []);
-
   /**
    * Paint every cell from where the stroke was to where it now is.
    *
@@ -668,39 +654,85 @@ export function Editor({
     paint(index);
   }, []);
 
-  const handleCellClick = useCallback(
-    (index: number, e?: React.MouseEvent) => {
-      if (index < COLS) return;
-      if (brushMode === "picker") {
-        pickFromCell(index);
+  /**
+   * A pointer touched or moved over a cell.
+   *
+   * One handler for mouse, pen and finger, resolved from the grid's geometry
+   * (see `TeletextGrid`'s `onPointerCell`). It replaced a set of per-cell mouse
+   * handlers that a touch drag never fired: the browser sends every event of a
+   * touch drag to the element the finger landed on, so the cells it passes over
+   * are never entered, and painting on a phone was impossible.
+   */
+  const handlePointerCell = useCallback(
+    (index: number, part: number, e: React.PointerEvent, phase: 'down' | 'move') => {
+      // The header row is not editable, and a stroke crossing it steps over.
+      if (index < COLS) {
+        if (phase === 'down') return;
+        setHoveredCellIndex(null);
+        setHoveredPartIndex(null);
         return;
       }
-      if (brushMode === "block" && e?.altKey) {
-        pickMotifFromCell(index);
+
+      const alt = e.altKey;
+      const drawing = isDrawingRef.current;
+
+      if (brushMode === 'picker') {
+        setHoveredCellIndex(index);
+        // Nothing to drag: picking is a single act, on the way down.
+        if (phase === 'down') pickFromCell(index);
         return;
       }
-      if (brushMode === "blink") {
-        paintBlinkCell(index, !e?.altKey);
+
+      if (brushMode === 'block') {
+        setHoveredCellIndex(index);
+        if (phase === 'down') {
+          // Alt is "pick up the motif under the pointer", not "paint with it".
+          if (alt) {
+            pickMotifFromCell(index);
+            return;
+          }
+          beginStroke(index, paintCell);
+        } else if (drawing) {
+          paintAlong(index, paintCell);
+        }
         return;
       }
-      if (brushMode === "pixel") {
-        const part = partFromEvent(e);
-        if (part != null) paintSixelPart(index, part, e?.altKey === true);
+
+      if (brushMode === 'pixel') {
+        setHoveredCellIndex(index);
+        setHoveredPartIndex(part);
+        if (phase === 'down') {
+          beginStroke(index, (cell) => paintSixelPart(cell, part, alt));
+        } else if (drawing) {
+          paintAlong(index, (cell) => paintSixelPart(cell, part, alt));
+        }
         return;
       }
-      if (brushMode === "block") {
-        paintCell(index);
-      } else {
+
+      if (brushMode === 'blink') {
+        const on = !alt;
+        if (phase === 'down') {
+          beginStroke(index, (cell) => paintBlinkCell(cell, on));
+        } else if (drawing) {
+          paintAlong(index, (cell) => paintBlinkCell(cell, true));
+        }
+        return;
+      }
+
+      // Typing: the pointer places the cursor and opens the keyboard, which on
+      // a phone is the only way to raise it at all.
+      if (phase === 'down') {
         setCursorIndex(index);
         focusHiddenInput();
       }
     },
     [
       brushMode,
+      beginStroke,
+      paintAlong,
       paintCell,
       paintBlinkCell,
       paintSixelPart,
-      partFromEvent,
       pickMotifFromCell,
       pickFromCell,
       focusHiddenInput,
@@ -708,91 +740,19 @@ export function Editor({
     ],
   );
 
-  const handleCellMouseDown = useCallback(
-    (index: number, e?: React.MouseEvent) => {
-      if (index < COLS) return;
-      // Picking happens on click, not on mousedown: there is nothing to drag, and
-      // starting a draw would leave `isDrawingRef` set with no painter to clear.
-      if (brushMode === "picker") return;
-      if (brushMode === "block" && e?.altKey) {
-        e?.preventDefault();
-        e?.stopPropagation();
-        pickMotifFromCell(index);
-        return;
-      }
-      if (brushMode === "blink") {
-        const on = !e?.altKey;
-        beginStroke(index, (cell) => paintBlinkCell(cell, on));
-      } else if (brushMode === "block") {
-        beginStroke(index, paintCell);
-      } else if (brushMode === "pixel") {
-        const part = partFromEvent(e);
-        if (part == null) return;
-        const erase = e?.altKey === true;
-        beginStroke(index, (cell) => paintSixelPart(cell, part, erase));
-      }
-    },
-    [
-      brushMode,
-      beginStroke,
-      paintCell,
-      paintBlinkCell,
-      paintSixelPart,
-      partFromEvent,
-      pickMotifFromCell,
-    ],
-  );
-
-  const handleCellMouseEnter = useCallback(
-    (index: number, e?: React.MouseEvent) => {
-      if (index < COLS) {
-        setHoveredCellIndex(null);
-        setHoveredPartIndex(null);
-        return;
-      }
-      if (brushMode === "picker") {
-        // Highlight what would be picked, without touching it.
-        setHoveredCellIndex(index);
-      } else if (brushMode === "block") {
-        setHoveredCellIndex(index);
-        if (isDrawingRef.current) paintAlong(index, paintCell);
-      } else if (brushMode === "pixel") {
-        setHoveredCellIndex(index);
-        const part = partFromEvent(e);
-        setHoveredPartIndex(part);
-        if (isDrawingRef.current && part != null) {
-          const erase = e?.altKey === true;
-          // The cells skipped between samples take the sixth the pointer is on
-          // now: the brush covers a sixth of a cell, and where exactly it
-          // crossed each one is not knowable from two samples.
-          paintAlong(index, (cell) => paintSixelPart(cell, part, erase));
-        }
-      } else if (brushMode === "blink" && isDrawingRef.current) {
-        paintAlong(index, (cell) => paintBlinkCell(cell, true));
-      }
-    },
-    [brushMode, paintAlong, paintCell, paintBlinkCell, paintSixelPart, partFromEvent],
-  );
-
   /**
-   * Pixel-brush only: track (and paint) the individual sixths the pointer
-   * crosses *within* a cell — cell-enter granularity is too coarse for a brush
-   * that covers a sixth of a cell.
+   * The stroke is over: the pointer was lifted, or capture was taken away.
+   *
+   * The hover marks go with it — on a touch screen there is no pointer resting
+   * anywhere between strokes, so leaving them lit would mark a cell nobody is
+   * pointing at.
    */
-  const handleCellMouseMove = useCallback(
-    (index: number, e?: React.MouseEvent) => {
-      if (brushMode !== "pixel" || index < COLS) return;
-      const part = partFromEvent(e);
-      if (part == null) return;
-      setHoveredCellIndex(index);
-      setHoveredPartIndex((prev) => (prev === part ? prev : part));
-      if (isDrawingRef.current) {
-        const erase = e?.altKey === true;
-        paintAlong(index, (cell) => paintSixelPart(cell, part, erase));
-      }
-    },
-    [brushMode, paintAlong, partFromEvent, paintSixelPart],
-  );
+  const endStroke = useCallback(() => {
+    isDrawingRef.current = false;
+    lastPaintedRef.current = null;
+    setHoveredCellIndex(null);
+    setHoveredPartIndex(null);
+  }, []);
 
   const handleGridMouseLeave = useCallback(() => {
     setHoveredCellIndex(null);
@@ -1026,6 +986,985 @@ export function Editor({
     setTimeout(() => hiddenInputRef.current?.focus(), 0);
   }, []);
 
+  /*
+   * Which shell to draw.
+   *
+   * A phone has no room beside the page, so the tools cannot sit next to it.
+   * Below 900px the page takes the screen, the brushes go in a dock under the
+   * thumb, and the rest lives in a sheet that pulls up when it is wanted.
+   */
+  const isNarrow = useMediaQuery("(max-width: 900px)");
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  // Choosing a brush should not leave the sheet sitting over the page you are
+  // about to draw on.
+  const chooseBrushMode = useCallback((mode: typeof brushMode) => {
+    setBrushMode(mode);
+    setSheetOpen(false);
+  }, []);
+
+
+  /*
+   * One set of controls, placed in one of two shells.
+   *
+   * Built here rather than inline in each layout so the phone and the desktop
+   * cannot drift apart: a control added to one is added to both, because there
+   * is only one of it.
+   */
+  const textStyleSection = (
+    <section className="sidebar-section">
+      <h2 className="sidebar-heading">Text style</h2>
+      <div className="text-preview-three-col">
+        <div className="text-preview-col">
+          <span className="text-preview-label">Fg</span>
+          <div className="text-preview-swatches text-preview-swatches-4x4">
+            {TELETEXT_COLORS.map((color) => (
+              <button
+                key={color}
+                type="button"
+                className={`color-swatch color-swatch-mini teletext-bg-${color} ${fg === color ? "active" : ""}`}
+                title={`Foreground ${color}`}
+                onClick={() => setFg(color)}
+                aria-label={`Foreground ${color}`}
+              />
+            ))}
+          </div>
+        </div>
+        <div className="text-preview-col">
+          <span className="text-preview-label">Bg</span>
+          <div className="text-preview-swatches text-preview-swatches-4x4">
+            {TELETEXT_COLORS.map((color) => (
+              <button
+                key={color}
+                type="button"
+                className={`color-swatch color-swatch-mini teletext-bg-${color} ${bg === color ? "active" : ""}`}
+                title={`Background ${color}`}
+                onClick={() => setBg(color)}
+                aria-label={`Background ${color}`}
+              />
+            ))}
+          </div>
+        </div>
+        <div
+          className={`text-preview-cell teletext-fg-${fg} teletext-bg-${bg} ${doubleHeightOn ? "text-preview-cell-double-height" : ""}`}
+          aria-hidden
+        />
+      </div>
+      <button
+        type="button"
+        className={`sidebar-toggle ${doubleHeightOn ? "active" : ""}`}
+        onClick={() => setDoubleHeightOn((v) => !v)}
+        aria-pressed={doubleHeightOn}
+        title="Typed characters render at twice the row height. Not available on the last row."
+      >
+        <IconDoubleHeight className="sidebar-toggle-icon" />
+        <span>Double height</span>
+      </button>
+
+      {textStyles.history.length > 0 && (
+        <div className="color-block brush-history">
+          <span className="sidebar-field-label">Recent text styles</span>
+          <div className="brush-history-stepper">
+            <button
+              type="button"
+              className="brush-history-step"
+              onClick={() => stepTextStyleHistory(1)}
+              disabled={textStyles.index >= textStyles.history.length - 1}
+              title="Older text style"
+              aria-label="Older text style"
+            >
+              ◀
+            </button>
+            <span className="brush-history-current">
+              <TextStyleSwatch style={textStyles.history[textStyles.index]} />
+            </span>
+            <button
+              type="button"
+              className="brush-history-step"
+              onClick={() => stepTextStyleHistory(-1)}
+              disabled={textStyles.index <= 0}
+              title="Newer text style"
+              aria-label="Newer text style"
+            >
+              ▶
+            </button>
+          </div>
+          <div className="brush-history-strip">
+            {textStyles.history.map((style, idx) => (
+              <button
+                key={textStyleKey(style)}
+                type="button"
+                className={`brush-history-btn ${idx === textStyles.index ? "brush-history-btn-active" : ""}`}
+                title={describeTextStyle(style)}
+                onClick={() => selectTextStyleFromHistory(idx)}
+                aria-label={`Use recent text style ${idx + 1}: ${describeTextStyle(style)}`}
+                aria-pressed={idx === textStyles.index}
+              >
+                <TextStyleSwatch style={style} />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+
+  const brushOptionsSection = (
+    <section className="sidebar-section">
+      <h2 className="sidebar-heading">Brush options</h2>
+        {brushMode === "picker" && (
+          <p className="sidebar-hint">
+            Click any cell to copy what made it. A cell with a character hands
+            its colours to the text tool and puts the cursor there; a mosaic
+            cell hands its shape and its six colours to the block brush.
+          </p>
+        )}
+        {brushMode === "block" && (
+          <div className="brush-options">
+            {/*
+              * A lifted shape is otherwise invisible state: the motif previews
+              * all show full cells, so a half-filled brush would look identical
+              * to a solid one right up until it painted.
+              */}
+            {blockPattern !== SIXEL_MAX && (
+              <div className="brush-picked-pattern">
+                <div className="brush-picked-preview" aria-hidden>
+                  {([0, 1, 2, 3, 4, 5] as const).map((i) => (
+                    <span
+                      key={i}
+                      className={`preset-motif-dot teletext-bg-${
+                        sixelBit(blockPattern, i) ? brushColors[i] : "black"
+                      }`}
+                    />
+                  ))}
+                </div>
+                <div className="brush-picked-text">
+                  <span className="sidebar-field-label">Picked shape</span>
+                  <button
+                    type="button"
+                    className="sidebar-toggle"
+                    onClick={() => setBlockPattern(SIXEL_MAX)}
+                  >
+                    <span>Fill the whole cell</span>
+                  </button>
+                </div>
+              </div>
+            )}
+            <div className="color-block">
+              <div className="preset-motifs">
+                {MOTIF_PATTERNS.map((pattern, idx) => {
+                  const previewColors =
+                    motifColors[idx] ?? defaultColorsForMotif(pattern.slots);
+                  return (
+                    <button
+                      key={pattern.name}
+                      type="button"
+                      className={`preset-motif-btn ${selectedMotifIndex === idx ? "preset-motif-btn-active" : ""}`}
+                      title={pattern.name}
+                      onClick={() => selectMotif(idx)}
+                      aria-label={`Use ${pattern.name} motif`}
+                      aria-pressed={selectedMotifIndex === idx}
+                    >
+                      <div className="preset-motif-preview">
+                        {([0, 1, 2, 3, 4, 5] as const).map((i) => (
+                          <span
+                            key={i}
+                            className={`preset-motif-dot teletext-bg-${previewColors[i]}`}
+                          />
+                        ))}
+                      </div>
+                      <span className="preset-motif-name">
+                        {pattern.name}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div
+                className="color-block sixel-color-tooltip-ref"
+                ref={sixelColorTooltipRef}
+              >
+                <span className="sidebar-field-label">
+                  Click a part to change its color
+                </span>
+                <div
+                  className="brush-sixel-preview"
+                  ref={brushSixelPreviewRef}
+                  aria-hidden
+                >
+                  {([0, 1, 2, 3, 4, 5] as const).map((i) => {
+                    const slotIndex = selectedMotif.slots[i];
+                    const slots = selectedMotif.slots;
+                    /* Grid is 2×3 row-major: [0][1] / [2][3] / [4][5]. Right = i+1 when left col; bottom = i+2 when row 0 or 1. */
+                    const rightNeighbor = i % 2 === 0 && i < 5 ? i + 1 : null;
+                    const bottomNeighbor = i <= 3 ? i + 2 : null;
+                    const borderRight =
+                      rightNeighbor !== null &&
+                      slots[i] !== slots[rightNeighbor];
+                    const borderBottom =
+                      bottomNeighbor !== null &&
+                      slots[i] !== slots[bottomNeighbor];
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        className={`brush-sixel-part brush-sixel-part-slot-${slotIndex} teletext-bg-${brushColors[i]} ${borderRight ? "brush-sixel-part-border-r" : ""} ${borderBottom ? "brush-sixel-part-border-b" : ""} ${hoveredSlotIndex === slotIndex ? "brush-sixel-part-hover" : ""} ${selectedSixelIndex === i && colorTooltipOpen ? "brush-sixel-part-active" : ""}`}
+                        title={`Part ${i + 1}`}
+                        onMouseEnter={() => setHoveredSlotIndex(slotIndex)}
+                        onMouseLeave={() => setHoveredSlotIndex(null)}
+                        onClick={(e) => {
+                          const open =
+                            colorTooltipOpen && selectedSixelIndex === i
+                              ? false
+                              : true;
+                          setSelectedSixelIndex(i);
+                          if (open && brushSixelPreviewRef.current) {
+                            const partRect = (
+                              e.currentTarget as HTMLButtonElement
+                            ).getBoundingClientRect();
+                            const previewRect =
+                              brushSixelPreviewRef.current.getBoundingClientRect();
+                            setTooltipAnchor({
+                              part: {
+                                left: partRect.left,
+                                top: partRect.top,
+                                width: partRect.width,
+                                height: partRect.height,
+                              },
+                              preview: {
+                                left: previewRect.left,
+                                top: previewRect.top,
+                                width: previewRect.width,
+                                height: previewRect.height,
+                              },
+                            });
+                          }
+                          setColorTooltipOpen(open);
+                        }}
+                        aria-label={`Part ${i + 1}, ${brushColors[i]}`}
+                        aria-expanded={
+                          selectedSixelIndex === i && colorTooltipOpen
+                        }
+                      />
+                    );
+                  })}
+                </div>
+                {(() => {
+                  const clamped = tooltipAnchor
+                    ? clampTooltipToViewport(tooltipAnchor)
+                    : null;
+                  const slotCount = motifSlotCount(selectedMotif.slots);
+                  const tooltipLabel =
+                    slotCount === 1
+                      ? "Color"
+                      : SIXEL_PART_NAMES[selectedSixelIndex];
+                  return (
+                    <div
+                      className={`sixel-color-tooltip ${colorTooltipOpen ? "sixel-color-tooltip-open" : ""}`}
+                      role="tooltip"
+                      aria-hidden={!colorTooltipOpen}
+                      style={{
+                        position: "fixed",
+                        left: clamped ? clamped.left : -9999,
+                        top: clamped ? clamped.top : 0,
+                      }}
+                    >
+                      <div
+                        className="sixel-color-tooltip-label"
+                        aria-live="polite"
+                      >
+                        {tooltipLabel}
+                      </div>
+                      <div className="sixel-color-tooltip-swatches">
+                        {TELETEXT_COLORS.map((color) => (
+                          <button
+                            key={color}
+                            type="button"
+                            className={`color-swatch teletext-bg-${color}`}
+                            title={color}
+                            onClick={() => {
+                              const slotIndex =
+                                selectedMotif.slots[selectedSixelIndex];
+                              setMotifSlotColor(slotIndex, color);
+                              setColorTooltipOpen(false);
+                            }}
+                            aria-label={`Set to ${color}`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+            <div className="color-block">
+              <span className="sidebar-field-label">
+                Pick from grid (Alt + click)
+              </span>
+              <p className="sidebar-hint">
+                Hold Alt and click a block on the grid to copy its motif.
+              </p>
+            </div>
+          </div>
+        )}
+        {brushMode === "pixel" && (
+          <div className="brush-options">
+            <div className="color-block">
+              <span className="sidebar-field-label">Pixel color</span>
+              <div className="text-preview-swatches text-preview-swatches-4x4">
+                {TELETEXT_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    className={`color-swatch color-swatch-mini teletext-bg-${color} ${pixelColor === color ? "active" : ""}`}
+                    title={`Pixel ${color}`}
+                    onClick={() => setPixelColor(color)}
+                    aria-label={`Pixel color ${color}`}
+                    aria-pressed={pixelColor === color}
+                  />
+                ))}
+              </div>
+            </div>
+            <p className="sidebar-hint">
+              Click a sixth of a cell to paint just that sixth. Drag to keep
+              painting. Alt + click erases a sixth.
+            </p>
+          </div>
+        )}
+        {brushMode === "blink" && (
+          <p className="sidebar-hint">
+            Click or drag to set blink on. Alt + click to remove blink.
+          </p>
+        )}
+        {isBrushActive && brushes.history.length > 0 && (
+          <div className="color-block brush-history">
+            <span className="sidebar-field-label">Recent brushes</span>
+            <div className="brush-history-stepper">
+              <button
+                type="button"
+                className="brush-history-step"
+                onClick={() => stepBrushHistory(1)}
+                disabled={brushes.index >= brushes.history.length - 1}
+                title="Older brush ( [ )"
+                aria-label="Older brush"
+              >
+                ◀
+              </button>
+              <span className="brush-history-current">
+                <BrushSwatch brush={brushes.history[brushes.index]} />
+              </span>
+              <button
+                type="button"
+                className="brush-history-step"
+                onClick={() => stepBrushHistory(-1)}
+                disabled={brushes.index <= 0}
+                title="Newer brush ( ] )"
+                aria-label="Newer brush"
+              >
+                ▶
+              </button>
+            </div>
+            <div className="brush-history-strip">
+              {brushes.history.map((brush, idx) => (
+                <button
+                  key={brushKey(brush)}
+                  type="button"
+                  className={`brush-history-btn ${idx === brushes.index ? "brush-history-btn-active" : ""}`}
+                  title={
+                    brush.kind === "pixel"
+                      ? `Pixel brush (${brush.color})`
+                      : `${MOTIF_PATTERNS[brush.motifIndex]?.name ?? "Block"} brush`
+                  }
+                  onClick={() => selectBrushFromHistory(idx)}
+                  aria-label={`Use recent brush ${idx + 1}`}
+                  aria-pressed={idx === brushes.index}
+                >
+                  <BrushSwatch brush={brush} />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+    </section>
+  );
+
+  const brushSection = (
+    <section className="sidebar-section">
+      <h2 className="sidebar-heading">Brush</h2>
+        <div className="brush-mode-toggles">
+          <button
+            type="button"
+            className={`sidebar-toggle ${brushMode === "off" ? "active" : ""}`}
+            onClick={() => setBrushMode("off")}
+            title="Type text"
+          >
+            <IconTextCursor className="sidebar-toggle-icon" />
+            <span>Off</span>
+          </button>
+          <button
+            type="button"
+            className={`sidebar-toggle ${brushMode === "block" ? "active" : ""}`}
+            onClick={() => setBrushMode("block")}
+            title="Paint whole mosaic cells with a motif"
+          >
+            <IconBlock className="sidebar-toggle-icon" />
+            <span>Block</span>
+          </button>
+          <button
+            type="button"
+            className={`sidebar-toggle ${brushMode === "pixel" ? "active" : ""}`}
+            onClick={() => setBrushMode("pixel")}
+            title="Paint a single sixth of a cell. Alt+click to erase it."
+          >
+            <IconPixel className="sidebar-toggle-icon" />
+            <span>Pixel</span>
+          </button>
+          <button
+            type="button"
+            className={`sidebar-toggle ${brushMode === "blink" ? "active" : ""}`}
+            onClick={() => setBrushMode("blink")}
+            title="Paint blink on cells. Alt+click to remove blink."
+          >
+            <IconBlink className="sidebar-toggle-icon" />
+            <span>Blink</span>
+          </button>
+          <button
+            type="button"
+            className={`sidebar-toggle ${brushMode === "picker" ? "active" : ""}`}
+            onClick={() => setBrushMode("picker")}
+            title="Click a cell to copy what made it: its colours if it holds a character, its shape and colours if it is a mosaic."
+          >
+            <IconPipette className="sidebar-toggle-icon" />
+            <span>Pick</span>
+          </button>
+        </div>
+      {brushMode === "picker" && (
+        <p className="sidebar-hint">
+          Click any cell to copy what made it. A cell with a character hands
+          its colours to the text tool and puts the cursor there; a mosaic
+          cell hands its shape and its six colours to the block brush.
+        </p>
+      )}
+      {brushMode === "block" && (
+        <div className="brush-options">
+          {/*
+            * A lifted shape is otherwise invisible state: the motif previews
+            * all show full cells, so a half-filled brush would look identical
+            * to a solid one right up until it painted.
+            */}
+          {blockPattern !== SIXEL_MAX && (
+            <div className="brush-picked-pattern">
+              <div className="brush-picked-preview" aria-hidden>
+                {([0, 1, 2, 3, 4, 5] as const).map((i) => (
+                  <span
+                    key={i}
+                    className={`preset-motif-dot teletext-bg-${
+                      sixelBit(blockPattern, i) ? brushColors[i] : "black"
+                    }`}
+                  />
+                ))}
+              </div>
+              <div className="brush-picked-text">
+                <span className="sidebar-field-label">Picked shape</span>
+                <button
+                  type="button"
+                  className="sidebar-toggle"
+                  onClick={() => setBlockPattern(SIXEL_MAX)}
+                >
+                  <span>Fill the whole cell</span>
+                </button>
+              </div>
+            </div>
+          )}
+          <div className="color-block">
+            <div className="preset-motifs">
+              {MOTIF_PATTERNS.map((pattern, idx) => {
+                const previewColors =
+                  motifColors[idx] ?? defaultColorsForMotif(pattern.slots);
+                return (
+                  <button
+                    key={pattern.name}
+                    type="button"
+                    className={`preset-motif-btn ${selectedMotifIndex === idx ? "preset-motif-btn-active" : ""}`}
+                    title={pattern.name}
+                    onClick={() => selectMotif(idx)}
+                    aria-label={`Use ${pattern.name} motif`}
+                    aria-pressed={selectedMotifIndex === idx}
+                  >
+                    <div className="preset-motif-preview">
+                      {([0, 1, 2, 3, 4, 5] as const).map((i) => (
+                        <span
+                          key={i}
+                          className={`preset-motif-dot teletext-bg-${previewColors[i]}`}
+                        />
+                      ))}
+                    </div>
+                    <span className="preset-motif-name">
+                      {pattern.name}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <div
+              className="color-block sixel-color-tooltip-ref"
+              ref={sixelColorTooltipRef}
+            >
+              <span className="sidebar-field-label">
+                Click a part to change its color
+              </span>
+              <div
+                className="brush-sixel-preview"
+                ref={brushSixelPreviewRef}
+                aria-hidden
+              >
+                {([0, 1, 2, 3, 4, 5] as const).map((i) => {
+                  const slotIndex = selectedMotif.slots[i];
+                  const slots = selectedMotif.slots;
+                  /* Grid is 2×3 row-major: [0][1] / [2][3] / [4][5]. Right = i+1 when left col; bottom = i+2 when row 0 or 1. */
+                  const rightNeighbor = i % 2 === 0 && i < 5 ? i + 1 : null;
+                  const bottomNeighbor = i <= 3 ? i + 2 : null;
+                  const borderRight =
+                    rightNeighbor !== null &&
+                    slots[i] !== slots[rightNeighbor];
+                  const borderBottom =
+                    bottomNeighbor !== null &&
+                    slots[i] !== slots[bottomNeighbor];
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      className={`brush-sixel-part brush-sixel-part-slot-${slotIndex} teletext-bg-${brushColors[i]} ${borderRight ? "brush-sixel-part-border-r" : ""} ${borderBottom ? "brush-sixel-part-border-b" : ""} ${hoveredSlotIndex === slotIndex ? "brush-sixel-part-hover" : ""} ${selectedSixelIndex === i && colorTooltipOpen ? "brush-sixel-part-active" : ""}`}
+                      title={`Part ${i + 1}`}
+                      onMouseEnter={() => setHoveredSlotIndex(slotIndex)}
+                      onMouseLeave={() => setHoveredSlotIndex(null)}
+                      onClick={(e) => {
+                        const open =
+                          colorTooltipOpen && selectedSixelIndex === i
+                            ? false
+                            : true;
+                        setSelectedSixelIndex(i);
+                        if (open && brushSixelPreviewRef.current) {
+                          const partRect = (
+                            e.currentTarget as HTMLButtonElement
+                          ).getBoundingClientRect();
+                          const previewRect =
+                            brushSixelPreviewRef.current.getBoundingClientRect();
+                          setTooltipAnchor({
+                            part: {
+                              left: partRect.left,
+                              top: partRect.top,
+                              width: partRect.width,
+                              height: partRect.height,
+                            },
+                            preview: {
+                              left: previewRect.left,
+                              top: previewRect.top,
+                              width: previewRect.width,
+                              height: previewRect.height,
+                            },
+                          });
+                        }
+                        setColorTooltipOpen(open);
+                      }}
+                      aria-label={`Part ${i + 1}, ${brushColors[i]}`}
+                      aria-expanded={
+                        selectedSixelIndex === i && colorTooltipOpen
+                      }
+                    />
+                  );
+                })}
+              </div>
+              {(() => {
+                const clamped = tooltipAnchor
+                  ? clampTooltipToViewport(tooltipAnchor)
+                  : null;
+                const slotCount = motifSlotCount(selectedMotif.slots);
+                const tooltipLabel =
+                  slotCount === 1
+                    ? "Color"
+                    : SIXEL_PART_NAMES[selectedSixelIndex];
+                return (
+                  <div
+                    className={`sixel-color-tooltip ${colorTooltipOpen ? "sixel-color-tooltip-open" : ""}`}
+                    role="tooltip"
+                    aria-hidden={!colorTooltipOpen}
+                    style={{
+                      position: "fixed",
+                      left: clamped ? clamped.left : -9999,
+                      top: clamped ? clamped.top : 0,
+                    }}
+                  >
+                    <div
+                      className="sixel-color-tooltip-label"
+                      aria-live="polite"
+                    >
+                      {tooltipLabel}
+                    </div>
+                    <div className="sixel-color-tooltip-swatches">
+                      {TELETEXT_COLORS.map((color) => (
+                        <button
+                          key={color}
+                          type="button"
+                          className={`color-swatch teletext-bg-${color}`}
+                          title={color}
+                          onClick={() => {
+                            const slotIndex =
+                              selectedMotif.slots[selectedSixelIndex];
+                            setMotifSlotColor(slotIndex, color);
+                            setColorTooltipOpen(false);
+                          }}
+                          aria-label={`Set to ${color}`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+          <div className="color-block">
+            <span className="sidebar-field-label">
+              Pick from grid (Alt + click)
+            </span>
+            <p className="sidebar-hint">
+              Hold Alt and click a block on the grid to copy its motif.
+            </p>
+          </div>
+        </div>
+      )}
+      {brushMode === "pixel" && (
+        <div className="brush-options">
+          <div className="color-block">
+            <span className="sidebar-field-label">Pixel color</span>
+            <div className="text-preview-swatches text-preview-swatches-4x4">
+              {TELETEXT_COLORS.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  className={`color-swatch color-swatch-mini teletext-bg-${color} ${pixelColor === color ? "active" : ""}`}
+                  title={`Pixel ${color}`}
+                  onClick={() => setPixelColor(color)}
+                  aria-label={`Pixel color ${color}`}
+                  aria-pressed={pixelColor === color}
+                />
+              ))}
+            </div>
+          </div>
+          <p className="sidebar-hint">
+            Click a sixth of a cell to paint just that sixth. Drag to keep
+            painting. Alt + click erases a sixth.
+          </p>
+        </div>
+      )}
+      {brushMode === "blink" && (
+        <p className="sidebar-hint">
+          Click or drag to set blink on. Alt + click to remove blink.
+        </p>
+      )}
+      {isBrushActive && brushes.history.length > 0 && (
+        <div className="color-block brush-history">
+          <span className="sidebar-field-label">Recent brushes</span>
+          <div className="brush-history-stepper">
+            <button
+              type="button"
+              className="brush-history-step"
+              onClick={() => stepBrushHistory(1)}
+              disabled={brushes.index >= brushes.history.length - 1}
+              title="Older brush ( [ )"
+              aria-label="Older brush"
+            >
+              ◀
+            </button>
+            <span className="brush-history-current">
+              <BrushSwatch brush={brushes.history[brushes.index]} />
+            </span>
+            <button
+              type="button"
+              className="brush-history-step"
+              onClick={() => stepBrushHistory(-1)}
+              disabled={brushes.index <= 0}
+              title="Newer brush ( ] )"
+              aria-label="Newer brush"
+            >
+              ▶
+            </button>
+          </div>
+          <div className="brush-history-strip">
+            {brushes.history.map((brush, idx) => (
+              <button
+                key={brushKey(brush)}
+                type="button"
+                className={`brush-history-btn ${idx === brushes.index ? "brush-history-btn-active" : ""}`}
+                title={
+                  brush.kind === "pixel"
+                    ? `Pixel brush (${brush.color})`
+                    : `${MOTIF_PATTERNS[brush.motifIndex]?.name ?? "Block"} brush`
+                }
+                onClick={() => selectBrushFromHistory(idx)}
+                aria-label={`Use recent brush ${idx + 1}`}
+                aria-pressed={idx === brushes.index}
+              >
+                <BrushSwatch brush={brush} />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
+
+  );
+
+  const actionsSection = (
+    <section className="sidebar-section sidebar-actions">
+      {onBackToGrid != null && (
+        <button
+          type="button"
+          className="sidebar-action-btn"
+          onClick={() => {
+            void onBackToGrid();
+          }}
+        >
+          <IconBack className="sidebar-toggle-icon" />
+          <span>Back to grid</span>
+        </button>
+      )}
+      <button
+        type="button"
+        className="sidebar-action-btn"
+        onClick={() =>
+          exportPageAsPng(page, "teletext.png", pageNumber ?? 100)
+        }
+      >
+        <IconExport className="sidebar-toggle-icon" />
+        <span>Export PNG</span>
+      </button>
+      {clearConfirmShown ? (
+        <div className="clear-confirm">
+          <span className="clear-confirm-label">Are you sure?</span>
+          <div className="clear-confirm-buttons">
+            <button
+              type="button"
+              className="sidebar-action-btn sidebar-action-btn-clear"
+              onClick={() => {
+                clearPage();
+                setClearConfirmShown(false);
+              }}
+            >
+              Yes, clear
+            </button>
+            <button
+              type="button"
+              className="sidebar-action-btn"
+              onClick={() => setClearConfirmShown(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="sidebar-action-btn sidebar-action-btn-clear"
+          onClick={() => setClearConfirmShown(true)}
+        >
+          <IconTrash className="sidebar-toggle-icon" />
+          <span>Clear page</span>
+        </button>
+      )}
+    </section>
+  );
+
+  const grid = (
+    <div className="editor-main">
+    <div
+      ref={gridRef}
+      className={`teletext-screen-wrapper${
+        brushMode === "picker"
+          ? " picker-cursor"
+          : isBrushActive
+            ? " brush-cursor"
+            : ""
+      }`}
+      tabIndex={0}
+      onFocus={focusHiddenInput}
+      onBlur={handleGridBlur}
+      onMouseLeave={handleGridMouseLeave}
+      role="application"
+      aria-label="Teletext editor grid"
+    >
+      <input
+        ref={hiddenInputRef}
+        type="text"
+        className="editor-hidden-input"
+        aria-hidden
+        tabIndex={-1}
+        onKeyDown={handleKeyDown}
+        onInput={handleHiddenInput}
+      />
+      <TeletextGrid
+        page={page}
+        pageNumber={pageNumber ?? 100}
+        subpage={subpage}
+        subpageCount={subpageCount}
+        cursorIndex={isBrushActive ? hoveredCellIndex : cursorIndex}
+        hoverPartIndex={brushMode === "pixel" ? hoveredPartIndex : null}
+        cursorDoubleHeight={brushMode === "off" && doubleHeightOn}
+        onPointerCell={handlePointerCell}
+        onPointerEnd={endStroke}
+        readOnly={false}
+      />
+      {remoteCursors && remoteCursors.length > 0 && (
+        <div
+          className="editor-remote-cursors"
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            fontSize: "14px",
+          }}
+        >
+          {remoteCursors.map((rc) => {
+            const { col, row } = rowColFromIndex(rc.index);
+            const color = resolveCursorColor(rc.color);
+            return (
+              <div
+                key={`${rc.name}-${rc.index}`}
+                className="editor-remote-cursor"
+                style={{
+                  position: "absolute",
+                  left: `calc(14px + ${col} * 1em)`,
+                  top: `calc(14px + ${row} * 1.35em)`,
+                  width: "1em",
+                  height: "1.35em",
+                  outline: `2px solid ${color}`,
+                  outlineOffset: "-2px",
+                  boxSizing: "border-box",
+                }}
+              >
+                <span
+                  className="editor-remote-cursor-label"
+                  style={{
+                    position: "absolute",
+                    top: "-1em",
+                    left: 0,
+                    fontSize: "0.5em",
+                    lineHeight: 1,
+                    background: color,
+                    color: "#000",
+                    padding: "1px 2px",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {rc.name}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+    </div>
+  );
+
+  if (isNarrow) {
+    return (
+      <div className="editor-layout editor-layout-narrow">
+        {/* The page, with nothing competing for the screen. */}
+        {grid}
+
+        {/*
+          * The dock: five brushes, always under the thumb, and the handle that
+          * raises everything else. Choosing a brush is most of what editing is,
+          * and a tool you have to go looking for is a tool you stop using.
+          */}
+        <div className="editor-dock">
+            <div className="brush-mode-toggles">
+              <button
+                type="button"
+                className={`sidebar-toggle ${brushMode === "off" ? "active" : ""}`}
+                onClick={() => chooseBrushMode("off")}
+                title="Type text"
+              >
+                <IconTextCursor className="sidebar-toggle-icon" />
+                <span>Off</span>
+              </button>
+              <button
+                type="button"
+                className={`sidebar-toggle ${brushMode === "block" ? "active" : ""}`}
+                onClick={() => chooseBrushMode("block")}
+                title="Paint whole mosaic cells with a motif"
+              >
+                <IconBlock className="sidebar-toggle-icon" />
+                <span>Block</span>
+              </button>
+              <button
+                type="button"
+                className={`sidebar-toggle ${brushMode === "pixel" ? "active" : ""}`}
+                onClick={() => chooseBrushMode("pixel")}
+                title="Paint a single sixth of a cell. Alt+click to erase it."
+              >
+                <IconPixel className="sidebar-toggle-icon" />
+                <span>Pixel</span>
+              </button>
+              <button
+                type="button"
+                className={`sidebar-toggle ${brushMode === "blink" ? "active" : ""}`}
+                onClick={() => chooseBrushMode("blink")}
+                title="Paint blink on cells. Alt+click to remove blink."
+              >
+                <IconBlink className="sidebar-toggle-icon" />
+                <span>Blink</span>
+              </button>
+              <button
+                type="button"
+                className={`sidebar-toggle ${brushMode === "picker" ? "active" : ""}`}
+                onClick={() => chooseBrushMode("picker")}
+                title="Click a cell to copy what made it: its colours if it holds a character, its shape and colours if it is a mosaic."
+              >
+                <IconPipette className="sidebar-toggle-icon" />
+                <span>Pick</span>
+              </button>
+            </div>
+          <button
+            type="button"
+            className="editor-sheet-handle"
+            aria-expanded={sheetOpen}
+            aria-controls="editor-sheet"
+            onClick={() => setSheetOpen((open) => !open)}
+          >
+            {sheetOpen ? "Close" : "Tools"}
+          </button>
+        </div>
+
+        {sheetOpen && (
+          <>
+            {/* Tapping the page closes the sheet — the gesture people try
+                first, and the only one that needs no explaining. */}
+            <div
+              className="editor-sheet-scrim"
+              onClick={() => setSheetOpen(false)}
+              aria-hidden="true"
+            />
+            <div
+              id="editor-sheet"
+              className="editor-sheet"
+              role="dialog"
+              aria-label="Tools"
+            >
+              {sidebarHeader}
+              {textStyleSection}
+              {brushOptionsSection}
+              {actionsSection}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="editor-layout">
       <aside className="editor-sidebar">
@@ -1033,577 +1972,14 @@ export function Editor({
 
         {sidebarHeader}
 
-        <section className="sidebar-section">
-          <h2 className="sidebar-heading">Text style</h2>
-          <div className="text-preview-three-col">
-            <div className="text-preview-col">
-              <span className="text-preview-label">Fg</span>
-              <div className="text-preview-swatches text-preview-swatches-4x4">
-                {TELETEXT_COLORS.map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    className={`color-swatch color-swatch-mini teletext-bg-${color} ${fg === color ? "active" : ""}`}
-                    title={`Foreground ${color}`}
-                    onClick={() => setFg(color)}
-                    aria-label={`Foreground ${color}`}
-                  />
-                ))}
-              </div>
-            </div>
-            <div className="text-preview-col">
-              <span className="text-preview-label">Bg</span>
-              <div className="text-preview-swatches text-preview-swatches-4x4">
-                {TELETEXT_COLORS.map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    className={`color-swatch color-swatch-mini teletext-bg-${color} ${bg === color ? "active" : ""}`}
-                    title={`Background ${color}`}
-                    onClick={() => setBg(color)}
-                    aria-label={`Background ${color}`}
-                  />
-                ))}
-              </div>
-            </div>
-            <div
-              className={`text-preview-cell teletext-fg-${fg} teletext-bg-${bg} ${doubleHeightOn ? "text-preview-cell-double-height" : ""}`}
-              aria-hidden
-            />
-          </div>
-          <button
-            type="button"
-            className={`sidebar-toggle ${doubleHeightOn ? "active" : ""}`}
-            onClick={() => setDoubleHeightOn((v) => !v)}
-            aria-pressed={doubleHeightOn}
-            title="Typed characters render at twice the row height. Not available on the last row."
-          >
-            <IconDoubleHeight className="sidebar-toggle-icon" />
-            <span>Double height</span>
-          </button>
+        {textStyleSection}
 
-          {textStyles.history.length > 0 && (
-            <div className="color-block brush-history">
-              <span className="sidebar-field-label">Recent text styles</span>
-              <div className="brush-history-stepper">
-                <button
-                  type="button"
-                  className="brush-history-step"
-                  onClick={() => stepTextStyleHistory(1)}
-                  disabled={textStyles.index >= textStyles.history.length - 1}
-                  title="Older text style"
-                  aria-label="Older text style"
-                >
-                  ◀
-                </button>
-                <span className="brush-history-current">
-                  <TextStyleSwatch style={textStyles.history[textStyles.index]} />
-                </span>
-                <button
-                  type="button"
-                  className="brush-history-step"
-                  onClick={() => stepTextStyleHistory(-1)}
-                  disabled={textStyles.index <= 0}
-                  title="Newer text style"
-                  aria-label="Newer text style"
-                >
-                  ▶
-                </button>
-              </div>
-              <div className="brush-history-strip">
-                {textStyles.history.map((style, idx) => (
-                  <button
-                    key={textStyleKey(style)}
-                    type="button"
-                    className={`brush-history-btn ${idx === textStyles.index ? "brush-history-btn-active" : ""}`}
-                    title={describeTextStyle(style)}
-                    onClick={() => selectTextStyleFromHistory(idx)}
-                    aria-label={`Use recent text style ${idx + 1}: ${describeTextStyle(style)}`}
-                    aria-pressed={idx === textStyles.index}
-                  >
-                    <TextStyleSwatch style={style} />
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </section>
+        {brushSection}
 
-        <section className="sidebar-section">
-          <h2 className="sidebar-heading">Brush</h2>
-          <div className="brush-mode-toggles">
-            <button
-              type="button"
-              className={`sidebar-toggle ${brushMode === "off" ? "active" : ""}`}
-              onClick={() => setBrushMode("off")}
-              title="Type text"
-            >
-              <IconTextCursor className="sidebar-toggle-icon" />
-              <span>Off</span>
-            </button>
-            <button
-              type="button"
-              className={`sidebar-toggle ${brushMode === "block" ? "active" : ""}`}
-              onClick={() => setBrushMode("block")}
-              title="Paint whole mosaic cells with a motif"
-            >
-              <IconBlock className="sidebar-toggle-icon" />
-              <span>Block</span>
-            </button>
-            <button
-              type="button"
-              className={`sidebar-toggle ${brushMode === "pixel" ? "active" : ""}`}
-              onClick={() => setBrushMode("pixel")}
-              title="Paint a single sixth of a cell. Alt+click to erase it."
-            >
-              <IconPixel className="sidebar-toggle-icon" />
-              <span>Pixel</span>
-            </button>
-            <button
-              type="button"
-              className={`sidebar-toggle ${brushMode === "blink" ? "active" : ""}`}
-              onClick={() => setBrushMode("blink")}
-              title="Paint blink on cells. Alt+click to remove blink."
-            >
-              <IconBlink className="sidebar-toggle-icon" />
-              <span>Blink</span>
-            </button>
-            <button
-              type="button"
-              className={`sidebar-toggle ${brushMode === "picker" ? "active" : ""}`}
-              onClick={() => setBrushMode("picker")}
-              title="Click a cell to copy what made it: its colours if it holds a character, its shape and colours if it is a mosaic."
-            >
-              <IconPipette className="sidebar-toggle-icon" />
-              <span>Pick</span>
-            </button>
-          </div>
-          {brushMode === "picker" && (
-            <p className="sidebar-hint">
-              Click any cell to copy what made it. A cell with a character hands
-              its colours to the text tool and puts the cursor there; a mosaic
-              cell hands its shape and its six colours to the block brush.
-            </p>
-          )}
-          {brushMode === "block" && (
-            <div className="brush-options">
-              {/*
-                * A lifted shape is otherwise invisible state: the motif previews
-                * all show full cells, so a half-filled brush would look identical
-                * to a solid one right up until it painted.
-                */}
-              {blockPattern !== SIXEL_MAX && (
-                <div className="brush-picked-pattern">
-                  <div className="brush-picked-preview" aria-hidden>
-                    {([0, 1, 2, 3, 4, 5] as const).map((i) => (
-                      <span
-                        key={i}
-                        className={`preset-motif-dot teletext-bg-${
-                          sixelBit(blockPattern, i) ? brushColors[i] : "black"
-                        }`}
-                      />
-                    ))}
-                  </div>
-                  <div className="brush-picked-text">
-                    <span className="sidebar-field-label">Picked shape</span>
-                    <button
-                      type="button"
-                      className="sidebar-toggle"
-                      onClick={() => setBlockPattern(SIXEL_MAX)}
-                    >
-                      <span>Fill the whole cell</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-              <div className="color-block">
-                <div className="preset-motifs">
-                  {MOTIF_PATTERNS.map((pattern, idx) => {
-                    const previewColors =
-                      motifColors[idx] ?? defaultColorsForMotif(pattern.slots);
-                    return (
-                      <button
-                        key={pattern.name}
-                        type="button"
-                        className={`preset-motif-btn ${selectedMotifIndex === idx ? "preset-motif-btn-active" : ""}`}
-                        title={pattern.name}
-                        onClick={() => selectMotif(idx)}
-                        aria-label={`Use ${pattern.name} motif`}
-                        aria-pressed={selectedMotifIndex === idx}
-                      >
-                        <div className="preset-motif-preview">
-                          {([0, 1, 2, 3, 4, 5] as const).map((i) => (
-                            <span
-                              key={i}
-                              className={`preset-motif-dot teletext-bg-${previewColors[i]}`}
-                            />
-                          ))}
-                        </div>
-                        <span className="preset-motif-name">
-                          {pattern.name}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-                <div
-                  className="color-block sixel-color-tooltip-ref"
-                  ref={sixelColorTooltipRef}
-                >
-                  <span className="sidebar-field-label">
-                    Click a part to change its color
-                  </span>
-                  <div
-                    className="brush-sixel-preview"
-                    ref={brushSixelPreviewRef}
-                    aria-hidden
-                  >
-                    {([0, 1, 2, 3, 4, 5] as const).map((i) => {
-                      const slotIndex = selectedMotif.slots[i];
-                      const slots = selectedMotif.slots;
-                      /* Grid is 2×3 row-major: [0][1] / [2][3] / [4][5]. Right = i+1 when left col; bottom = i+2 when row 0 or 1. */
-                      const rightNeighbor = i % 2 === 0 && i < 5 ? i + 1 : null;
-                      const bottomNeighbor = i <= 3 ? i + 2 : null;
-                      const borderRight =
-                        rightNeighbor !== null &&
-                        slots[i] !== slots[rightNeighbor];
-                      const borderBottom =
-                        bottomNeighbor !== null &&
-                        slots[i] !== slots[bottomNeighbor];
-                      return (
-                        <button
-                          key={i}
-                          type="button"
-                          className={`brush-sixel-part brush-sixel-part-slot-${slotIndex} teletext-bg-${brushColors[i]} ${borderRight ? "brush-sixel-part-border-r" : ""} ${borderBottom ? "brush-sixel-part-border-b" : ""} ${hoveredSlotIndex === slotIndex ? "brush-sixel-part-hover" : ""} ${selectedSixelIndex === i && colorTooltipOpen ? "brush-sixel-part-active" : ""}`}
-                          title={`Part ${i + 1}`}
-                          onMouseEnter={() => setHoveredSlotIndex(slotIndex)}
-                          onMouseLeave={() => setHoveredSlotIndex(null)}
-                          onClick={(e) => {
-                            const open =
-                              colorTooltipOpen && selectedSixelIndex === i
-                                ? false
-                                : true;
-                            setSelectedSixelIndex(i);
-                            if (open && brushSixelPreviewRef.current) {
-                              const partRect = (
-                                e.currentTarget as HTMLButtonElement
-                              ).getBoundingClientRect();
-                              const previewRect =
-                                brushSixelPreviewRef.current.getBoundingClientRect();
-                              setTooltipAnchor({
-                                part: {
-                                  left: partRect.left,
-                                  top: partRect.top,
-                                  width: partRect.width,
-                                  height: partRect.height,
-                                },
-                                preview: {
-                                  left: previewRect.left,
-                                  top: previewRect.top,
-                                  width: previewRect.width,
-                                  height: previewRect.height,
-                                },
-                              });
-                            }
-                            setColorTooltipOpen(open);
-                          }}
-                          aria-label={`Part ${i + 1}, ${brushColors[i]}`}
-                          aria-expanded={
-                            selectedSixelIndex === i && colorTooltipOpen
-                          }
-                        />
-                      );
-                    })}
-                  </div>
-                  {(() => {
-                    const clamped = tooltipAnchor
-                      ? clampTooltipToViewport(tooltipAnchor)
-                      : null;
-                    const slotCount = motifSlotCount(selectedMotif.slots);
-                    const tooltipLabel =
-                      slotCount === 1
-                        ? "Color"
-                        : SIXEL_PART_NAMES[selectedSixelIndex];
-                    return (
-                      <div
-                        className={`sixel-color-tooltip ${colorTooltipOpen ? "sixel-color-tooltip-open" : ""}`}
-                        role="tooltip"
-                        aria-hidden={!colorTooltipOpen}
-                        style={{
-                          position: "fixed",
-                          left: clamped ? clamped.left : -9999,
-                          top: clamped ? clamped.top : 0,
-                        }}
-                      >
-                        <div
-                          className="sixel-color-tooltip-label"
-                          aria-live="polite"
-                        >
-                          {tooltipLabel}
-                        </div>
-                        <div className="sixel-color-tooltip-swatches">
-                          {TELETEXT_COLORS.map((color) => (
-                            <button
-                              key={color}
-                              type="button"
-                              className={`color-swatch teletext-bg-${color}`}
-                              title={color}
-                              onClick={() => {
-                                const slotIndex =
-                                  selectedMotif.slots[selectedSixelIndex];
-                                setMotifSlotColor(slotIndex, color);
-                                setColorTooltipOpen(false);
-                              }}
-                              aria-label={`Set to ${color}`}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
-              <div className="color-block">
-                <span className="sidebar-field-label">
-                  Pick from grid (Alt + click)
-                </span>
-                <p className="sidebar-hint">
-                  Hold Alt and click a block on the grid to copy its motif.
-                </p>
-              </div>
-            </div>
-          )}
-          {brushMode === "pixel" && (
-            <div className="brush-options">
-              <div className="color-block">
-                <span className="sidebar-field-label">Pixel color</span>
-                <div className="text-preview-swatches text-preview-swatches-4x4">
-                  {TELETEXT_COLORS.map((color) => (
-                    <button
-                      key={color}
-                      type="button"
-                      className={`color-swatch color-swatch-mini teletext-bg-${color} ${pixelColor === color ? "active" : ""}`}
-                      title={`Pixel ${color}`}
-                      onClick={() => setPixelColor(color)}
-                      aria-label={`Pixel color ${color}`}
-                      aria-pressed={pixelColor === color}
-                    />
-                  ))}
-                </div>
-              </div>
-              <p className="sidebar-hint">
-                Click a sixth of a cell to paint just that sixth. Drag to keep
-                painting. Alt + click erases a sixth.
-              </p>
-            </div>
-          )}
-          {brushMode === "blink" && (
-            <p className="sidebar-hint">
-              Click or drag to set blink on. Alt + click to remove blink.
-            </p>
-          )}
-          {isBrushActive && brushes.history.length > 0 && (
-            <div className="color-block brush-history">
-              <span className="sidebar-field-label">Recent brushes</span>
-              <div className="brush-history-stepper">
-                <button
-                  type="button"
-                  className="brush-history-step"
-                  onClick={() => stepBrushHistory(1)}
-                  disabled={brushes.index >= brushes.history.length - 1}
-                  title="Older brush ( [ )"
-                  aria-label="Older brush"
-                >
-                  ◀
-                </button>
-                <span className="brush-history-current">
-                  <BrushSwatch brush={brushes.history[brushes.index]} />
-                </span>
-                <button
-                  type="button"
-                  className="brush-history-step"
-                  onClick={() => stepBrushHistory(-1)}
-                  disabled={brushes.index <= 0}
-                  title="Newer brush ( ] )"
-                  aria-label="Newer brush"
-                >
-                  ▶
-                </button>
-              </div>
-              <div className="brush-history-strip">
-                {brushes.history.map((brush, idx) => (
-                  <button
-                    key={brushKey(brush)}
-                    type="button"
-                    className={`brush-history-btn ${idx === brushes.index ? "brush-history-btn-active" : ""}`}
-                    title={
-                      brush.kind === "pixel"
-                        ? `Pixel brush (${brush.color})`
-                        : `${MOTIF_PATTERNS[brush.motifIndex]?.name ?? "Block"} brush`
-                    }
-                    onClick={() => selectBrushFromHistory(idx)}
-                    aria-label={`Use recent brush ${idx + 1}`}
-                    aria-pressed={idx === brushes.index}
-                  >
-                    <BrushSwatch brush={brush} />
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </section>
-
-        <section className="sidebar-section sidebar-actions">
-          {onBackToGrid != null && (
-            <button
-              type="button"
-              className="sidebar-action-btn"
-              onClick={() => {
-                void onBackToGrid();
-              }}
-            >
-              <IconBack className="sidebar-toggle-icon" />
-              <span>Back to grid</span>
-            </button>
-          )}
-          <button
-            type="button"
-            className="sidebar-action-btn"
-            onClick={() =>
-              exportPageAsPng(page, "teletext.png", pageNumber ?? 100)
-            }
-          >
-            <IconExport className="sidebar-toggle-icon" />
-            <span>Export PNG</span>
-          </button>
-          {clearConfirmShown ? (
-            <div className="clear-confirm">
-              <span className="clear-confirm-label">Are you sure?</span>
-              <div className="clear-confirm-buttons">
-                <button
-                  type="button"
-                  className="sidebar-action-btn sidebar-action-btn-clear"
-                  onClick={() => {
-                    clearPage();
-                    setClearConfirmShown(false);
-                  }}
-                >
-                  Yes, clear
-                </button>
-                <button
-                  type="button"
-                  className="sidebar-action-btn"
-                  onClick={() => setClearConfirmShown(false)}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              type="button"
-              className="sidebar-action-btn sidebar-action-btn-clear"
-              onClick={() => setClearConfirmShown(true)}
-            >
-              <IconTrash className="sidebar-toggle-icon" />
-              <span>Clear page</span>
-            </button>
-          )}
-        </section>
+        {actionsSection}
       </aside>
 
-      <div className="editor-main">
-        <div
-          ref={gridRef}
-          className={`teletext-screen-wrapper${
-            brushMode === "picker"
-              ? " picker-cursor"
-              : isBrushActive
-                ? " brush-cursor"
-                : ""
-          }`}
-          tabIndex={0}
-          onFocus={focusHiddenInput}
-          onBlur={handleGridBlur}
-          onMouseLeave={handleGridMouseLeave}
-          role="application"
-          aria-label="Teletext editor grid"
-        >
-          <input
-            ref={hiddenInputRef}
-            type="text"
-            className="editor-hidden-input"
-            aria-hidden
-            tabIndex={-1}
-            onKeyDown={handleKeyDown}
-            onInput={handleHiddenInput}
-          />
-          <TeletextGrid
-            page={page}
-            pageNumber={pageNumber ?? 100}
-            subpage={subpage}
-            subpageCount={subpageCount}
-            cursorIndex={isBrushActive ? hoveredCellIndex : cursorIndex}
-            hoverPartIndex={brushMode === "pixel" ? hoveredPartIndex : null}
-            cursorDoubleHeight={brushMode === "off" && doubleHeightOn}
-            onCellClick={handleCellClick}
-            onCellMouseDown={handleCellMouseDown}
-            onCellMouseEnter={handleCellMouseEnter}
-            onCellMouseMove={brushMode === "pixel" ? handleCellMouseMove : undefined}
-            readOnly={false}
-          />
-          {remoteCursors && remoteCursors.length > 0 && (
-            <div
-              className="editor-remote-cursors"
-              aria-hidden
-              style={{
-                position: "absolute",
-                inset: 0,
-                pointerEvents: "none",
-                fontSize: "14px",
-              }}
-            >
-              {remoteCursors.map((rc) => {
-                const { col, row } = rowColFromIndex(rc.index);
-                const color = resolveCursorColor(rc.color);
-                return (
-                  <div
-                    key={`${rc.name}-${rc.index}`}
-                    className="editor-remote-cursor"
-                    style={{
-                      position: "absolute",
-                      left: `calc(14px + ${col} * 1em)`,
-                      top: `calc(14px + ${row} * 1.35em)`,
-                      width: "1em",
-                      height: "1.35em",
-                      outline: `2px solid ${color}`,
-                      outlineOffset: "-2px",
-                      boxSizing: "border-box",
-                    }}
-                  >
-                    <span
-                      className="editor-remote-cursor-label"
-                      style={{
-                        position: "absolute",
-                        top: "-1em",
-                        left: 0,
-                        fontSize: "0.5em",
-                        lineHeight: 1,
-                        background: color,
-                        color: "#000",
-                        padding: "1px 2px",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {rc.name}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
+      {grid}
     </div>
   );
 }
