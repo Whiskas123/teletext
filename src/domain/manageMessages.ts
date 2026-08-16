@@ -65,6 +65,8 @@ export function actionLabel(action: PageActionName): string {
       return 'Remove the last subpage';
     case 'absorb-page':
       return 'Fold a page in as a subpage';
+    case 'showcase':
+      return 'Change the front page';
   }
 }
 
@@ -89,6 +91,10 @@ export function actionProgress(action: PageActionName): string {
       return 'Removing the last subpage…';
     case 'absorb-page':
       return 'Folding the page in…';
+    case 'showcase':
+      // Drawing the page is the slow half, and it is worth naming: the picture
+      // is made here and now, not fetched.
+      return 'Drawing the page…';
   }
 }
 
@@ -113,6 +119,8 @@ export function actionDone(action: PageActionName): string {
       return 'one subpage shorter';
     case 'absorb-page':
       return 'given the page as a subpage';
+    case 'showcase':
+      return 'front page updated';
   }
 }
 

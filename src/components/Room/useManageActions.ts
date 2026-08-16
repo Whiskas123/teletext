@@ -15,6 +15,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import type { ArchiveAdminApi, PublishTransforms } from '../../collab/useArchiveAdmin';
+import type { ShowcaseApi } from '../../collab/useShowcase';
 import type { PageKind } from '../../domain/directory';
 import {
   EMPTY_REGISTRY,
@@ -46,6 +47,8 @@ type Outcome = { ok: true } | { ok: false; error: string };
 
 export interface ManageActionsInput {
   data: ArchiveAdminApi;
+  /** Putting a screen on the front page, and taking it off again. */
+  showcase: Pick<ShowcaseApi, 'add' | 'remove' | 'entries'>;
   setKind(pageNumber: number, kind: PageKind): void;
   /** Called once a page's text has been stored, so the editor can close. */
   onTextSaved(pageNumber: number): void;
@@ -105,6 +108,14 @@ export interface ManageActionsApi {
   removeLastSubpage(pageNumber: number): void;
   /** Fold `source`'s carousel onto the end of `target`'s, emptying `source`. */
   absorbPage(target: number, source: number): void;
+  /**
+   * Put one screen on the front page's strip, or take it off.
+   *
+   * Adding draws the page in this browser and uploads the picture, which is why
+   * it is a page action with a busy state rather than a checkbox: it is a
+   * round trip, and it is doing real work.
+   */
+  toggleShowcase(pageNumber: number, subpage: number, on: boolean): void;
   /** Send a page to a page number the operator chose. */
   moveTo(pageNumber: number, destination: number): void;
   setRole(pageNumber: number, kind: PageKind): void;
@@ -122,6 +133,7 @@ export interface ManageActionsApi {
 
 export function useManageActions({
   data,
+  showcase,
   setKind,
   onTextSaved,
   onMoved,
@@ -260,6 +272,33 @@ export function useManageActions({
       });
     },
     [runPageAction, data, onAbsorbed],
+  );
+
+  const toggleShowcase = useCallback(
+    (pageNumber: number, subpage: number, on: boolean) => {
+      runAction(
+        { kind: 'page', pageNumber, action: 'showcase' },
+        () =>
+          on
+            ? showcase.remove(pageNumber, subpage)
+            : showcase.add(pageNumber, subpage, showcase.entries.length),
+        (outcome) => {
+          if (!outcome.ok) {
+            return pageActionFailed('showcase', pageNumber, outcome.error);
+          }
+          // Named for what happened rather than through `actionDone`, which has
+          // one word per action and this action has two directions.
+          const where = subpage > 1 ? `${pageNumber}-${subpage}` : `${pageNumber}`;
+          return {
+            tone: 'status',
+            text: on
+              ? `Page ${where} taken off the front page.`
+              : `Page ${where} added to the front page.`,
+          };
+        },
+      );
+    },
+    [runAction, showcase],
   );
 
   const moveTo = useCallback(
@@ -509,6 +548,7 @@ export function useManageActions({
     addSubpage,
     removeLastSubpage,
     absorbPage,
+    toggleShowcase,
     moveTo,
     setRole,
     saveText,

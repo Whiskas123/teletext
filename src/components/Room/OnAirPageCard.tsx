@@ -57,6 +57,7 @@ export interface OnAirCardCallbacks {
   closeAdder(): void;
   setAdderSource(value: string): void;
   absorbPage(source: number): void;
+  toggleShowcase(subpage: number, on: boolean): void;
   remove(): void;
   saveText(): void;
   setRole(kind: PageKind): void;
@@ -79,6 +80,8 @@ export interface OnAirPageCardProps {
   subpageCount: number;
   /** How many screens any page holds, for previewing what folding one in costs. */
   subpageCountOf(pageNumber: number): number;
+  /** Whether a given screen of this page is on the front page's strip. */
+  isShowcased(subpage: number): boolean;
   /**
    * Read the live content of one screen, called only when the operator asks to
    * see it. The card passes the screen it is showing, so stepping the carousel
@@ -116,6 +119,7 @@ export function OnAirPageCard({
   kind,
   subpageCount,
   subpageCountOf,
+  isShowcased,
   readContent,
   occupied,
   draft,
@@ -143,6 +147,9 @@ export function OnAirPageCard({
   const subpage = Math.min(shownSubpage, subpageCount);
   const hasCarousel = subpageCount > MIN_SUBPAGE;
   const entry = publicationAt(subpage);
+  // Per screen, not per page: the strip holds screens, and a carousel's second
+  // screen is as choosable as its first.
+  const showcased = isShowcased(subpage);
   const adderOpen = adderSource != null;
 
   // What folding the typed page in would do — including that it empties that
@@ -475,6 +482,27 @@ export function OnAirPageCard({
             onClick={() => (editorOpen ? on.closeEditor() : on.openEditor())}
           >
             {editorOpen ? 'Close' : 'Edit'}
+          </button>
+          {/*
+            * The front page's strip, per screen.
+            *
+            * Adding draws this page here and now and uploads the picture, so
+            * the strip costs a visitor an <img> rather than a canvas redrawn
+            * from 960 cells. That also means it is a snapshot: pressing it
+            * again on a page already on the strip redraws it as it looks now.
+            */}
+          <button
+            type="button"
+            className="manage-mini-btn"
+            disabled={disabled}
+            title={
+              showcased
+                ? `Take page ${pageNumber} off the front page`
+                : `Draw page ${pageNumber} now and put it on the front page`
+            }
+            onClick={() => on.toggleShowcase(subpage, showcased)}
+          >
+            {showcased ? '− Frontpage' : '+ Frontpage'}
           </button>
           {/* Delete is the one way off air: it empties the page, whether or not
               it had a publication record, so a separate Unpublish would be the

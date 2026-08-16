@@ -72,6 +72,7 @@ export function ManageArchivePage() {
 
   const actions = useManageActions({
     data,
+    showcase,
     setKind,
     onTextSaved: onAir.closeEditor,
     onMoved: onAir.closeMover,
@@ -263,6 +264,8 @@ export function ManageArchivePage() {
             onAddSubpage={actions.addSubpage}
             onRemoveLastSubpage={actions.removeLastSubpage}
             onAbsorbPage={actions.absorbPage}
+            isShowcased={showcase.has}
+            onToggleShowcase={actions.toggleShowcase}
             onNudge={actions.nudge}
             onMoveTo={actions.moveTo}
             onDelete={(pageNumber, title) =>

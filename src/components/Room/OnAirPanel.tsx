@@ -66,6 +66,10 @@ export interface OnAirPanelProps {
   onRemoveLastSubpage(pageNumber: number): void;
   /** Fold `source`'s carousel onto the end of `target`'s, emptying `source`. */
   onAbsorbPage(target: number, source: number): void;
+  /** Whether this screen is on the front page's strip. */
+  isShowcased(pageNumber: number, subpage: number): boolean;
+  /** Put this screen on the front page, or take it off. */
+  onToggleShowcase(pageNumber: number, subpage: number, on: boolean): void;
   onNudge(pageNumber: number, delta: -1 | 1): void;
   onMoveTo(pageNumber: number, destination: number): void;
   onDelete(pageNumber: number, title: string): void;
@@ -97,6 +101,8 @@ export function OnAirPanel({
   onAddSubpage,
   onRemoveLastSubpage,
   onAbsorbPage,
+  isShowcased,
+  onToggleShowcase,
   onNudge,
   onMoveTo,
   onDelete,
@@ -183,6 +189,7 @@ export function OnAirPanel({
         kind={kindOf(row.pageNumber)}
         subpageCount={subpageCountOfPage(row.pageNumber)}
         subpageCountOf={subpageCountOfPage}
+        isShowcased={(subpage) => isShowcased(row.pageNumber, subpage)}
         readContent={(subpage) => livePage(row.pageNumber, subpage)}
         occupied={occupied}
         stored={stored}
@@ -216,6 +223,8 @@ export function OnAirPanel({
           closeAdder: state.closeAdder,
           setAdderSource: state.setAdderSource,
           absorbPage: (source) => onAbsorbPage(row.pageNumber, source),
+          toggleShowcase: (subpage, on) =>
+            onToggleShowcase(row.pageNumber, subpage, on),
           openMover: () => state.openMover(row.pageNumber),
           closeMover: state.closeMover,
           setDestination: state.setDestination,

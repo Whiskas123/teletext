@@ -65,6 +65,8 @@ function Harness(overrides: Partial<OnAirPanelProps> = {}) {
       onAddSubpage={vi.fn()}
       onRemoveLastSubpage={vi.fn()}
       onAbsorbPage={vi.fn()}
+      isShowcased={() => false}
+      onToggleShowcase={vi.fn()}
       onNudge={vi.fn()}
       onMoveTo={vi.fn()}
       onDelete={vi.fn()}

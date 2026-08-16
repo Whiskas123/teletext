@@ -35,7 +35,8 @@ export type PageActionName =
   | 'set-role'
   | 'add-subpage'
   | 'remove-subpage'
-  | 'absorb-page';
+  | 'absorb-page'
+  | 'showcase';
 
 /** What an in-flight action targets. */
 export type ActionScope =
