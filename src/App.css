@@ -747,6 +747,18 @@
   .frontpage-mark {
     padding-right: 4.5rem;
   }
+
+  /*
+   * Bigger pages, because there is only one of them at a time.
+   *
+   * The desktop width is a compromise between the tile and its neighbours —
+   * several are on screen together and each has to leave room for the next. A
+   * phone shows barely more than one at a time, so the compromise is not being
+   * paid for, and a 40-column page needs the pixels to read at all.
+   */
+  .frontpage-strip-tile .teletext-thumbnail {
+    width: min(68vw, 300px);
+  }
 }
 
 /*
