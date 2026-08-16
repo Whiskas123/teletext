@@ -36,6 +36,11 @@ export const CELL_H = 18;
 export const PAGE_W = COLS * CELL_W;
 export const PAGE_H = ROWS * CELL_H;
 
+/** How tall the picture is, given whether the header row is being drawn. */
+export function pageHeight(skipHeaderRow = false): number {
+  return (ROWS - (skipHeaderRow ? 1 : 0)) * CELL_H;
+}
+
 const FONT_PX = 14;
 const FONT_STACK = '"Press Start 2P", "Courier New", Courier, monospace';
 
@@ -129,6 +134,19 @@ export interface DrawPageOptions {
   /** Header clock. Passed in so a caller can freeze it, and tests can fix it. */
   now?: Date;
   /**
+   * Leave the header row out, and make the picture a row shorter.
+   *
+   * Row 0 is the page number, the subpage counter and a clock. On a page being
+   * watched that is the whole point of it; on the front page's strip it is a
+   * line of near-identical furniture repeated down the row, and the clock is
+   * frozen at whatever time the picture happened to be drawn — which is worse
+   * than absent.
+   *
+   * Dropped rather than blanked: a blank row would leave a band of background
+   * above every page and the strip would look like it had a gap in it.
+   */
+  skipHeaderRow?: boolean;
+  /**
    * Device pixels per page pixel.
    *
    * Applied here rather than by the caller's `ctx.scale`, because the geometry
@@ -154,9 +172,12 @@ export function drawPage(
     showIndexLine = true,
     now = new Date(),
     scale = 1,
+    skipHeaderRow = false,
   }: DrawPageOptions = {},
 ): void {
   const px = (v: number) => Math.round(v * scale);
+  // Everything below shifts up by the row that is not being drawn.
+  const firstRow = skipHeaderRow ? 1 : 0;
   ctx.font = `${FONT_PX}px ${FONT_STACK}`;
   ctx.textBaseline = 'top';
 
@@ -164,7 +185,7 @@ export function drawPage(
   const subpageStr = formatSubpageIndicator(subpage, subpageCount);
   const dateTimeStr = formatHeaderDateTime(now);
 
-  for (let row = 0; row < ROWS; row++) {
+  for (let row = firstRow; row < ROWS; row++) {
     for (let col = 0; col < COLS; col++) {
       const index = row * COLS + col;
       // This row is covered by a double-height cell directly above it — its
@@ -177,7 +198,7 @@ export function drawPage(
       let fg = COLOR_HEX[cell.fg] ?? '#ffffff';
       let char = cell.char === ' ' ? ' ' : cell.char;
       const x = col * CELL_W;
-      const y = row * CELL_H;
+      const y = (row - firstRow) * CELL_H;
 
       let isHeaderOverlay = false;
       if (row === 0) {
@@ -244,7 +265,7 @@ export async function renderPageBlob(
 ): Promise<Blob | null> {
   const canvas = document.createElement('canvas');
   canvas.width = PAGE_W;
-  canvas.height = PAGE_H;
+  canvas.height = pageHeight(options.skipHeaderRow);
   const ctx = canvas.getContext('2d');
   if (ctx == null) return null;
 

@@ -14,7 +14,7 @@
 import { useEffect, useRef } from 'react';
 
 import type { TeletextPage } from '../../types/teletext';
-import { PAGE_H, PAGE_W, drawPage } from '../../utils/pageCanvas';
+import { PAGE_W, drawPage, pageHeight } from '../../utils/pageCanvas';
 
 export interface TeletextThumbnailProps {
   page: TeletextPage;
@@ -23,6 +23,8 @@ export interface TeletextThumbnailProps {
   subpageCount?: number;
   /** The fastext strip. Off by default: on a wall of these it is a repeated smear. */
   showIndexLine?: boolean;
+  /** Leave off the page number, counter and clock, and lose the row with them. */
+  skipHeaderRow?: boolean;
   /** Alternative text. Empty (the default) marks it decorative. */
   alt?: string;
   /**
@@ -41,6 +43,7 @@ export function TeletextThumbnail({
   subpage = 1,
   subpageCount = 1,
   showIndexLine = false,
+  skipHeaderRow = false,
   alt = '',
   scale = 1,
 }: TeletextThumbnailProps) {
@@ -59,7 +62,14 @@ export function TeletextThumbnail({
       // The scale goes to `drawPage`, not to the context: the cell geometry has
       // to be snapped to whole device pixels after scaling or thin seams show
       // between the cells.
-      drawPage(ctx, page, { pageNumber, subpage, subpageCount, showIndexLine, scale });
+      drawPage(ctx, page, {
+        pageNumber,
+        subpage,
+        subpageCount,
+        showIndexLine,
+        skipHeaderRow,
+        scale,
+      });
     };
 
     // Drawn once now and again once the webfont has loaded. Canvas text takes
@@ -73,7 +83,7 @@ export function TeletextThumbnail({
     return () => {
       cancelled = true;
     };
-  }, [page, pageNumber, subpage, subpageCount, showIndexLine, scale]);
+  }, [page, pageNumber, subpage, subpageCount, showIndexLine, skipHeaderRow, scale]);
 
   return (
     <canvas
@@ -83,7 +93,7 @@ export function TeletextThumbnail({
          reads better than the hard pixel edges `image-rendering: pixelated`
          would give. */
       width={Math.round(PAGE_W * scale)}
-      height={Math.round(PAGE_H * scale)}
+      height={Math.round(pageHeight(skipHeaderRow) * scale)}
       className="teletext-thumbnail"
       role={alt === '' ? 'presentation' : 'img'}
       aria-label={alt === '' ? undefined : alt}

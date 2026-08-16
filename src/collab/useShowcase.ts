@@ -131,6 +131,9 @@ export function useShowcase(): ShowcaseApi {
         // The fastext strip is identical on every page; a row of them along the
         // front page would be a repeated smear.
         showIndexLine: false,
+        // And so is the header row — page number, counter, and a clock frozen
+        // at the moment this was drawn.
+        skipHeaderRow: true,
       });
       if (blob == null) {
         return { ok: false, error: 'This browser could not draw the page.' };

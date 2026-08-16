@@ -712,6 +712,44 @@
 }
 
 /*
+ * The phone: the menu stands up again, and the switch keeps its corner.
+ *
+ * Across the top the four words need the width of a desktop; on a phone they
+ * crowd into each other and the eye has nowhere to start. Down the left they
+ * are the index the front page always was.
+ *
+ * The language switch is taken out of the flow rather than left to wrap. There
+ * is no room beside the wordmark at this width, and wrapping put it on a line
+ * of its own under the logo, where it read as a stray control rather than as
+ * the corner of the page. Absolute keeps it in the corner it belongs to; the
+ * wordmark is short enough at this size that nothing runs under it.
+ */
+@media (max-width: 640px) {
+  .frontpage-menu-list {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+
+  .frontpage-head {
+    flex-wrap: nowrap;
+  }
+
+  .frontpage-lang {
+    position: absolute;
+    /* The page's own padding, so the switch sits on its corner exactly. */
+    top: clamp(1.5rem, 4vw, 3.75rem);
+    right: clamp(2.5rem, 5vw, 4.25rem);
+    margin-left: 0;
+  }
+
+  /* Clear of the switch, so a long name cannot run under it. */
+  .frontpage-mark {
+    padding-right: 4.5rem;
+  }
+}
+
+/*
  * The strip sits under the wordmark, in the flow, and runs full bleed.
  *
  * Negative margins cancel the page's own horizontal padding so the pages run

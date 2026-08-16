@@ -26,14 +26,14 @@
  *
  */
 
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 
 import {
   showcaseImageUrl,
   useShowcase,
   type ShowcaseEntry,
 } from '../../collab/useShowcase';
-import { SHOWCASE_SECONDS_PER_SCREEN } from '../../domain/showcase';
+import { SHOWCASE_SECONDS_PER_SCREEN, shuffleBySeed } from '../../domain/showcase';
 
 export interface FrontpageShowcaseProps {
   /** Chosen: opens this page in the viewer. */
@@ -72,8 +72,13 @@ function usePrefersReducedMotion(): boolean {
 
 
 export function FrontpageShowcase({ onSelect, label, pageWord }: FrontpageShowcaseProps) {
-  const { entries } = useShowcase();
+  const { entries: chosen } = useShowcase();
   const reducedMotion = usePrefersReducedMotion();
+
+  // One order per visit. The seed is drawn once, so a re-render — or a dropped
+  // memo — reproduces the same order rather than reshuffling under the reader.
+  const [seed] = useState(() => Math.random());
+  const entries = useMemo(() => shuffleBySeed(chosen, seed), [chosen, seed]);
 
   // Nothing chosen yet, or the list has not arrived: the space stays empty,
   // which is what the front page looks like anyway. A placeholder for something
