@@ -77,10 +77,16 @@ export default async function handler(
         }
 
         res.setHeader('Content-Type', String(stored.image_type ?? 'image/png'));
-        // Public — the front page is public — but only briefly cacheable: the
-        // picture is replaced whenever a moderator refreshes it, and a strip
-        // showing a page as it looked last week would be worse than redrawing.
-        res.setHeader('Cache-Control', 'public, max-age=300');
+        // A `v` in the URL is the row's `updated_at`, so that URL's bytes can
+        // never change: cache it for a year. Without one the URL is stable
+        // across a redraw, so it may only be held briefly — otherwise pressing
+        // Redraw would change the picture on the server and nothing on screen.
+        res.setHeader(
+          'Cache-Control',
+          queryValue(req, 'v') == null
+            ? 'public, max-age=60'
+            : 'public, max-age=31536000, immutable',
+        );
         res.status(200).send(toBuffer(stored.image));
         return;
       }

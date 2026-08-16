@@ -580,7 +580,15 @@
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  padding: clamp(1.5rem, 4vw, 3.75rem) clamp(2.5rem, 5vw, 4.25rem);
+  /*
+   * The page's own margins, named because three rules have to agree on them:
+   * this padding, the strip's negative margin that cancels it for a full-bleed
+   * run, and the language switch pinned to the corner on a phone. As three
+   * copies of one `clamp` they drifted apart the first time any of them moved.
+   */
+  --frontpage-gutter: clamp(2.5rem, 5vw, 4.25rem);
+  --frontpage-gutter-y: clamp(1.5rem, 4vw, 3.75rem);
+  padding: var(--frontpage-gutter-y) var(--frontpage-gutter);
   background: #111;
   color: #fff;
   /* The containing block for the showcase, which on a wide screen is taken out
@@ -725,6 +733,27 @@
  * wordmark is short enough at this size that nothing runs under it.
  */
 @media (max-width: 640px) {
+  /*
+   * A much narrower gutter. The desktop one is generous because there is room
+   * to be; on a phone it was taking a tenth of the screen off either side of a
+   * page that is mostly one column of words.
+   */
+  .frontpage {
+    --frontpage-gutter: 1rem;
+  }
+
+  /*
+   * No hover marker, so nothing needs to hang in the gutter.
+   *
+   * The `>` sits outside the word, in the space the padding used to leave —
+   * which at 1rem it no longer does, so it would be clipped at the edge. A
+   * touch screen has no hover to show it with anyway, and focus is still
+   * marked by the outline.
+   */
+  .frontpage-menu-btn::before {
+    content: none;
+  }
+
   .frontpage-menu-list {
     flex-direction: column;
     align-items: flex-start;
@@ -738,8 +767,8 @@
   .frontpage-lang {
     position: absolute;
     /* The page's own padding, so the switch sits on its corner exactly. */
-    top: clamp(1.5rem, 4vw, 3.75rem);
-    right: clamp(2.5rem, 5vw, 4.25rem);
+    top: var(--frontpage-gutter-y);
+    right: var(--frontpage-gutter);
     margin-left: 0;
   }
 
@@ -769,7 +798,7 @@
  * with ends, and this one is meant to have none.
  */
 .frontpage-band {
-  margin: auto calc(-1 * clamp(2.5rem, 5vw, 4.25rem)) 0;
+  margin: auto calc(-1 * var(--frontpage-gutter)) 0;
 }
 
 .frontpage-menu {

@@ -34,9 +34,22 @@ export interface ShowcaseEntry {
   updated_at: string;
 }
 
-/** Where a page's stored picture lives. */
-export function showcaseImageUrl(pageNumber: number, subpage: number): string {
-  return `/api/showcase?format=image&page=${pageNumber}&subpage=${subpage}`;
+/**
+ * Where a page's stored picture lives.
+ *
+ * `version` is the row's `updated_at`, and it is what makes Redraw visible. The
+ * picture for a page always lived at the same URL, so redrawing it changed the
+ * bytes on the server and nothing on screen — the browser went on serving the
+ * copy it had cached. Putting the timestamp in the URL means a redrawn page is
+ * a *different* URL, so it is fetched, and an unchanged one can be cached hard.
+ */
+export function showcaseImageUrl(
+  pageNumber: number,
+  subpage: number,
+  version?: string,
+): string {
+  const base = `/api/showcase?format=image&page=${pageNumber}&subpage=${subpage}`;
+  return version == null ? base : `${base}&v=${encodeURIComponent(version)}`;
 }
 
 export interface ShowcaseApi {

@@ -102,7 +102,11 @@ export function ShowcasePanel({
                       visitor sees, which is the point of showing it here. */}
                   <img
                     className="manage-showcase-image"
-                    src={showcaseImageUrl(entry.page_number, entry.subpage)}
+                    src={showcaseImageUrl(
+                      entry.page_number,
+                      entry.subpage,
+                      entry.updated_at,
+                    )}
                     alt={`Page ${entry.page_number}`}
                     loading="lazy"
                   />

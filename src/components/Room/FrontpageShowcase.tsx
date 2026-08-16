@@ -123,7 +123,11 @@ export function FrontpageShowcase({ onSelect, label, pageWord }: FrontpageShowca
             >
               <img
                 className="teletext-thumbnail"
-                src={showcaseImageUrl(entry.page_number, entry.subpage)}
+                src={showcaseImageUrl(
+                  entry.page_number,
+                  entry.subpage,
+                  entry.updated_at,
+                )}
                 alt=""
                 loading="lazy"
                 decoding="async"
