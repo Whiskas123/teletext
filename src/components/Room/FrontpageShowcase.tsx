@@ -1,27 +1,38 @@
 /**
- * The page on air beside the front page's menu.
+ * The strip of pages under the wordmark.
  *
- * One real archive page, cycling — the front page's empty right half is a
- * page-shaped hole, and filling it with the medium itself says what the project
- * is faster than a paragraph about teletext could. It reads the same live
- * document the viewer reads, so it shows what is genuinely published rather
- * than a set of screenshots that can drift out of date, and choosing it opens
- * that page.
+ * Real archive pages, running right to left and never stopping — a service on
+ * air rather than a gallery of one. One page says "here is a page"; a strip
+ * that keeps producing more says "there are hundreds", which is what the front
+ * page is for.
  *
- * Which screens are eligible, and the order they run in, is
- * `domain/showcase.ts`; this binds it to playhtml and to a timer.
+ * They come from the same live document the viewer reads, so the strip shows
+ * what is genuinely published rather than screenshots that drift out of date,
+ * and choosing one opens that page.
+ *
+ * ## The loop is CSS, and the content is doubled
+ *
+ * The track holds the same screens twice and slides by exactly half its width,
+ * so the moment the first copy has gone the second is sitting precisely where
+ * it started. No timer, no index arithmetic, nothing to resynchronise — the
+ * animation runs on the compositor and the component never re-renders for it.
+ *
+ * Each tile is a canvas ({@link TeletextThumbnail}) rather than the interactive
+ * grid: nothing on the strip is clicked *into*, so per-cell elements would buy
+ * nothing and cost ~1,500 DOM nodes each.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { usePageData } from '@playhtml/react';
 
 import { PAGES_CHANNEL } from '../../collab/useEditPage';
+import { useGuide } from '../../collab/useGuide';
 import { normalizePage } from '../../domain/pageOps';
 import {
-  SHOWCASE_INTERVAL_MS,
-  nextIndex,
+  SHOWCASE_SECONDS_PER_SCREEN,
+  SHOWCASE_STRIP,
+  initialGrid,
   showcaseScreens,
-  startIndex,
 } from '../../domain/showcase';
 import {
   SUBPAGE_COUNTS_CHANNEL,
@@ -29,14 +40,24 @@ import {
   type SubpageCounts,
 } from '../../domain/subpages';
 import type { PagesData } from '../../collab/types';
-import { TeletextGrid } from '../TeletextGrid/TeletextGrid';
+import { TeletextThumbnail } from '../TeletextGrid/TeletextThumbnail';
+
+/**
+ * Backing store per tile, as a fraction of the page's natural size.
+ *
+ * Raised with the tile width: a canvas drawn smaller than it is displayed goes
+ * soft, and a 280px tile on a 2x screen wants 560px of pixels. Not 1.0, because
+ * two dozen canvases at full size is four times the memory for detail nobody
+ * can see at this size.
+ */
+const TILE_SCALE = 0.75;
 
 export interface FrontpageShowcaseProps {
   /** Chosen: opens this page in the viewer. */
   onSelect(pageNumber: number, subpage: number): void;
-  /** Names the region, and labels the control, in the current language. */
+  /** Names the region, and labels each tile, in the current language. */
   label: string;
-  /** How the page number reads under the screen, e.g. `página 220`. */
+  /** How a page number reads in a tile's name, e.g. `página 220`. */
   pageWord: string;
 }
 
@@ -51,11 +72,16 @@ function usePrefersReducedMotion(): boolean {
   });
 
   useEffect(() => {
-    const query = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
-    if (query == null) return;
-    const onChange = () => setReduced(query.matches);
-    query.addEventListener('change', onChange);
-    return () => query.removeEventListener('change', onChange);
+    let list: MediaQueryList | undefined;
+    try {
+      list = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
+    } catch {
+      return;
+    }
+    if (list == null) return;
+    const onChange = () => setReduced(list.matches);
+    list.addEventListener('change', onChange);
+    return () => list.removeEventListener('change', onChange);
   }, []);
 
   return reduced;
@@ -64,6 +90,8 @@ function usePrefersReducedMotion(): boolean {
 export function FrontpageShowcase({ onSelect, label, pageWord }: FrontpageShowcaseProps) {
   const [pages] = usePageData<PagesData>(PAGES_CHANNEL, {});
   const [counts] = usePageData<SubpageCounts>(SUBPAGE_COUNTS_CHANNEL, {});
+  // Titles for the hover caption, from the same place the directory reads them.
+  const { title } = useGuide();
   const reducedMotion = usePrefersReducedMotion();
 
   const screens = useMemo(
@@ -71,72 +99,82 @@ export function FrontpageShowcase({ onSelect, label, pageWord }: FrontpageShowca
     [pages, counts],
   );
 
-  // Where this visit starts.
-  //
-  // A lazy initializer rather than `useRef(Math.random())`: a ref's argument is
-  // evaluated on *every* render even though only the first is kept, so that
-  // form draws a fresh number each time the live document syncs another page —
-  // impure in render, and the rotation would jump.
+  // Where this visit's run begins. A lazy initializer rather than
+  // `useRef(Math.random())`, whose argument is evaluated on every render.
   const [seed] = useState(() => Math.random());
-  const [step, setStep] = useState(0);
 
-  useEffect(() => {
-    // Auto-advancing content is exactly what the reduced-motion preference is
-    // about, so with it set the showcase holds one page and stays there.
-    if (reducedMotion || screens.length <= 1) return;
-    const timer = setInterval(
-      () => setStep((current) => current + 1),
-      SHOWCASE_INTERVAL_MS,
-    );
-    return () => clearInterval(timer);
-  }, [reducedMotion, screens.length]);
-
-  // Nothing on air, or nothing synced yet: the space stays empty, which is what
-  // the front page looks like anyway. A spinner in a hole nobody was promised
-  // anything in would be worse than the hole.
-  if (screens.length === 0) return null;
-
-  // The step is folded into range on read, so a document that shrinks under a
-  // running timer cannot leave the index pointing past the end.
-  let index = startIndex(screens.length, seed);
-  for (let i = 0; i < step % screens.length; i += 1) {
-    index = nextIndex(index, screens.length);
-  }
-  const screen = screens[index];
-  const page = normalizePage(
-    (pages as Record<string, unknown> | null)?.[
-      String(pageKey(screen.pageNumber, screen.subpage))
-    ],
+  const riding = useMemo(
+    () => initialGrid(screens.length, seed, SHOWCASE_STRIP),
+    [screens.length, seed],
   );
 
+  // Nothing on air, or nothing synced yet: the space stays empty, which is what
+  // the front page looks like anyway.
+  if (riding.length === 0) return null;
+
   return (
-    <div className="frontpage-showcase" aria-label={label}>
-      <button
-        type="button"
-        className="frontpage-showcase-btn"
-        onClick={() => onSelect(screen.pageNumber, screen.subpage)}
-        aria-label={`${label}: ${pageWord} ${screen.pageNumber}${
-          screen.subpageCount > 1 ? `-${screen.subpage}` : ''
-        }`}
+    <div
+      className="frontpage-strip"
+      aria-label={label}
+      // Longer strips take proportionally longer, so pages cross at the same
+      // speed whether there are three of them or twelve.
+      style={
+        {
+          '--strip-seconds': `${riding.length * SHOWCASE_SECONDS_PER_SCREEN}s`,
+        } as CSSProperties
+      }
+    >
+      <div
+        className={`frontpage-strip-track${reducedMotion ? ' frontpage-strip-still' : ''}`}
       >
-        <TeletextGrid
-          page={page}
-          pageNumber={screen.pageNumber}
-          subpage={screen.subpage}
-          subpageCount={screen.subpageCount}
-          readOnly
-        />
-      </button>
-      {/*
-        * No caption under the screen.
-        *
-        * A teletext page carries its own number in its header — `102 1/1`, top
-        * left, in the palette — so a line beneath repeating it in a second
-        * typeface said nothing new and cost the object its alignment: the
-        * screen's bottom edge is meant to land on the menu's, and a caption
-        * hanging below pushed it 25px short. The page number reaches a screen
-        * reader through the button's own name instead.
-        */}
+        {/* Twice: the second copy is what the first slides away to reveal, and
+            it is already in place when it does. `copy` is in the key because
+            the same page legitimately appears in both. */}
+        {[0, 1].map((copy) =>
+          riding.map((index) => {
+            const screen = screens[index];
+            if (screen == null) return null;
+            const page = normalizePage(
+              (pages as Record<string, unknown> | null)?.[
+                String(pageKey(screen.pageNumber, screen.subpage))
+              ],
+            );
+
+            return (
+              <button
+                key={`${copy}-${index}`}
+                type="button"
+                className="frontpage-strip-tile"
+                onClick={() => onSelect(screen.pageNumber, screen.subpage)}
+                // The duplicate is decoration: announcing every page twice would
+                // make the strip read as a service holding each page two times.
+                aria-hidden={copy === 1 ? true : undefined}
+                tabIndex={copy === 1 ? -1 : undefined}
+                aria-label={`${pageWord} ${screen.pageNumber}${
+                  screen.subpageCount > 1 ? `-${screen.subpage}` : ''
+                }${title(screen.pageNumber) ? `, ${title(screen.pageNumber)}` : ''}`}
+              >
+                <TeletextThumbnail
+                  page={page}
+                  pageNumber={screen.pageNumber}
+                  subpage={screen.subpage}
+                  subpageCount={screen.subpageCount}
+                  scale={TILE_SCALE}
+                />
+                {/* Decoration: the same words are already the button's own
+                    accessible name, so a screen reader would hear them twice. */}
+                <span className="frontpage-strip-caption" aria-hidden="true">
+                  <span className="frontpage-strip-caption-number">
+                    {screen.pageNumber}
+                    {screen.subpageCount > 1 ? `-${screen.subpage}` : ''}
+                  </span>
+                  {title(screen.pageNumber)}
+                </span>
+              </button>
+            );
+          }),
+        )}
+      </div>
     </div>
   );
 }

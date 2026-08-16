@@ -12,7 +12,9 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 
 import {
+  SHOWCASE_STRIP,
   hasInk,
+  initialGrid,
   nextIndex,
   showcaseScreens,
   startIndex,
@@ -156,5 +158,37 @@ describe('the rotation', () => {
       index = nextIndex(index, length);
     }
     expect(seen.size).toBe(length);
+  });
+});
+
+describe('the strip', () => {
+  it('fills the strip from a run, all different', () => {
+    const riding = initialGrid(40, 0.5);
+    expect(riding).toHaveLength(SHOWCASE_STRIP);
+    expect(new Set(riding).size).toBe(SHOWCASE_STRIP);
+  });
+
+  it('rides only as many pages as there are', () => {
+    // A strip of twelve drawn from six would repeat, and the same page passing
+    // twice in a row looks like a fault rather than a service.
+    expect(initialGrid(6, 0.2)).toHaveLength(6);
+    expect(initialGrid(0, 0.2)).toEqual([]);
+  });
+
+  it('never repeats a page within one pass, from any start', () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 1, max: 200 }),
+        fc.double({ min: 0, max: 1, noNaN: true }),
+        (total, seed) => {
+          const riding = initialGrid(total, seed);
+          expect(new Set(riding).size).toBe(riding.length);
+          for (const index of riding) {
+            expect(index).toBeGreaterThanOrEqual(0);
+            expect(index).toBeLessThan(total);
+          }
+        },
+      ),
+    );
   });
 });

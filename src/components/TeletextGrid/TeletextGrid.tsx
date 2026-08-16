@@ -137,6 +137,13 @@ interface TeletextGridProps {
   cursorDoubleHeight?: boolean;
   readOnly?: boolean;
   compact?: boolean;
+  /**
+   * Whether to draw the four-colour fastext strip below the page. Defaults to
+   * `readOnly` — a set showed it whenever you were watching. The front page's
+   * wall of thumbnails turns it off: the strip is identical on every page, so
+   * nine of them side by side is a repeated smear rather than information.
+   */
+  showIndexLine?: boolean;
   /** When set (and readOnly), bottom line index links are clickable and call this with page number */
   onIndexPageSelect?: (page: number) => void;
   /** When set (and readOnly), clicking the top-left page number calls this so parent can open input */
@@ -187,6 +194,7 @@ export function TeletextGrid({
   cursorDoubleHeight = false,
   readOnly = false,
   compact = false,
+  showIndexLine: showIndexLineProp,
   onIndexPageSelect,
   onPageNumberClick,
 }: TeletextGridProps) {
@@ -195,7 +203,7 @@ export function TeletextGrid({
   const pageStr = formatPageNumber(pageNumber);
   const subpageStr = formatSubpageIndicator(subpage, subpageCount);
   const dateTimeStr = formatHeaderDateTime(now);
-  const showIndexLine = readOnly;
+  const showIndexLine = showIndexLineProp ?? readOnly;
   const indexClickable = showIndexLine && onIndexPageSelect != null;
   const pageNumberClickable = readOnly && onPageNumberClick != null;
   const pageLinkMap = useMemo(() => (readOnly && onIndexPageSelect ? getPageLinkMap(page) : new Map<number, number>()), [page, readOnly, onIndexPageSelect]);
