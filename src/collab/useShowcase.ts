@@ -22,7 +22,7 @@ import { normalizePage } from '../domain/pageOps';
 import { pageKey, type SubpageCounts, SUBPAGE_COUNTS_CHANNEL } from '../domain/subpages';
 import { blobToBase64, renderPageBlob } from '../utils/pageCanvas';
 import { PAGES_CHANNEL } from './useEditPage';
-import { useGuide } from './useGuide';
+import { usePageTitles } from './useGuide';
 import type { PagesData } from './types';
 
 /** One page on the strip, as the endpoint reports it. */
@@ -78,7 +78,7 @@ export interface ShowcaseApi {
 export function useShowcase(): ShowcaseApi {
   const [pages] = usePageData<PagesData>(PAGES_CHANNEL, {});
   const [counts] = usePageData<SubpageCounts>(SUBPAGE_COUNTS_CHANNEL, {});
-  const { title } = useGuide();
+  const { title } = usePageTitles();
 
   const [entries, setEntries] = useState<ShowcaseEntry[]>([]);
   const [error, setError] = useState<string | null>(null);

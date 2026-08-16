@@ -12,6 +12,29 @@ import { Landing } from './Landing';
 import { ROOMS } from './rooms';
 import { LANGUAGE_STORAGE_KEY } from '../../domain/landing';
 
+/**
+ * A storage the test controls.
+ *
+ * Node 24 defines its own `localStorage` global and leaves it *undefined*
+ * unless started with `--localstorage-file`, which shadows the one jsdom would
+ * otherwise provide. `useLanguage` copes — it wraps every access and falls back
+ * to remembering the choice for this tab only — but a test that wants to prove
+ * the choice is *persisted* has to supply somewhere to persist it.
+ */
+function memoryStorage(): Storage {
+  const map = new Map<string, string>();
+  return {
+    get length() {
+      return map.size;
+    },
+    clear: () => map.clear(),
+    getItem: (key: string) => map.get(key) ?? null,
+    key: (index: number) => [...map.keys()][index] ?? null,
+    removeItem: (key: string) => void map.delete(key),
+    setItem: (key: string, value: string) => void map.set(key, String(value)),
+  } as Storage;
+}
+
 const navigateMock = vi.fn();
 vi.mock('react-router-dom', async () => {
   const actual =
@@ -46,13 +69,9 @@ describe('the front page', () => {
   beforeEach(() => {
     navigateMock.mockReset();
     occupiedPages = [];
-    for (const store of [window.sessionStorage, window.localStorage]) {
-      try {
-        store.clear();
-      } catch {
-        /* ignore */
-      }
-    }
+    // A fresh one per test, so a language chosen in one does not leak.
+    vi.stubGlobal('localStorage', memoryStorage());
+    vi.stubGlobal('sessionStorage', memoryStorage());
   });
 
   it('shows the wordmark', () => {

@@ -91,18 +91,24 @@ const DEFAULT_PAGES_DATA: PagesData = {};
  * Pages and titles are global shared content, so this hook is not room-scoped
  * and can be used from the solo editor as well as from a room's TV Guide.
  */
-export function useGuide(): GuideApi {
+/**
+ * Titles alone — reading one, and writing one.
+ *
+ * Split out of {@link useGuide} because of what the *listing* costs. Building
+ * it walks 100..999 and calls `normalizePage` on every occupied page, which
+ * allocates a fresh 960-cell array each time — on a full archive, most of a
+ * million cell objects. It is memoised on `pages`, and `pages` gets a new
+ * identity whenever *anyone* edits *any* page.
+ *
+ * So the editor, which wanted nothing but `title` and `setTitle`, rebuilt the
+ * whole directory on every keystroke — including its own. Four of the six
+ * callers were in that position. They take this instead, and never touch the
+ * `pages` channel at all.
+ */
+export function usePageTitles(): Pick<GuideApi, 'title' | 'setTitle'> {
   const [titles, setTitles] = usePageData<TitlesData>(
     TITLES_CHANNEL,
     DEFAULT_TITLES_DATA,
-  );
-  const [pages] = usePageData<PagesData>(PAGES_CHANNEL, DEFAULT_PAGES_DATA);
-
-  // The qualifying, ascending-ordered listing (Req 9.7, 9.11, 9.13).
-  const entries = useMemo<GuideEntry[]>(
-    () =>
-      guideEntries(pages ?? DEFAULT_PAGES_DATA, titles ?? DEFAULT_TITLES_DATA),
-    [pages, titles],
   );
 
   // Read the current Page_Title, '' when unset (Req 9.2).
@@ -126,6 +132,21 @@ export function useGuide(): GuideApi {
       return 'ok';
     },
     [setTitles],
+  );
+
+  return { title, setTitle };
+}
+
+export function useGuide(): GuideApi {
+  const [titles] = usePageData<TitlesData>(TITLES_CHANNEL, DEFAULT_TITLES_DATA);
+  const [pages] = usePageData<PagesData>(PAGES_CHANNEL, DEFAULT_PAGES_DATA);
+  const { title, setTitle } = usePageTitles();
+
+  // The qualifying, ascending-ordered listing (Req 9.7, 9.11, 9.13).
+  const entries = useMemo<GuideEntry[]>(
+    () =>
+      guideEntries(pages ?? DEFAULT_PAGES_DATA, titles ?? DEFAULT_TITLES_DATA),
+    [pages, titles],
   );
 
   return {

@@ -33,7 +33,7 @@ import { shiftPageDown } from '../domain/pageTransform';
 import { MAX_DESCRIPTION_LENGTH } from '../domain/publication';
 import { validateTitle } from '../domain/titles';
 import type { ReorderPlan } from '../domain/reorder';
-import { useGuide } from './useGuide';
+import { usePageTitles } from './useGuide';
 import { useImportPages } from './useImportPages';
 import { PAGES_CHANNEL } from './useEditPage';
 import { TITLES_CHANNEL } from './useGuide';
@@ -297,7 +297,7 @@ export function useArchiveAdmin({
   offset,
 }: ArchiveAdminInput): ArchiveAdminApi {
   const { importPages } = useImportPages();
-  const { setTitle } = useGuide();
+  const { setTitle } = usePageTitles();
 
   const [published, setPublished] = useState<PublishedEntry[]>([]);
   const [publishedError, setPublishedError] = useState<string | null>(null);

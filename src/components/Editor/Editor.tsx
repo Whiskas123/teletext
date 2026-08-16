@@ -52,6 +52,7 @@ import {
   type TeletextColor,
   type TeletextPage,
 } from "../../types/teletext";
+import { cellsBetween } from "../../domain/strokeLine";
 import { exportPageAsPng } from "../../utils/exportPng";
 import { TeletextGrid } from "../TeletextGrid/TeletextGrid";
 
@@ -317,6 +318,16 @@ export function Editor({
   } | null>(null);
   const [hoveredCellIndex, setHoveredCellIndex] = useState<number | null>(null);
   const isDrawingRef = useRef(false);
+  /**
+   * The last cell this stroke painted, so the gap to the next one can be filled.
+   *
+   * A drag is sampled, not continuous: the browser reports the pointer perhaps
+   * sixty times a second, and a hand moving quickly crosses several cells
+   * between two reports. Painting only the reported cells drew a dashed line —
+   * solid where the hand was slow, gapped where it was fast. See
+   * `domain/strokeLine.ts`.
+   */
+  const lastPaintedRef = useRef<number | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const hiddenInputRef = useRef<HTMLInputElement>(null);
   const sixelColorTooltipRef = useRef<HTMLDivElement>(null);
@@ -631,6 +642,32 @@ export function Editor({
     );
   }, []);
 
+  /**
+   * Paint every cell from where the stroke was to where it now is.
+   *
+   * `cellsBetween` excludes the cell the stroke came from — it was painted by
+   * the sample before — and includes the one it arrived at, so a brush that
+   * toggles is never applied twice to the same cell in one stroke.
+   */
+  const paintAlong = useCallback(
+    (index: number, paint: (cellIndex: number) => void) => {
+      for (const cellIndex of cellsBetween(lastPaintedRef.current ?? index, index)) {
+        // The header row is not drawable, and a stroke that crosses it should
+        // step over rather than stop.
+        if (cellIndex >= COLS) paint(cellIndex);
+      }
+      lastPaintedRef.current = index;
+    },
+    [],
+  );
+
+  /** Begin a stroke at `index`: nothing to interpolate from yet. */
+  const beginStroke = useCallback((index: number, paint: (cellIndex: number) => void) => {
+    isDrawingRef.current = true;
+    lastPaintedRef.current = index;
+    paint(index);
+  }, []);
+
   const handleCellClick = useCallback(
     (index: number, e?: React.MouseEvent) => {
       if (index < COLS) return;
@@ -684,20 +721,20 @@ export function Editor({
         return;
       }
       if (brushMode === "blink") {
-        isDrawingRef.current = true;
-        paintBlinkCell(index, !e?.altKey);
+        const on = !e?.altKey;
+        beginStroke(index, (cell) => paintBlinkCell(cell, on));
       } else if (brushMode === "block") {
-        isDrawingRef.current = true;
-        paintCell(index);
+        beginStroke(index, paintCell);
       } else if (brushMode === "pixel") {
         const part = partFromEvent(e);
         if (part == null) return;
-        isDrawingRef.current = true;
-        paintSixelPart(index, part, e?.altKey === true);
+        const erase = e?.altKey === true;
+        beginStroke(index, (cell) => paintSixelPart(cell, part, erase));
       }
     },
     [
       brushMode,
+      beginStroke,
       paintCell,
       paintBlinkCell,
       paintSixelPart,
@@ -718,19 +755,23 @@ export function Editor({
         setHoveredCellIndex(index);
       } else if (brushMode === "block") {
         setHoveredCellIndex(index);
-        if (isDrawingRef.current) paintCell(index);
+        if (isDrawingRef.current) paintAlong(index, paintCell);
       } else if (brushMode === "pixel") {
         setHoveredCellIndex(index);
         const part = partFromEvent(e);
         setHoveredPartIndex(part);
         if (isDrawingRef.current && part != null) {
-          paintSixelPart(index, part, e?.altKey === true);
+          const erase = e?.altKey === true;
+          // The cells skipped between samples take the sixth the pointer is on
+          // now: the brush covers a sixth of a cell, and where exactly it
+          // crossed each one is not knowable from two samples.
+          paintAlong(index, (cell) => paintSixelPart(cell, part, erase));
         }
       } else if (brushMode === "blink" && isDrawingRef.current) {
-        paintBlinkCell(index, true);
+        paintAlong(index, (cell) => paintBlinkCell(cell, true));
       }
     },
-    [brushMode, paintCell, paintBlinkCell, paintSixelPart, partFromEvent],
+    [brushMode, paintAlong, paintCell, paintBlinkCell, paintSixelPart, partFromEvent],
   );
 
   /**
@@ -746,10 +787,11 @@ export function Editor({
       setHoveredCellIndex(index);
       setHoveredPartIndex((prev) => (prev === part ? prev : part));
       if (isDrawingRef.current) {
-        paintSixelPart(index, part, e?.altKey === true);
+        const erase = e?.altKey === true;
+        paintAlong(index, (cell) => paintSixelPart(cell, part, erase));
       }
     },
-    [brushMode, partFromEvent, paintSixelPart],
+    [brushMode, paintAlong, partFromEvent, paintSixelPart],
   );
 
   const handleGridMouseLeave = useCallback(() => {
@@ -760,6 +802,9 @@ export function Editor({
   useEffect(() => {
     const onMouseUp = () => {
       isDrawingRef.current = false;
+      // The next stroke starts wherever it starts; interpolating from the end of
+      // the last one would draw a line across the page between them.
+      lastPaintedRef.current = null;
     };
     window.addEventListener("mouseup", onMouseUp);
     return () => window.removeEventListener("mouseup", onMouseUp);

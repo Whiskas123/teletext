@@ -38,7 +38,7 @@ import {
 } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
-import { useGuide } from '../../collab/useGuide';
+import { usePageTitles } from '../../collab/useGuide';
 import { useImportPages } from '../../collab/useImportPages';
 import { useLearnedGlyphs } from '../../collab/useLearnedGlyphs';
 import { useIsModerator } from '../../collab/useIsModerator';
@@ -162,7 +162,7 @@ export function ImportArchivePage() {
   const navigate = useNavigate();
   const isModerator = useIsModerator();
   const { importPages, saveError } = useImportPages();
-  const { setTitle } = useGuide();
+  const { setTitle } = usePageTitles();
 
   const [entries, setEntries] = useState<Entry[]>([]);
   const [reading, setReading] = useState<{ done: number; total: number } | null>(null);

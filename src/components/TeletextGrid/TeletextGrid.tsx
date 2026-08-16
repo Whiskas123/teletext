@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import type { Cell, TeletextPage } from '../../types/teletext';
 import {
   COLS,
@@ -75,16 +75,6 @@ function useLiveTime() {
     return () => clearInterval(id);
   }, []);
   return now;
-}
-
-/** Global blink phase so all blinking cells are in sync (1s on, 1s off). */
-function useBlinkPhase() {
-  const [visible, setVisible] = useState(true);
-  useEffect(() => {
-    const id = setInterval(() => setVisible((v) => !v), 1000);
-    return () => clearInterval(id);
-  }, []);
-  return visible;
 }
 
 const COLS_PER_INDEX = 10; /* 40 / 4 */
@@ -180,6 +170,144 @@ function SixelBlock({
   );
 }
 
+interface CellViewProps {
+  cell: Cell;
+  index: number;
+  col: number;
+  row: number;
+  doubleHeight: boolean;
+  isCursor: boolean;
+  /** Sixth to outline as the brush target on *this* cell, or null. */
+  hoverPart: number | null;
+  /** Character the header overlays here — page number, counter or clock. */
+  headerChar: string | null;
+  headerFg: Cell['fg'] | null;
+  pageLinkTarget?: number;
+  readOnly: boolean;
+  pageNumberClickable: boolean;
+  onCellClick?: (index: number, e?: React.MouseEvent) => void;
+  onCellMouseDown?: (index: number, e?: React.MouseEvent) => void;
+  onCellMouseEnter?: (index: number, e?: React.MouseEvent) => void;
+  onCellMouseMove?: (index: number, e?: React.MouseEvent) => void;
+  onIndexPageSelect?: (page: number) => void;
+  onPageNumberClick?: () => void;
+}
+
+/**
+ * One cell of the grid, and the reason it is a component at all.
+ *
+ * A page is 960 of these. Rendering them inline meant every one was rebuilt
+ * whenever anything changed — a keystroke, a clock tick, a stroke of the brush,
+ * someone else editing a different page — so a drag cost 960 elements per
+ * pointer event and drawing lagged behind the pointer.
+ *
+ * Memoised, a cell re-renders when *its own* data changes. That only works
+ * because the page keeps the identity of cells that did not change
+ * (`domain/pageReuse.ts`) and because the handlers below are stable in the
+ * editor; without either, every prop would be new every time and this would be
+ * a comparison that always fails, which is slower than not comparing at all.
+ */
+const CellView = memo(function CellView({
+  cell,
+  index,
+  col,
+  row,
+  doubleHeight,
+  isCursor,
+  hoverPart,
+  headerChar,
+  headerFg,
+  pageLinkTarget,
+  readOnly,
+  pageNumberClickable,
+  onCellClick,
+  onCellMouseDown,
+  onCellMouseEnter,
+  onCellMouseMove,
+  onIndexPageSelect,
+  onPageNumberClick,
+}: CellViewProps) {
+  const isHeaderOverlay = headerChar !== null;
+  const isPageCell = row === 0 && col < 3;
+
+  const displayCell =
+    headerChar !== null
+      ? { ...cell, char: headerChar, fg: headerFg as typeof cell.fg }
+      : cell;
+  const hasGraphics =
+    !isHeaderOverlay &&
+    typeof displayCell.graphics === 'number' &&
+    displayCell.graphics >= 0 &&
+    displayCell.graphics <= 63;
+  // The sub-cell brush target. A blank cell without graphics still shows the
+  // highlight (rendered as an all-background sixel block, which looks identical
+  // to the blank cell); a cell with a character keeps the character and settles
+  // for the cell-level cursor outline.
+  const isHoverTarget = !readOnly && !isHeaderOverlay && hoverPart != null;
+  const showGraphics =
+    hasGraphics ||
+    (isHoverTarget && (displayCell.char === ' ' || displayCell.char === ''));
+  const displayChar: string = isHeaderOverlay
+    ? headerChar === ' ' || headerChar === null
+      ? '\u00a0'
+      : headerChar
+    : displayCell.char === ' '
+      ? '\u00a0'
+      : displayCell.char;
+  const isPageLink = pageLinkTarget != null;
+
+  const handleClick =
+    pageNumberClickable && isPageCell
+      ? (e: React.MouseEvent) => {
+          e.preventDefault();
+          onPageNumberClick?.();
+        }
+      : pageLinkTarget != null
+        ? (e: React.MouseEvent) => {
+            e.preventDefault();
+            onIndexPageSelect?.(pageLinkTarget);
+          }
+        : (e: React.MouseEvent) => onCellClick?.(index, e);
+
+  const inert = (isPageCell && pageNumberClickable) || isPageLink;
+  const content = showGraphics ? (
+    <SixelBlock
+      cell={hasGraphics ? displayCell : { ...displayCell, graphics: 0 }}
+      hoverPartIndex={isHoverTarget ? hoverPart : null}
+    />
+  ) : (
+    displayChar
+  );
+
+  return (
+    <div
+      className={`teletext-cell teletext-fg-${displayCell.fg} teletext-bg-${displayCell.bg} ${
+        !readOnly && isCursor ? 'cursor' : ''
+      } ${!isHeaderOverlay && displayCell.blink ? 'teletext-blink' : ''} ${pageNumberClickable && isPageCell ? 'teletext-page-number-clickable' : ''} ${isPageLink ? 'teletext-index-link' : ''} ${doubleHeight ? 'teletext-cell-double-height' : ''}`}
+      style={{
+        gridColumn: col + 1,
+        gridRow: doubleHeight ? `${row + 1} / span 2` : row + 1,
+      }}
+      onClick={handleClick}
+      onMouseDown={inert ? undefined : (e: React.MouseEvent) => onCellMouseDown?.(index, e)}
+      onMouseEnter={inert ? undefined : (e: React.MouseEvent) => onCellMouseEnter?.(index, e)}
+      onMouseMove={
+        onCellMouseMove == null || inert
+          ? undefined
+          : (e: React.MouseEvent) => onCellMouseMove(index, e)
+      }
+      role={readOnly ? (inert ? 'button' : undefined) : 'button'}
+      tabIndex={-1}
+    >
+      {doubleHeight ? (
+        <span className="teletext-cell-dh-content">{content}</span>
+      ) : (
+        content
+      )}
+    </div>
+  );
+});
+
 export function TeletextGrid({
   page,
   pageNumber = 100,
@@ -199,7 +327,6 @@ export function TeletextGrid({
   onPageNumberClick,
 }: TeletextGridProps) {
   const now = useLiveTime();
-  const blinkVisible = useBlinkPhase();
   const pageStr = formatPageNumber(pageNumber);
   const subpageStr = formatSubpageIndicator(subpage, subpageCount);
   const dateTimeStr = formatHeaderDateTime(now);
@@ -229,8 +356,8 @@ export function TeletextGrid({
 
           // A cell covered by a double-height cell directly above it renders
           // nothing — that cell's own box already spans down into this row (see
-          // the `gridRow` span below). Every other cell gets explicit grid
-          // placement so these gaps don't get backfilled by auto-placement.
+          // the `gridRow` span in `CellView`). Every other cell gets explicit
+          // grid placement so these gaps don't get backfilled by auto-placement.
           // The cursor preview (see `cursorDoubleHeight`) covers its cell below
           // the same way, even though nothing has actually been typed yet.
           const isCursorPreviewShadow =
@@ -246,7 +373,6 @@ export function TeletextGrid({
           const isSubpageCell =
             isHeaderRow && col >= SUBPAGE_COL && col < SUBPAGE_COL + subpageStr.length;
           const isDateTimeCell = isHeaderRow && col >= 20;
-          const isHeaderOverlay = isPageCell || isSubpageCell || isDateTimeCell;
           const headerChar = isPageCell
             ? pageStr[col]
             : isSubpageCell
@@ -264,57 +390,30 @@ export function TeletextGrid({
                 ? 'yellow'
                 : null;
 
-          const displayCell = headerChar !== null ? { ...cell, char: headerChar, fg: headerFg as typeof cell.fg } : cell;
-          const hasGraphics = !isHeaderOverlay && typeof displayCell.graphics === 'number' && displayCell.graphics >= 0 && displayCell.graphics <= 63;
-          // The sub-cell brush target. A blank cell without graphics still shows
-          // the highlight (rendered as an all-background sixel block, which looks
-          // identical to the blank cell); a cell with a character keeps the
-          // character and settles for the cell-level cursor outline.
-          const isHoverTarget =
-            !readOnly &&
-            !isHeaderOverlay &&
-            hoverPartIndex != null &&
-            cursorIndex === index;
-          const showGraphics =
-            hasGraphics ||
-            (isHoverTarget && (displayCell.char === ' ' || displayCell.char === ''));
-          const displayChar: string = isHeaderOverlay ? (headerChar === ' ' || headerChar === null ? '\u00a0' : headerChar) : (displayCell.char === ' ' ? '\u00a0' : displayCell.char);
-          const cellFg = displayCell.fg;
-          const pageLinkTarget = !isHeaderOverlay ? pageLinkMap.get(index) : undefined;
-          const handleClick = pageNumberClickable && isPageCell
-            ? (e: React.MouseEvent) => { e.preventDefault(); onPageNumberClick?.(); }
-            : pageLinkTarget != null
-              ? (e: React.MouseEvent) => { e.preventDefault(); onIndexPageSelect?.(pageLinkTarget); }
-              : (e: React.MouseEvent) => onCellClick?.(index, e);
-          const isPageLink = pageLinkTarget != null;
-          const content = showGraphics ? (
-            <SixelBlock
-              cell={hasGraphics ? displayCell : { ...displayCell, graphics: 0 }}
-              hoverPartIndex={isHoverTarget ? hoverPartIndex : null}
-            />
-          ) : (
-            displayChar
-          );
           return (
-            <div
+            <CellView
               key={index}
-              className={`teletext-cell teletext-fg-${cellFg} teletext-bg-${displayCell.bg} ${
-                !readOnly && cursorIndex === index ? 'cursor' : ''
-              } ${!isHeaderOverlay && displayCell.blink ? `teletext-blink${!blinkVisible ? ' teletext-blink-hidden' : ''}` : ''} ${pageNumberClickable && isPageCell ? 'teletext-page-number-clickable' : ''} ${isPageLink ? 'teletext-index-link' : ''} ${doubleHeight ? 'teletext-cell-double-height' : ''}`}
-              style={{ gridColumn: col + 1, gridRow: doubleHeight ? `${row + 1} / span 2` : row + 1 }}
-              onClick={handleClick}
-              onMouseDown={isPageCell && pageNumberClickable ? undefined : isPageLink ? undefined : (e: React.MouseEvent) => onCellMouseDown?.(index, e)}
-              onMouseEnter={isPageCell && pageNumberClickable ? undefined : isPageLink ? undefined : (e: React.MouseEvent) => onCellMouseEnter?.(index, e)}
-              onMouseMove={onCellMouseMove == null || (isPageCell && pageNumberClickable) || isPageLink ? undefined : (e: React.MouseEvent) => onCellMouseMove(index, e)}
-              role={readOnly ? (pageNumberClickable && isPageCell || isPageLink ? 'button' : undefined) : 'button'}
-              tabIndex={-1}
-            >
-              {doubleHeight ? (
-                <span className="teletext-cell-dh-content">{content}</span>
-              ) : (
-                content
-              )}
-            </div>
+              cell={cell}
+              index={index}
+              col={col}
+              row={row}
+              doubleHeight={doubleHeight}
+              isCursor={cursorIndex === index}
+              // Only the cell under the pointer is told about the sixth, so the
+              // other 959 are not re-rendered every time it moves.
+              hoverPart={cursorIndex === index ? hoverPartIndex : null}
+              headerChar={headerChar}
+              headerFg={headerFg as Cell['fg'] | null}
+              pageLinkTarget={headerChar === null ? pageLinkMap.get(index) : undefined}
+              readOnly={readOnly}
+              pageNumberClickable={pageNumberClickable}
+              onCellClick={onCellClick}
+              onCellMouseDown={onCellMouseDown}
+              onCellMouseEnter={onCellMouseEnter}
+              onCellMouseMove={onCellMouseMove}
+              onIndexPageSelect={onIndexPageSelect}
+              onPageNumberClick={onPageNumberClick}
+            />
           );
         })}
         {/* Extra row 25: index line (INDEX / TV GUIDE / WORLD / FINANCE) when in view mode */}

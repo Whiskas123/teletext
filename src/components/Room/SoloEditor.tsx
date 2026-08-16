@@ -26,7 +26,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import { useEditPage } from '../../collab/useEditPage';
-import { useGuide } from '../../collab/useGuide';
+import { usePageTitles } from '../../collab/useGuide';
 import { useIsModerator } from '../../collab/useIsModerator';
 import { useSubpages } from '../../collab/useSubpages';
 import { canEditPage, PLAYGROUND_MIN_PAGE } from '../../domain/access';
@@ -87,7 +87,7 @@ export function SoloEditor() {
   const { page, editCell, saveError } = useEditPage(pageNumber, subpage);
 
   // Global TV_Guide title editing for the current page (Req 9.3).
-  const { title, setTitle } = useGuide();
+  const { title, setTitle } = usePageTitles();
   const [titleError, setTitleError] = useState<string | null>(null);
 
   // Free-text draft for the page-number field so it can be typed (cleared and

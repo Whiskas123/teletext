@@ -186,9 +186,43 @@
 }
 
 
-/* Blinking blocks/cells: synchronized 1s on, 1s off (visibility driven by JS) */
-.teletext-cell.teletext-blink.teletext-blink-hidden {
-  opacity: 0;
+/*
+ * Blinking cells: 1s on, 1s off, driven by CSS.
+ *
+ * This used to be a React `setInterval` toggling a class, which meant the whole
+ * grid — 960 cells — re-rendered twice a second whether or not a single cell on
+ * the page was blinking, and whether or not anyone was looking. As an animation
+ * it costs the compositor one opacity flip on the cells that actually blink.
+ *
+ * `steps(1)` rather than a fade: teletext blinked, it did not pulse.
+ *
+ * The one thing given up is perfect synchronisation. A cell that *becomes*
+ * blinking starts its own animation then, so it runs out of phase with the rest
+ * until the page is next rendered from scratch. Cells that blink together
+ * because they were rendered together — which is every page as it loads — stay
+ * together.
+ */
+.teletext-cell.teletext-blink {
+  animation: teletext-blink 2s steps(1, end) infinite;
+}
+
+@keyframes teletext-blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+
+  50.01%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* A blink is motion, and a page full of it is the kind this setting means. */
+  .teletext-cell.teletext-blink {
+    animation: none;
+  }
 }
 
 /* Retro brush cursor when brush mode is on (pixel block tip) */
@@ -1271,4 +1305,80 @@
 
 .import-pending .sidebar-action-btn {
   margin-top: 0.4rem;
+}
+
+/* ===================================================================== *
+ * The editor on a small screen.
+ *
+ * It was built as a desktop instrument and says so in its measurements: a
+ * 20rem sidebar that cannot shrink, beside a grid fixed at 14px cells — 40 of
+ * them, so 560px — inside a `100vh` row that hides its own overflow. That is
+ * about 880px of content, and on a 390px phone the grid simply sat off the
+ * side of the screen with no way to reach it.
+ *
+ * Three changes, in order of what actually breaks:
+ *
+ * 1. The row becomes a column, and the page scrolls. `overflow: hidden` on a
+ *    fixed-height row is right when the sidebar has its own scrollbar and
+ *    wrong the moment they stack.
+ * 2. The grid is sized from the viewport instead of a constant, so 40 cells
+ *    fit the width whatever the width is.
+ * 3. The page goes first. On a desktop the tools sit beside the work; stacked,
+ *    tools *above* the work would push the thing being edited off the bottom
+ *    of the screen on every visit.
+ * ===================================================================== */
+@media (max-width: 900px) {
+  .editor-layout {
+    flex-direction: column;
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
+  /* The grid first, and kept in view while the tools are scrolled. */
+  .editor-main {
+    order: -1;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding: 0.5rem;
+    background: #111;
+    border-bottom: 1px solid #333;
+    overflow: visible;
+  }
+
+  .editor-sidebar {
+    order: 0;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    /* Its own scrollbar was for when it was a column of its own height; now the
+       page scrolls and a nested scroller would trap the gesture. */
+    overflow: visible;
+    border-right: 0;
+    border-top: 1px solid #333;
+  }
+
+  /*
+   * 40 cells across the viewport, whatever it is.
+   *
+   * The grid is `repeat(40, 1em)`, so the font size *is* the width: 40 of them
+   * plus the screen's 12px padding and 2px border either side. The subtraction
+   * is that chrome plus `.editor-main`'s padding, and the 14px cap keeps a
+   * tablet at the size the desktop uses rather than blowing the cells up.
+   */
+  .editor-main .teletext-screen {
+    font-size: min(14px, calc((100vw - 3.5rem) / 40));
+    padding: 6px;
+  }
+
+  /* A tap target, not a pointer target. */
+  .color-swatch {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+
+  .editor-toolbar {
+    justify-content: flex-start;
+  }
 }
