@@ -23,14 +23,14 @@
  * properties inherit: a black sixel dot inside a red cell would otherwise pick
  * up the cell's `--cell-bg` and bleed red.
  */
-.teletext-bg-black { background-color: #000000; --cell-bg: transparent; }
-.teletext-bg-red { background-color: #ff0000; --cell-bg: #ff0000; }
-.teletext-bg-green { background-color: #00ff00; --cell-bg: #00ff00; }
-.teletext-bg-yellow { background-color: #ffff00; --cell-bg: #ffff00; }
-.teletext-bg-blue { background-color: #0000ff; --cell-bg: #0000ff; }
-.teletext-bg-magenta { background-color: #ff00ff; --cell-bg: #ff00ff; }
-.teletext-bg-cyan { background-color: #00ffff; --cell-bg: #00ffff; }
-.teletext-bg-white { background-color: #ffffff; --cell-bg: #ffffff; }
+.teletext-bg-black { background-color: #000000; }
+.teletext-bg-red { background-color: #ff0000;}
+.teletext-bg-green { background-color: #00ff00; }
+.teletext-bg-yellow { background-color: #ffff00;}
+.teletext-bg-blue { background-color: #0000ff;  }
+.teletext-bg-magenta { background-color: #ff00ff; }
+.teletext-bg-cyan { background-color: #00ffff; }
+.teletext-bg-white { background-color: #ffffff; }
 
 /* Pixelated teletext font (SAA5050-style); accentuated chars appear squished in same cell */
 .teletext-screen {
@@ -194,7 +194,6 @@
    * Black opts out entirely, because its bleed is the one that would show: see
    * `.teletext-bg-black`.
    */
-  box-shadow: 0 0 0 0.5px var(--cell-bg, transparent);
 }
 
 .teletext-cell.cursor {
