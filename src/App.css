@@ -1454,7 +1454,7 @@
   pointer-events: none;
   background: repeating-linear-gradient(
     0deg,
-    rgb(0 0 0 / 20%) 0 0.1cqw,
+    rgb(0 0 0 / 8%) 0 0.1cqw,
     transparent 0.1cqw 0.3cqw
   );
   transition: opacity 0.2s ease;
