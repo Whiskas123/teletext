@@ -11,6 +11,7 @@ import {
   sixelPartAt,
 } from '../../types/teletext';
 import { formatSubpageIndicator } from '../../domain/subpages';
+import { startBlinkClock } from '../../utils/blinkClock';
 
 const VALID_PAGE_NUMBERS = new Set([100, 200, 300, 400, 500, 600, 700, 800, 900]);
 
@@ -74,6 +75,16 @@ function formatPageNumber(n: number): string {
  * column 8.
  */
 const SUBPAGE_COL = 4;
+
+/**
+ * Keep the shared blink phase running for as long as a grid is on screen.
+ *
+ * Reference-counted inside the clock, so however many grids are mounted there
+ * is one timer between them and they blink together — see `utils/blinkClock.ts`.
+ */
+function useBlinkClock() {
+  useEffect(() => startBlinkClock(), []);
+}
 
 function useLiveTime() {
   const [now, setNow] = useState(() => new Date());
@@ -551,6 +562,7 @@ export function TeletextGrid({
   onPointerEnd,
 }: TeletextGridProps) {
   const now = useLiveTime();
+  useBlinkClock();
   const gridRef = useRef<HTMLDivElement>(null);
   const pageStr = formatPageNumber(pageNumber);
   const subpageStr = formatSubpageIndicator(subpage, subpageCount);

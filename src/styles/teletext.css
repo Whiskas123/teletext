@@ -200,41 +200,28 @@
 
 
 /*
- * Blinking cells: 1s on, 1s off, driven by CSS.
+ * Blinking cells: 1s on, 1s off, every one of them together.
  *
- * This used to be a React `setInterval` toggling a class, which meant the whole
- * grid — 960 cells — re-rendered twice a second whether or not a single cell on
- * the page was blinking, and whether or not anyone was looking. As an animation
- * it costs the compositor one opacity flip on the cells that actually blink.
+ * The phase is not held here. An animation per cell — which this was — starts
+ * when the cell gets it, so cells painted blink at different moments blink
+ * against each other, and no amount of CSS can pull them back into step
+ * afterwards. Blinking belongs to the page, not to each cell separately: a
+ * blinking word has to read as a word.
  *
- * `steps(1)` rather than a fade: teletext blinked, it did not pulse.
+ * So one clock publishes the phase as a class on `<html>` (see
+ * `utils/blinkClock.ts`) and every blinking cell on screen reads it through
+ * this one rule. A cell that starts blinking is in step with the rest
+ * immediately, because there was never anything of its own to be out of step.
  *
- * The one thing given up is perfect synchronisation. A cell that *becomes*
- * blinking starts its own animation then, so it runs out of phase with the rest
- * until the page is next rendered from scratch. Cells that blink together
- * because they were rendered together — which is every page as it loads — stay
- * together.
+ * A hard switch rather than a fade: teletext blinked, it did not pulse.
+ *
+ * Scoped to `no-preference` rather than undone under `reduce`: a blink is
+ * motion, and a page full of it is the kind that setting means. Where motion is
+ * not wanted the rule simply never applies and the cells stay lit.
  */
-.teletext-cell.teletext-blink {
-  animation: teletext-blink 2s steps(1, end) infinite;
-}
-
-@keyframes teletext-blink {
-  0%,
-  50% {
-    opacity: 1;
-  }
-
-  50.01%,
-  100% {
+@media (prefers-reduced-motion: no-preference) {
+  .teletext-blink-off .teletext-cell.teletext-blink {
     opacity: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  /* A blink is motion, and a page full of it is the kind this setting means. */
-  .teletext-cell.teletext-blink {
-    animation: none;
   }
 }
 
