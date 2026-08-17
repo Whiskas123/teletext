@@ -133,6 +133,11 @@
   grid-template-columns: repeat(40, 1fr);
   grid-template-rows: repeat(24, 1fr);
   gap: 0;
+  /* Without this, a double-height or cursor cell's `z-index: 1` (below) isn't
+     contained to the grid — it competes in whatever ancestor stacking context
+     it lands in, which inside the CRT means it out-ranks `.crt-scanlines` and
+     the other overlay layers even though those come later in the DOM. */
+  isolation: isolate;
 }
 
 /* View mode: extra row for index line so row 23 stays drawable */
