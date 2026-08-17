@@ -31,6 +31,7 @@ import { RoomContext } from '../../collab/RoomContext';
 import { useRoomSync } from '../../collab/useRoomSync';
 import { useVoting } from '../../collab/useVoting';
 import { TeletextGrid } from '../TeletextGrid/TeletextGrid';
+import CrtTelevision from './CrtTelevision';
 import RoomLayout from './RoomLayout';
 import ChatSidebar from './ChatSidebar';
 import PresenceList from './PresenceList';
@@ -141,57 +142,33 @@ function RoomViewerContent({
       }
     >
       <div className="room-viewer">
-        <div className="room-viewer-screen">
-          <div className="tv-bezel">
-            <div className="tv-screen">
-              <TeletextGrid
-                page={shownPage}
-                pageNumber={displayNumber}
-                subpage={displayedSubpage}
-                subpageCount={subpageCount}
-                readOnly
-                onIndexPageSelect={handleRequestPage}
-              />
-            </div>
-          </div>
-          <div className="tv-controls">
-            <div className="tv-speaker" aria-hidden="true" />
-            <div className="tv-knob-stack">
-              {/* Decoration here, unlike the solo set: which page a room watches
-                  is the vote's to decide, not a knob's. */}
-              <div className="tv-knobs" aria-hidden="true">
-                <div className="tv-knob" />
-                <div className="tv-knob" />
-              </div>
-              {/*
-                * The subpage pair, which is not a vote. The room agreed on a
-                * page; turning to the next screen of it is reading what was
-                * agreed, so it applies at once — for everyone, since the
-                * subpage is part of the room's synchronized state.
-                */}
-              <div className="tv-knobs tv-knobs-sub">
-                <button
-                  type="button"
-                  className="tv-knob tv-knob-btn tv-knob-btn-sm"
-                  aria-label={`Previous subpage (showing ${displayedSubpage} of ${subpageCount})`}
-                  title="Previous subpage"
-                  onClick={() => stepSubpageBy(-1)}
-                >
-                  <span aria-hidden="true">‹</span>
-                </button>
-                <button
-                  type="button"
-                  className="tv-knob tv-knob-btn tv-knob-btn-sm"
-                  aria-label={`Next subpage (showing ${displayedSubpage} of ${subpageCount})`}
-                  title="Next subpage"
-                  onClick={() => stepSubpageBy(1)}
-                >
-                  <span aria-hidden="true">›</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/*
+          * The set, with most of its front panel moulded in but wired to
+          * nothing: which page a room watches is the vote's to decide, so the
+          * keypad, the page keys and the fastext colours are all dead here.
+          *
+          * The subpage keys are not, and neither is power. The room agreed on a
+          * page; turning to the next screen of it is reading what was agreed, so
+          * it applies at once — for everyone, since the subpage is part of the
+          * room's synchronized state. Switching the set off is the opposite: it
+          * is nobody's business but the person sitting in front of it, and it
+          * changes nothing anyone else can see.
+          */}
+        <CrtTelevision
+          pageNumber={displayNumber}
+          subpage={displayedSubpage}
+          subpageCount={subpageCount}
+          onSubpageStep={stepSubpageBy}
+        >
+          <TeletextGrid
+            page={shownPage}
+            pageNumber={displayNumber}
+            subpage={displayedSubpage}
+            subpageCount={subpageCount}
+            readOnly
+            onIndexPageSelect={handleRequestPage}
+          />
+        </CrtTelevision>
 
         <div className="object-bar" role="toolbar" aria-label="Room objects">
           <div className="object-slot" ref={remoteSlotRef}>

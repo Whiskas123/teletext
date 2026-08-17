@@ -52,7 +52,7 @@ describe('RoomLayout', () => {
   it('shows a plain title outside a room', () => {
     render(
       <MemoryRouter>
-        <RoomLayout title="Watch solo">
+        <RoomLayout title="">
           <div>content</div>
         </RoomLayout>
       </MemoryRouter>,

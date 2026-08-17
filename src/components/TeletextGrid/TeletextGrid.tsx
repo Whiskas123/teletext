@@ -11,6 +11,7 @@ import {
   sixelPartAt,
 } from '../../types/teletext';
 import { formatSubpageIndicator } from '../../domain/subpages';
+import { INDEX_LINE_RANGES, type IndexLineItem } from '../../domain/indexLine';
 import { startBlinkClock } from '../../utils/blinkClock';
 
 const VALID_PAGE_NUMBERS = new Set([100, 200, 300, 400, 500, 600, 700, 800, 900]);
@@ -94,23 +95,6 @@ function useLiveTime() {
   }, []);
   return now;
 }
-
-const COLS_PER_INDEX = 10; /* 40 / 4 */
-const INDEX_LINE: { label: string; fg: 'red' | 'green' | 'yellow' | 'cyan'; page: number }[] = [
-  { label: 'INDEX', fg: 'red', page: 100 },
-  { label: 'TV GUIDE', fg: 'green', page: 200 },
-  { label: 'WORLD', fg: 'yellow', page: 300 },
-  { label: 'FINANCE', fg: 'cyan', page: 400 },
-];
-
-/** Start column for each word so they're evenly spaced (centered in 10‑column zones) */
-const INDEX_LINE_RANGES: { start: number; end: number; item: (typeof INDEX_LINE)[number] }[] = INDEX_LINE.map(
-  (item, i) => {
-    const zoneStart = i * COLS_PER_INDEX;
-    const start = zoneStart + Math.floor((COLS_PER_INDEX - item.label.length) / 2);
-    return { start, end: start + item.label.length, item };
-  }
-);
 
 interface TeletextGridProps {
   page: TeletextPage;
@@ -736,7 +720,7 @@ export function TeletextGrid({
         {showIndexLine &&
           Array.from({ length: COLS }, (_, col) => {
             let displayChar = '\u00a0';
-            let indexLink: (typeof INDEX_LINE)[number] | null = null;
+            let indexLink: IndexLineItem | null = null;
             for (const { start, end, item } of INDEX_LINE_RANGES) {
               if (col >= start && col < end) {
                 displayChar = item.label[col - start];

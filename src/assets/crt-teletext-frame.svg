@@ -1,0 +1,457 @@
+<svg viewBox="0 0 1000 830" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     role="img" aria-label="1980s Trinitron-style television with teletext control panel">
+  <!--
+    TELETEXT TV FRAME — modelled on a mid-1980s Sony Trinitron KV-series front panel.
+    HOOKS
+      #screen              4:3 glass. x=180 y=80 w=640 h=480 (viewBox 1000x830). Overlay teletext here,
+                           or set fill to transparent and render content behind the SVG.
+      #btn-page-up/-down   page +/-           #btn-sub-prev/-next   subpage </>
+      #key-0 … #key-9      numeric keypad     #ft-red/green/yellow/cyan  fastext keys
+      #disp-page  (3 digits)  #disp-sub (2 digits): each digit is a <g data-digit> holding
+                           7 rects data-seg="a".."g" with class "seg on"|"seg off".
+      #btn-power, #led-power
+  -->
+  <defs>
+    <linearGradient id="cab" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a3937"/><stop offset=".12" stop-color="#2f2e2c"/>
+      <stop offset=".85" stop-color="#242321"/><stop offset="1" stop-color="#1a1918"/>
+    </linearGradient>
+    <linearGradient id="cabSide" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".07"/><stop offset=".08" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset=".92" stop-color="#000000" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity=".28"/>
+    </linearGradient>
+    <linearGradient id="lip" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4b4a48"/><stop offset=".5" stop-color="#3a3937"/><stop offset="1" stop-color="#26252a"/>
+    </linearGradient>
+    <linearGradient id="bezelIn" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0d0d0e"/><stop offset="1" stop-color="#171718"/>
+    </linearGradient>
+    <linearGradient id="glassBase" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1e2224"/><stop offset=".5" stop-color="#171a1c"/><stop offset="1" stop-color="#101314"/>
+    </linearGradient>
+    <radialGradient id="glassHi" cx=".28" cy=".2" r=".9">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".05"/><stop offset=".45" stop-color="#ffffff" stop-opacity=".012"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="glassVig" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#000" stop-opacity=".18"/><stop offset=".12" stop-color="#000" stop-opacity="0"/>
+      <stop offset=".88" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".22"/>
+    </linearGradient>
+    <linearGradient id="alu" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e6e8ea"/><stop offset=".3" stop-color="#b9bdc0"/>
+      <stop offset=".55" stop-color="#d9dcde"/><stop offset=".8" stop-color="#8f9396"/><stop offset="1" stop-color="#5f6366"/>
+    </linearGradient>
+    <linearGradient id="key" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4a4947"/><stop offset=".08" stop-color="#3b3a38"/>
+      <stop offset=".9" stop-color="#2a2927"/><stop offset="1" stop-color="#1e1d1c"/>
+    </linearGradient>
+    <linearGradient id="win" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#050505"/><stop offset="1" stop-color="#110807"/>
+    </linearGradient>
+    <linearGradient id="winGloss" x1="0" y1="0" x2="0.15" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity=".075"/><stop offset=".55" stop-color="#fff" stop-opacity=".025"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="ledG" cx=".5" cy=".45" r=".55">
+      <stop offset="0" stop-color="#b6ff9c"/><stop offset=".45" stop-color="#3ddc4c"/><stop offset="1" stop-color="#0d5a1c"/>
+    </radialGradient>
+    <linearGradient id="ftkey" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset=".25" stop-color="#fff" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000" stop-opacity=".30"/>
+    </linearGradient>
+
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+    </filter>
+    <filter id="brush" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency=".002 .9" numOctaves="1" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+    </filter>
+    <filter id="floorShadow" x="-30%" y="-100%" width="160%" height="300%"><feGaussianBlur stdDeviation="14"/></filter>
+    <filter id="glassIn" x="-10%" y="-10%" width="120%" height="120%">
+      <feOffset dy="4"/><feGaussianBlur stdDeviation="9" result="b"/>
+      <feComposite operator="out" in="SourceGraphic" in2="b" result="i"/>
+      <feFlood flood-color="#000" flood-opacity=".85"/><feComposite operator="in" in2="i" result="s"/>
+      <feComposite operator="over" in="s" in2="SourceGraphic"/>
+    </filter>
+    <filter id="segGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="1.6" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="keyShadow" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="1" flood-color="#000" flood-opacity=".7"/>
+    </filter>
+
+    <!-- key caps: small, tightly bevelled, like real 80s membrane/plastic keys -->
+    <symbol id="k34"><rect x=".5" y=".5" width="33" height="25" rx="2.5" fill="url(#key)" stroke="#0a0a0a"/><path d="M3 1.8H31" stroke="#9a9a94" stroke-opacity=".55" stroke-width="1"/></symbol>
+    <symbol id="k40x36"><rect x=".5" y=".5" width="39" height="35" rx="3" fill="url(#key)" stroke="#0a0a0a"/><path d="M3 1.8H37" stroke="#9a9a94" stroke-opacity=".55"/></symbol>
+    <symbol id="k52x34"><rect x=".5" y=".5" width="51" height="33" rx="3" fill="url(#key)" stroke="#0a0a0a"/><path d="M3 1.8H49" stroke="#9a9a94" stroke-opacity=".55"/></symbol>
+    <symbol id="k40x26"><rect x=".5" y=".5" width="39" height="25" rx="2.5" fill="url(#key)" stroke="#0a0a0a"/><path d="M3 1.8H37" stroke="#9a9a94" stroke-opacity=".55"/></symbol>
+    <symbol id="k44"><rect x=".5" y=".5" width="43" height="29" rx="2.5" fill="url(#key)" stroke="#0a0a0a"/><path d="M3 1.8H41" stroke="#9a9a94" stroke-opacity=".55"/></symbol>
+    <symbol id="k64"><rect x=".5" y=".5" width="63" height="29" rx="2.5" fill="url(#key)" stroke="#0a0a0a"/><path d="M3 1.8H61" stroke="#9a9a94" stroke-opacity=".55"/></symbol>
+
+
+    <!-- ===== realism layer ===== -->
+    <!-- key light: soft window from upper-left, falloff to lower-right -->
+    <linearGradient id="keyLight" x1="0.05" y1="0" x2="0.95" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".045"/>
+      <stop offset=".28" stop-color="#ffffff" stop-opacity=".012"/>
+      <stop offset=".62" stop-color="#000000" stop-opacity=".07"/>
+      <stop offset="1" stop-color="#000000" stop-opacity=".20"/>
+    </linearGradient>
+    <!-- broad diffuse bounce on the lower cabinet (light off the table) -->
+    <linearGradient id="bounce" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#8fa2b5" stop-opacity=".10"/>
+      <stop offset=".18" stop-color="#8fa2b5" stop-opacity="0"/>
+    </linearGradient>
+    <!-- corner darkening so the box reads as a volume, not a flat card -->
+    <radialGradient id="cabVig" cx=".38" cy=".3" r=".95">
+      <stop offset=".45" stop-color="#000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000" stop-opacity=".38"/>
+    </radialGradient>
+    <!-- chamfer strips: injection-moulded edges catch light on top, occlude at bottom -->
+    <linearGradient id="chamTop" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7d7c78" stop-opacity=".55"/><stop offset="1" stop-color="#7d7c78" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="chamLeft" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#6e6d69" stop-opacity=".38"/><stop offset="1" stop-color="#6e6d69" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="chamBot" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#000" stop-opacity=".55"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="chamRight" x1="1" y1="0" x2="0" y2="0">
+      <stop offset="0" stop-color="#000" stop-opacity=".42"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+    </linearGradient>
+    <!-- ambient occlusion pooling around the tube opening -->
+    <linearGradient id="aoTop" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#000" stop-opacity=".5"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="aoBot" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#000" stop-opacity=".42"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+    </linearGradient>
+    <!-- CRT glass: faint green-grey cast of real leaded tube glass -->
+    <linearGradient id="glassTint" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7f9a8d" stop-opacity=".07"/>
+      <stop offset="1" stop-color="#5d7480" stop-opacity=".05"/>
+    </linearGradient>
+    <!-- the room reflected in the tube: soft window shape, upper-left -->
+    <linearGradient id="reflWin" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".16"/>
+      <stop offset=".55" stop-color="#ffffff" stop-opacity=".05"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="reflSweep" x1="0" y1="0" x2="1" y2="0.55">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset=".38" stop-color="#ffffff" stop-opacity=".045"/>
+      <stop offset=".55" stop-color="#ffffff" stop-opacity=".012"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <!-- specular band along the very top of the curved glass edge -->
+    <linearGradient id="glassEdge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#dfe8ea" stop-opacity=".22"/>
+      <stop offset=".035" stop-color="#dfe8ea" stop-opacity=".04"/>
+      <stop offset=".09" stop-color="#dfe8ea" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="reflBlur" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="14"/></filter>
+    <filter id="softBlur" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="6"/></filter>
+    <!-- coarse mould texture, larger scale than the fine grain -->
+    <filter id="mould" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency=".012" numOctaves="3" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+    </filter>
+    <filter id="antiGlare" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="1.6" numOctaves="1" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+    </filter>
+    <clipPath id="clipScreen"><rect x="180" y="80" width="640" height="480" rx="6"/></clipPath>
+    <clipPath id="clipCab"><rect x="90" y="30" width="820" height="750" rx="9"/></clipPath>
+
+
+    <!-- ===== imperfections & directional shadows ===== -->
+    <!-- sparse micro-scratches: high-frequency noise thresholded to hairlines -->
+    <filter id="scratches" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency=".9 .02" numOctaves="1" seed="7" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+      <feComponentTransfer><feFuncA type="discrete" tableValues="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1"/></feComponentTransfer>
+      <feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .55 0"/>
+    </filter>
+    <!-- dust: sparse specks -->
+    <filter id="dust" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="2.4" numOctaves="1" seed="3" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+      <feComponentTransfer><feFuncA type="discrete" tableValues="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1"/></feComponentTransfer>
+      <feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .5 0"/>
+    </filter>
+    <!-- fingerprint / smudge: soft radial, blurred -->
+    <radialGradient id="smudgeG" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".055"/>
+      <stop offset=".6" stop-color="#ffffff" stop-opacity=".02"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="smudge" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4"/></filter>
+    <!-- directional cast shadow, upper-left key light -->
+    <filter id="castLip" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="2.5" dy="4" stdDeviation="3.5" flood-color="#000" flood-opacity=".55"/>
+    </filter>
+    <filter id="castKey" x="-30%" y="-30%" width="160%" height="180%">
+      <feDropShadow dx="1.2" dy="2.2" stdDeviation="1.4" flood-color="#000" flood-opacity=".75"/>
+    </filter>
+    <filter id="castTrim" x="-5%" y="-50%" width="110%" height="300%">
+      <feDropShadow dx="0" dy="3" stdDeviation="2.5" flood-color="#000" flood-opacity=".6"/>
+    </filter>
+    <!-- LED display: tinted red filter window + strong bloom -->
+    <linearGradient id="ledFilter" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a0605" stop-opacity=".22"/><stop offset="1" stop-color="#1c0302" stop-opacity=".30"/>
+    </linearGradient>
+    <filter id="segBloom" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="3.2" result="b1"/>
+      <feGaussianBlur in="SourceGraphic" stdDeviation="1" result="b2"/>
+      <feMerge><feMergeNode in="b1"/><feMergeNode in="b2"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <!-- fresnel rim on edges facing away from key light -->
+    <linearGradient id="rimR" x1="1" y1="0" x2="0" y2="0">
+      <stop offset="0" stop-color="#b8c4cf" stop-opacity=".22"/><stop offset=".25" stop-color="#b8c4cf" stop-opacity=".04"/><stop offset="1" stop-color="#b8c4cf" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="rimB" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#b8c4cf" stop-opacity=".16"/><stop offset=".3" stop-color="#b8c4cf" stop-opacity=".03"/><stop offset="1" stop-color="#b8c4cf" stop-opacity="0"/>
+    </linearGradient>
+    <!-- key wear: most-used keys have a slightly polished, lighter cap -->
+    <radialGradient id="wear" cx=".5" cy=".55" r=".6">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".09"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="clipPanel"><rect x="164" y="606" width="672" height="150" rx="3"/></clipPath>
+    <clipPath id="clipDisp"><rect x="182" y="643" width="180" height="76" rx="2"/></clipPath>
+
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700');
+      @import url('https://fonts.googleapis.com/css2?family=Michroma');
+      .kb { cursor:pointer; }
+      .kb use, .kb rect, .kb .lg { transition: transform .05s ease, filter .12s ease; }
+      .kb:hover use, .kb:hover rect { filter: brightness(1.15); }
+      .kb:active use, .kb:active rect, .kb:active .lg { transform: translateY(1.5px); }
+      .lg { font-family:Michroma,'Chakra Petch',Eurostile,Microgramma,'Arial Narrow',sans-serif; font-size:12.5px; font-weight:400; letter-spacing:0; text-anchor:middle; pointer-events:none; }
+      .cap { font-family:Michroma,'Chakra Petch',Eurostile,Microgramma,'Arial Narrow',sans-serif; font-size:8px; font-weight:400; fill:#a8a8a4; letter-spacing:1.1px; text-anchor:middle; }
+      .seg.on  { fill:#ff4a3a; filter:url(#segBloom); }
+      .seg.off { fill:#2c0c0a; opacity:.7; }
+      @media (prefers-reduced-motion: reduce){ .kb use,.kb rect,.kb .lg{ transition:none; } }
+    </style>
+  </defs>
+
+  <!-- floor shadow: wide ambient + tight dark contact line -->
+  <ellipse cx="500" cy="790" rx="410" ry="26" fill="#000" opacity=".34" filter="url(#floorShadow)"/>
+  <ellipse cx="500" cy="781" rx="330" ry="10" fill="#000" opacity=".55" filter="url(#softBlur)"/>
+
+  <!-- ===== CABINET ===== -->
+  <g id="cabinet">
+    <rect x="90" y="30" width="820" height="750" rx="9" fill="url(#cab)"/>
+    <rect x="90" y="30" width="820" height="750" rx="9" fill="url(#cabSide)"/>
+    <!-- plastic: coarse mould flow + fine grain -->
+    <g clip-path="url(#clipCab)">
+      <rect x="90" y="30" width="820" height="750" filter="url(#mould)" opacity=".07" style="mix-blend-mode:overlay"/>
+      <rect x="90" y="30" width="820" height="750" filter="url(#grain)" opacity=".13" style="mix-blend-mode:soft-light"/>
+    </g>
+    <!-- light model -->
+    <rect x="90" y="30" width="820" height="750" rx="9" fill="url(#keyLight)"/>
+    <rect x="90" y="30" width="820" height="750" rx="9" fill="url(#cabVig)"/>
+    <rect x="90" y="30" width="820" height="750" rx="9" fill="url(#bounce)"/>
+    <!-- moulded chamfers: light rolls over the top-left edges, occludes bottom-right -->
+    <g clip-path="url(#clipCab)">
+      <rect x="90" y="30" width="820" height="9" fill="url(#chamTop)"/>
+      <rect x="90" y="30" width="9" height="750" fill="url(#chamLeft)"/>
+      <rect x="90" y="765" width="820" height="15" fill="url(#chamBot)"/>
+      <rect x="895" y="30" width="15" height="750" fill="url(#chamRight)"/>
+    </g>
+    <g clip-path="url(#clipCab)">
+      <rect x="880" y="30" width="30" height="750" fill="url(#rimR)"/>
+      <rect x="90" y="750" width="820" height="30" fill="url(#rimB)"/>
+      <!-- cabinet dust and a couple of scuffs -->
+      <rect x="90" y="30" width="820" height="750" filter="url(#dust)" opacity=".07"/>
+    </g>
+    <path d="M100 33.5H900" stroke="#89887f" stroke-opacity=".5" stroke-width="1"/>
+    <path d="M100 777H900" stroke="#000" stroke-opacity=".75" stroke-width="1.5"/>
+    <!-- vent slots on cabinet top -->
+    <g>
+      <g fill="#0a0a09" opacity=".95">
+        <rect x="150" y="38" width="120" height="3" rx="1.5"/><rect x="290" y="38" width="120" height="3" rx="1.5"/>
+        <rect x="590" y="38" width="120" height="3" rx="1.5"/><rect x="730" y="38" width="120" height="3" rx="1.5"/>
+      </g>
+      <g fill="#8a8981" opacity=".22">
+        <rect x="150" y="41.2" width="120" height="1" rx=".5"/><rect x="290" y="41.2" width="120" height="1" rx=".5"/>
+        <rect x="590" y="41.2" width="120" height="1" rx=".5"/><rect x="730" y="41.2" width="120" height="1" rx=".5"/>
+      </g>
+    </g>
+  </g>
+
+  <!-- ===== BEZEL (stepped) ===== -->
+  <g id="bezel">
+    <rect x="156" y="56" width="688" height="528" rx="7" fill="url(#lip)"/>
+    <path d="M160 60H840M160 60V580" stroke="#8d8c88" stroke-opacity=".6" fill="none"/>
+    <path d="M840 60V580M160 580H840" stroke="#000" stroke-opacity=".7" fill="none"/>
+    <rect x="164" y="64" width="672" height="512" rx="5" fill="url(#bezelIn)"/>
+    <path d="M168 68H832M168 68V572" stroke="#000" stroke-opacity=".9" fill="none"/>
+    <!-- THE GLASS 4:3 -->
+    <rect id="screen" x="180" y="80" width="640" height="480" rx="6" fill="url(#glassBase)" filter="url(#glassIn)"/>
+    <g clip-path="url(#clipScreen)" pointer-events="none">
+      <rect x="180" y="80" width="640" height="480" fill="url(#glassTint)"/>
+      <rect x="180" y="80" width="640" height="480" fill="url(#glassVig)"/>
+      <rect x="180" y="80" width="640" height="480" fill="url(#glassHi)"/>
+      <!-- reflected room: window panes, blurred, upper-left -->
+      <g filter="url(#reflBlur)" opacity=".9">
+        <path d="M215 92 L385 92 L330 250 L175 250 Z" fill="url(#reflWin)" opacity=".75"/>
+        <path d="M400 92 L470 92 L410 232 L345 232 Z" fill="url(#reflWin)" opacity=".55"/>
+      </g>
+      <!-- broad sweep across the tube face -->
+      <rect x="180" y="80" width="640" height="480" fill="url(#reflSweep)"/>
+      <!-- specular band on the top glass edge -->
+      <rect x="180" y="80" width="640" height="480" fill="url(#glassEdge)"/>
+      <!-- anti-glare coating speckle -->
+      <rect x="180" y="80" width="640" height="480" filter="url(#antiGlare)" opacity=".05" style="mix-blend-mode:screen"/>
+    </g>
+    <!-- directional cast from the bezel lip (light upper-left → shadow at top/left) -->
+    <g clip-path="url(#clipScreen)" pointer-events="none">
+      <rect x="180" y="80" width="640" height="34" fill="url(#aoTop)" opacity=".5"/>
+      <linearGradient id="aoLeft" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#000" stop-opacity=".45"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient>
+      <rect x="180" y="80" width="26" height="480" fill="url(#aoLeft)"/>
+    </g>
+    <!-- glass imperfections: scratches, dust, a smudge near the bottom-right corner -->
+    <g clip-path="url(#clipScreen)" pointer-events="none">
+      <rect x="180" y="80" width="640" height="480" filter="url(#scratches)" opacity=".10" transform="rotate(-11 500 320)"/>
+      <rect x="180" y="80" width="640" height="480" filter="url(#dust)" opacity=".16"/>
+      <ellipse cx="740" cy="500" rx="60" ry="30" filter="url(#smudge)" fill="url(#smudgeG)" opacity=".7" transform="rotate(-25 740 500)"/>
+      <ellipse cx="248" cy="530" rx="34" ry="14" filter="url(#smudge)" fill="url(#smudgeG)" opacity=".5" transform="rotate(15 248 530)"/>
+    </g>
+    <!-- AO where the tube meets the bezel -->
+    <g pointer-events="none">
+      <rect x="180" y="80" width="640" height="26" fill="url(#aoTop)" opacity=".55"/>
+      <rect x="180" y="534" width="640" height="26" fill="url(#aoBot)" opacity=".45"/>
+    </g>
+    <!-- wordmark on bezel, bottom-left, as on the real thing -->
+    <text x="188" y="571" font-family="Michroma,'Chakra Petch',Eurostile,Microgramma,'Arial Narrow',sans-serif" font-size="11.5" font-weight="400" letter-spacing="2.6" fill="#bfc1c3">TELETEXTRON</text>
+  </g>
+
+  <!-- ===== ALUMINIUM TRIM STRIP ===== -->
+  <g id="trim">
+    <rect x="156" y="590" width="688" height="7" fill="url(#alu)" filter="url(#castTrim)"/>
+    <rect x="156" y="590" width="688" height="7" filter="url(#brush)" opacity=".35" style="mix-blend-mode:multiply"/>
+    <rect x="156" y="590" width="688" height="1.6" fill="#ffffff" opacity=".55"/>
+    <path d="M156 597.5H844" stroke="#000" stroke-opacity=".85"/>
+    <path d="M156 589.2H844" stroke="#000" stroke-opacity=".5"/>
+  </g>
+
+  <!-- ===== CONTROL PANEL ===== -->
+  <g id="panel">
+    <!-- slight recess -->
+    <rect x="164" y="606" width="672" height="150" rx="3" fill="#000" opacity=".26"/>
+    <rect x="164" y="606" width="672" height="18" fill="url(#aoTop)" opacity=".7"/>
+    <rect x="164" y="742" width="672" height="14" fill="url(#aoBot)" opacity=".5"/>
+    <path d="M166 607H834" stroke="#000" stroke-opacity=".8"/>
+    <path d="M166 755H834" stroke="#5c5b58" stroke-opacity=".5"/>
+
+    <g id="panel-content" transform="translate(0,-8)">
+    <!-- wear: polished caps on the most-used keys -->
+    <g pointer-events="none">
+      <rect x="380" y="641" width="40" height="36" rx="3" fill="url(#wear)"/>
+      <rect x="564" y="685" width="40" height="36" rx="3" fill="url(#wear)"/>
+      <rect x="642" y="634" width="52" height="34" rx="3" fill="url(#wear)"/>
+      <rect x="700" y="634" width="52" height="34" rx="3" fill="url(#wear)"/>
+    </g>
+    <!-- greasy fingerprints on the panel plastic beside the keypad and nav -->
+    <g clip-path="url(#clipPanel)" pointer-events="none">
+      <ellipse cx="612" cy="705" rx="26" ry="18" filter="url(#smudge)" fill="url(#smudgeG)" opacity=".45"/>
+      <ellipse cx="770" cy="660" rx="22" ry="16" filter="url(#smudge)" fill="url(#smudgeG)" opacity=".4"/>
+      <rect x="164" y="606" width="672" height="150" filter="url(#dust)" opacity=".10"/>
+    </g>
+    <!-- LED display window -->
+    <g id="display">
+      <rect x="180" y="641" width="184" height="80" rx="3" fill="#000"/>
+      <rect x="182" y="643" width="180" height="76" rx="2" fill="url(#win)"/>
+      <!-- page digits (26x44, gap 8) -->
+      <g id="disp-page" transform="translate(196 659) skewX(-5)">
+        <g data-digit="1" data-value="1">
+          <rect data-seg="a" class="seg off" x="3" y="0" width="20" height="5" rx="1"/><rect data-seg="b" class="seg on" x="21" y="3" width="5" height="18" rx="1"/>
+          <rect data-seg="c" class="seg on" x="21" y="23" width="5" height="18" rx="1"/><rect data-seg="d" class="seg off" x="3" y="39" width="20" height="5" rx="1"/>
+          <rect data-seg="e" class="seg off" x="0" y="23" width="5" height="18" rx="1"/><rect data-seg="f" class="seg off" x="0" y="3" width="5" height="18" rx="1"/>
+          <rect data-seg="g" class="seg off" x="3" y="19.5" width="20" height="5" rx="1"/>
+        </g>
+        <g data-digit="2" data-value="0" transform="translate(34 0)">
+          <rect data-seg="a" class="seg on" x="3" y="0" width="20" height="5" rx="1"/><rect data-seg="b" class="seg on" x="21" y="3" width="5" height="18" rx="1"/>
+          <rect data-seg="c" class="seg on" x="21" y="23" width="5" height="18" rx="1"/><rect data-seg="d" class="seg on" x="3" y="39" width="20" height="5" rx="1"/>
+          <rect data-seg="e" class="seg on" x="0" y="23" width="5" height="18" rx="1"/><rect data-seg="f" class="seg on" x="0" y="3" width="5" height="18" rx="1"/>
+          <rect data-seg="g" class="seg off" x="3" y="19.5" width="20" height="5" rx="1"/>
+        </g>
+        <g data-digit="3" data-value="0" transform="translate(68 0)">
+          <rect data-seg="a" class="seg on" x="3" y="0" width="20" height="5" rx="1"/><rect data-seg="b" class="seg on" x="21" y="3" width="5" height="18" rx="1"/>
+          <rect data-seg="c" class="seg on" x="21" y="23" width="5" height="18" rx="1"/><rect data-seg="d" class="seg on" x="3" y="39" width="20" height="5" rx="1"/>
+          <rect data-seg="e" class="seg on" x="0" y="23" width="5" height="18" rx="1"/><rect data-seg="f" class="seg on" x="0" y="3" width="5" height="18" rx="1"/>
+          <rect data-seg="g" class="seg off" x="3" y="19.5" width="20" height="5" rx="1"/>
+        </g>
+      </g>
+      <!-- separator dot + subpage digits (smaller) -->
+      <rect x="300" y="698" width="4" height="4" fill="#ff3b2c" filter="url(#segGlow)"/>
+      <g id="disp-sub" transform="translate(312 671) scale(.72) skewX(-5)">
+        <g data-digit="1" data-value="0">
+          <rect data-seg="a" class="seg on" x="3" y="0" width="20" height="5" rx="1"/><rect data-seg="b" class="seg on" x="21" y="3" width="5" height="18" rx="1"/>
+          <rect data-seg="c" class="seg on" x="21" y="23" width="5" height="18" rx="1"/><rect data-seg="d" class="seg on" x="3" y="39" width="20" height="5" rx="1"/>
+          <rect data-seg="e" class="seg on" x="0" y="23" width="5" height="18" rx="1"/><rect data-seg="f" class="seg on" x="0" y="3" width="5" height="18" rx="1"/>
+          <rect data-seg="g" class="seg off" x="3" y="19.5" width="20" height="5" rx="1"/>
+        </g>
+        <g data-digit="2" data-value="1" transform="translate(34 0)">
+          <rect data-seg="a" class="seg off" x="3" y="0" width="20" height="5" rx="1"/><rect data-seg="b" class="seg on" x="21" y="3" width="5" height="18" rx="1"/>
+          <rect data-seg="c" class="seg on" x="21" y="23" width="5" height="18" rx="1"/><rect data-seg="d" class="seg off" x="3" y="39" width="20" height="5" rx="1"/>
+          <rect data-seg="e" class="seg off" x="0" y="23" width="5" height="18" rx="1"/><rect data-seg="f" class="seg off" x="0" y="3" width="5" height="18" rx="1"/>
+          <rect data-seg="g" class="seg off" x="3" y="19.5" width="20" height="5" rx="1"/>
+        </g>
+      </g>
+            <!-- red filter plate over the LEDs -->
+      <rect x="182" y="643" width="180" height="76" rx="2" fill="url(#ledFilter)" pointer-events="none" style="mix-blend-mode:multiply"/>
+      <!-- gloss: reflection of the room on the display's acrylic, curved lower edge -->
+      <path d="M184 645 H360 Q360 645 360 647 V672 Q290 686 184 664 Z" fill="url(#winGloss)" pointer-events="none" clip-path="url(#clipDisp)"/>
+            <text class="cap" x="240" y="737">PAGE</text>
+      <text class="cap" x="330" y="737">SUB</text>
+    </g>
+    <!-- numeric keypad 5x2 -->
+    <g id="keypad">
+      <g id="key-1" class="kb" role="button" aria-label="1"><use href="#k40x36" x="380" y="641" filter="url(#castKey)"/><text class="lg" fill="#dcdcda" x="400" y="664">1</text></g>
+      <g id="key-2" class="kb" role="button" aria-label="2"><use href="#k40x36" x="426" y="641" filter="url(#castKey)"/><text class="lg" fill="#dcdcda" x="446" y="664">2</text></g>
+      <g id="key-3" class="kb" role="button" aria-label="3"><use href="#k40x36" x="472" y="641" filter="url(#castKey)"/><text class="lg" fill="#dcdcda" x="492" y="664">3</text></g>
+      <g id="key-4" class="kb" role="button" aria-label="4"><use href="#k40x36" x="518" y="641" filter="url(#castKey)"/><text class="lg" fill="#dcdcda" x="538" y="664">4</text></g>
+      <g id="key-5" class="kb" role="button" aria-label="5"><use href="#k40x36" x="564" y="641" filter="url(#castKey)"/><text class="lg" fill="#dcdcda" x="584" y="664">5</text></g>
+      <g id="key-6" class="kb" role="button" aria-label="6"><use href="#k40x36" x="380" y="685" filter="url(#castKey)"/><text class="lg" fill="#dcdcda" x="400" y="708">6</text></g>
+      <g id="key-7" class="kb" role="button" aria-label="7"><use href="#k40x36" x="426" y="685" filter="url(#castKey)"/><text class="lg" fill="#dcdcda" x="446" y="708">7</text></g>
+      <g id="key-8" class="kb" role="button" aria-label="8"><use href="#k40x36" x="472" y="685" filter="url(#castKey)"/><text class="lg" fill="#dcdcda" x="492" y="708">8</text></g>
+      <g id="key-9" class="kb" role="button" aria-label="9"><use href="#k40x36" x="518" y="685" filter="url(#castKey)"/><text class="lg" fill="#dcdcda" x="538" y="708">9</text></g>
+      <g id="key-0" class="kb" role="button" aria-label="0"><use href="#k40x36" x="564" y="685" filter="url(#castKey)"/><text class="lg" fill="#dcdcda" x="584" y="708">0</text></g>
+    </g>
+    <!-- fastext colour keys, spanning the keypad width -->
+    <g id="fastext">
+      <g id="ft-red" class="kb" role="button" aria-label="Fastext red"><rect x="380.0" y="729" width="51.5" height="14" rx="2" fill="#b7302a" stroke="#0a0a0a" filter="url(#castKey)"/><rect x="380.0" y="729" width="51.5" height="14" rx="2" fill="url(#ftkey)"/></g>
+      <g id="ft-green" class="kb" role="button" aria-label="Fastext green"><rect x="437.5" y="729" width="51.5" height="14" rx="2" fill="#2f8f43" stroke="#0a0a0a" filter="url(#castKey)"/><rect x="437.5" y="729" width="51.5" height="14" rx="2" fill="url(#ftkey)"/></g>
+      <g id="ft-yellow" class="kb" role="button" aria-label="Fastext yellow"><rect x="495.0" y="729" width="51.5" height="14" rx="2" fill="#c9a72a" stroke="#0a0a0a" filter="url(#castKey)"/><rect x="495.0" y="729" width="51.5" height="14" rx="2" fill="url(#ftkey)"/></g>
+      <g id="ft-cyan" class="kb" role="button" aria-label="Fastext cyan"><rect x="552.5" y="729" width="51.5" height="14" rx="2" fill="#2a8fae" stroke="#0a0a0a" filter="url(#castKey)"/><rect x="552.5" y="729" width="51.5" height="14" rx="2" fill="url(#ftkey)"/></g>
+    </g>
+
+    <!-- page (large) over subpage (small): size hierarchy -->
+    <g id="page-nav">
+      <g id="btn-page-down" class="kb" role="button" aria-label="Previous page"><use href="#k52x34" x="642" y="634" filter="url(#castKey)"/><path class="lg" d="M661 651 L675 643 L675 659 Z" fill="#dcdcda"/></g>
+      <g id="btn-page-up" class="kb" role="button" aria-label="Next page"><use href="#k52x34" x="700" y="634" filter="url(#castKey)"/><path class="lg" d="M733 651 L719 643 L719 659 Z" fill="#dcdcda"/></g>
+      <text class="cap" x="697" y="683">PAGE</text>
+    </g>
+    <g id="sub-nav">
+      <g id="btn-sub-prev" class="kb" role="button" aria-label="Previous subpage"><use href="#k40x26" x="654" y="698" filter="url(#castKey)"/><path class="lg" d="M669 711 L679 705 L679 717 Z" fill="#dcdcda"/></g>
+      <g id="btn-sub-next" class="kb" role="button" aria-label="Next subpage"><use href="#k40x26" x="700" y="698" filter="url(#castKey)"/><path class="lg" d="M725 711 L715 705 L715 717 Z" fill="#dcdcda"/></g>
+      <text class="cap" x="697" y="741">SUBPAGE</text>
+    </g>
+
+    <!-- power -->
+    <g id="power">
+      <g id="btn-power" class="kb" role="button" aria-label="Power">
+        <use href="#k34" x="782" y="647" filter="url(#castKey)"/>
+        <circle class="lg" cx="799" cy="660" r="6.5" fill="none" stroke="#dcdcda" stroke-width="1.6"/>
+        <line class="lg" x1="799" y1="651" x2="799" y2="659" stroke="#dcdcda" stroke-width="1.8" stroke-linecap="round"/>
+      </g>
+      <text class="cap" x="799" y="693">POWER</text>
+      <circle id="led-power" cx="799" cy="715" r="4.5" fill="url(#ledG)"/>
+      <circle cx="799" cy="715" r="7" fill="none" stroke="#000" stroke-opacity=".7"/>
+    </g>
+    </g>
+  </g>
+</svg>

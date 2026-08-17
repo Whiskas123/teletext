@@ -15,6 +15,7 @@ import { useParams } from 'react-router-dom';
 
 import { useSoloView } from '../../collab/useSoloView';
 import { TeletextGrid } from '../TeletextGrid/TeletextGrid';
+import CrtTelevision from './CrtTelevision';
 import RoomLayout from './RoomLayout';
 import YellowPages from './YellowPages';
 import PageSearch from './PageSearch';
@@ -135,15 +136,23 @@ export function SoloViewer({ pageNumber: pageNumberProp }: SoloViewerProps) {
 
   // Stepping is not dialling: going back one page should not count up through
   // 998 numbers to get there.
-  const stepPrev = useCallback(() => {
-    skipRoll();
-    return gotoPrevNonEmpty();
-  }, [skipRoll, gotoPrevNonEmpty]);
+  const stepPage = useCallback(
+    (delta: 1 | -1) => {
+      skipRoll();
+      return delta > 0 ? gotoNextNonEmpty() : gotoPrevNonEmpty();
+    },
+    [skipRoll, gotoNextNonEmpty, gotoPrevNonEmpty],
+  );
 
-  const stepNext = useCallback(() => {
-    skipRoll();
-    return gotoNextNonEmpty();
-  }, [skipRoll, gotoNextNonEmpty]);
+  // Dialling, on the other hand, keeps the roll: counting up to the number you
+  // typed is what a set did while it waited for that page to come round again,
+  // and it is the one piece of teletext that was never instant.
+  const handleDialPage = useCallback(
+    (target: number) => {
+      setDisplayedPage(target);
+    },
+    [setDisplayedPage],
+  );
 
   const [openObject, setOpenObject] = useState<OpenObject>(null);
   const remoteSlotRef = useRef<HTMLDivElement>(null);
@@ -203,79 +212,38 @@ export function SoloViewer({ pageNumber: pageNumberProp }: SoloViewerProps) {
   const closeObject = useCallback(() => setOpenObject(null), []);
 
   return (
-    <RoomLayout title="Watch solo">
+    <RoomLayout title="">
       <div className="room-viewer">
-        <div className="room-viewer-screen">
-          <div className="tv-bezel">
-            <div className="tv-screen">
-              <TeletextGrid
-                page={shownPage}
-                pageNumber={displayNumber}
-                subpage={subpage}
-                subpageCount={subpageCount}
-                readOnly
-                onIndexPageSelect={handleSelectPage}
-              />
-            </div>
-          </div>
-          <div className="tv-controls">
-            <div className="tv-speaker" aria-hidden="true" />
-            <div className="tv-knob-stack">
-              {/* The chassis knobs, which used to be decoration. A set's tuning
-                  knobs stepped through channels, so stepping through pages is
-                  what they should have done all along. */}
-              <div className="tv-knobs">
-                <button
-                  type="button"
-                  className="tv-knob tv-knob-btn"
-                  aria-label="Previous page with content"
-                  title="Previous page"
-                  onClick={stepPrev}
-                >
-                  <span aria-hidden="true">‹</span>
-                </button>
-                <button
-                  type="button"
-                  className="tv-knob tv-knob-btn"
-                  aria-label="Next page with content"
-                  title="Next page"
-                  onClick={stepNext}
-                >
-                  <span aria-hidden="true">›</span>
-                </button>
-              </div>
-              {/*
-                * The subpage pair: smaller, and tucked under the page knobs
-                * rather than beside them, because they are the same gesture at a
-                * smaller scale — a carousel is inside a page, not next to it.
-                * Left enabled on a page with one screen: the step is a no-op
-                * (see `stepSubpage`), and controls that vanish as you change
-                * page read as a fault rather than as information. The counter
-                * in the header already says whether there is anywhere to go.
-                */}
-              <div className="tv-knobs tv-knobs-sub">
-                <button
-                  type="button"
-                  className="tv-knob tv-knob-btn tv-knob-btn-sm"
-                  aria-label={`Previous subpage (showing ${subpage} of ${subpageCount})`}
-                  title="Previous subpage"
-                  onClick={() => stepSubpageBy(-1)}
-                >
-                  <span aria-hidden="true">‹</span>
-                </button>
-                <button
-                  type="button"
-                  className="tv-knob tv-knob-btn tv-knob-btn-sm"
-                  aria-label={`Next subpage (showing ${subpage} of ${subpageCount})`}
-                  title="Next subpage"
-                  onClick={() => stepSubpageBy(1)}
-                >
-                  <span aria-hidden="true">›</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/*
+          * The whole front panel is live here. There is nobody to agree with, so
+          * every key does what the label says it does: the keypad dials a page
+          * the way you always dialled one, the PAGE pair steps, the SUBPAGE pair
+          * turns the carousel, and the fastext colours jump to the four
+          * destinations along the bottom of the picture.
+          *
+          * The subpage keys stay live on a page with one screen: the step is a
+          * no-op (see `stepSubpage`), and a control that vanishes as you change
+          * page reads as a fault rather than as information. The counter in the
+          * header already says whether there is anywhere to go.
+          */}
+        <CrtTelevision
+          pageNumber={displayNumber}
+          subpage={subpage}
+          subpageCount={subpageCount}
+          onPageEntry={handleDialPage}
+          onPageStep={stepPage}
+          onSubpageStep={stepSubpageBy}
+          onFastext={handleSelectPage}
+        >
+          <TeletextGrid
+            page={shownPage}
+            pageNumber={displayNumber}
+            subpage={subpage}
+            subpageCount={subpageCount}
+            readOnly
+            onIndexPageSelect={handleSelectPage}
+          />
+        </CrtTelevision>
 
         <div className="object-bar" role="toolbar" aria-label="Room objects">
           <div className="object-slot" ref={remoteSlotRef}>

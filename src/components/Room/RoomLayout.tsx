@@ -49,8 +49,9 @@ export function RoomLayout({ roomId, title, children, sidebar }: RoomLayoutProps
   return (
     <div className="room-layout">
       <header className="room-layout-header">
-        <Link to="/" className="room-back-link">
-          &lt; Back to home
+        <Link to="/" className="room-back-link" aria-label="Back to home">
+          <span className="room-back-arrow">&lt;</span>
+          <img src="/logo.png" alt="" className="room-back-logo" />
         </Link>
         <div className="room-id-display">
           {roomId != null ? (

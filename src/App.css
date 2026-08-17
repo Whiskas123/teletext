@@ -1282,340 +1282,557 @@
   flex-direction: column;
   align-items: center;
   gap: 2rem;
-  padding: 1rem 0 2rem;
 }
 
-/* ── TV set frame ──────────────────────────────────────────────────────────── */
+/* ── The television set ────────────────────────────────────────────────────── */
 /*
- * The .room-viewer-screen is now the full TV cabinet.
- * Inside it, .tv-bezel holds the screen opening (a dark recessed box)
- * and .tv-screen is where TeletextGrid actually renders.
+ * The cabinet is one inline SVG (see `CrtTelevision.tsx`), so almost nothing
+ * about its *appearance* is here — the gradients, mould texture, chamfers and
+ * glass are all in the artwork's own coordinate space and scale with it. What
+ * lives in this file is the part the SVG cannot own: how the picture is fitted
+ * to the tube, how the front-panel keys respond to a pointer, and the switch-on
+ * and switch-off of the raster.
  *
- * Structure rendered by RoomViewer:
- *   <div class="room-viewer-screen">        ← TV cabinet (wood body)
- *     <div class="tv-bezel">                ← inner plastic bezel + CRT recess
- *       <div class="tv-screen">             ← TeletextGrid lives here
- *         <TeletextGrid … />
+ * Structure rendered by CrtTelevision:
+ *   <div class="crt-tv" data-power="on|off|powering-on|powering-off">
+ *     <svg class="crt-tv-svg">           ← the whole set, 1000×830 user units
+ *       …cabinet, bezel, glass, trim, control panel…
+ *     <div class="crt-glass">            ← the picture, laid over the glass
+ *       <div class="crt-raster">         ← collapses on power-off
+ *         <TeletextGrid …/>
  *       </div>
- *     </div>
- *     <div class="tv-controls">             ← knobs, speaker, brand
- *       <div class="tv-speaker"> … </div>
- *       <div class="tv-knobs"> … </div>
- *     </div>
- *   </div>
+ *       <div class="crt-beam">           ← the line, then the dot, then nothing
+ *       <div class="crt-scanlines">
+ *       <svg class="crt-glass-surface">  ← reflections, *over* the picture
+ *
+ * The picture is a sibling of the cabinet rather than a `<foreignObject>` inside
+ * it, because WebKit paints a `foreignObject` at the wrong scale; see the note
+ * in `CrtTelevision.tsx`. Stacking is plain document order — the picture covers
+ * the tube because it comes after the cabinet, and the glass surface covers the
+ * picture because it comes after that.
  */
 
-.room-viewer-screen {
-  /* Warm dark-walnut wood body */
-  background:
-    repeating-linear-gradient(
-      92deg,
-      rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 1px,
-      transparent 1px, transparent 6px
-    ),
-    linear-gradient(175deg, #5a3a1a 0%, #3d2409 40%, #2e1a08 70%, #4a2e10 100%);
-  border-radius: 18px 18px 14px 14px;
-  padding: 28px 32px 0 32px;
-  box-shadow:
-    /* outer glow / ambient */
-    0 0 0 1px #1a0d00,
-    0 0 0 3px #6b4420,
-    0 6px 0 3px #3a1e06,
-    /* depth shadow */
-    0 20px 60px rgba(0,0,0,0.75),
-    0 40px 80px rgba(0,0,0,0.45),
-    /* highlight on top edge */
-    inset 0 2px 3px rgba(255,200,100,0.18),
-    /* dark sides */
-    inset 4px 0 8px rgba(0,0,0,0.35),
-    inset -4px 0 8px rgba(0,0,0,0.35);
-  /*
-   * Width-driven, not content-driven.
-   *
-   * This was `inline-flex` with `align-items: center`, so the cabinet was as wide
-   * as the 40-column grid inside it demanded — about 716px once the bezel and
-   * cabinet padding were added, with nothing able to give. On a phone the whole
-   * TV simply hung off the side of the page.
-   *
-   * Now the width comes from outside and the grid scales to fit it (see
-   * `.tv-screen` below). `max-width` is the size it used to be, so nothing
-   * changes on a desktop; `stretch` is what gives the bezel a definite width for
-   * the container query to measure.
-   */
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
+.crt-tv {
+  position: relative;
   width: 100%;
   /*
-   * 684px is the size the cabinet has always been, worked back from the parts:
-   * 40 columns × 14px = 560, + 28 for the screen's padding and border, + 32 for
-   * the bezel, + 64 for the wood. Landing on it exactly means the grid fills the
-   * well flush at full size instead of sitting off-centre in it.
+   * As big as the column allows, but never taller than the window.
+   *
+   * The cabinet is a fixed 1000×830, so capping the *width* by the height
+   * available — times 1000/830 — is the same statement as capping the height,
+   * and it is the one a percentage-width SVG will actually honour. Without it a
+   * wide, short window gives a set whose control panel is below the fold, which
+   * for a television is the wrong half to lose.
+   *
+   * The plain `max-width` first is the fallback for engines without `dvh`,
+   * which would otherwise drop the whole declaration and take the cap with it.
    */
-  max-width: 684px;
-  box-sizing: border-box;
-  gap: 0;
-  position: relative;
-}
-
-
-
-/* plastic inner bezel — dark grey, recessed */
-.tv-bezel {
-  background: linear-gradient(160deg, #222 0%, #111 60%, #1a1a1a 100%);
-  border-radius: 10px 10px 6px 6px;
-  padding: 14px 16px 16px 16px;
-  box-shadow:
-    inset 0 3px 8px rgba(0,0,0,0.8),
-    inset 0 -2px 4px rgba(255,255,255,0.04),
-    inset 3px 0 6px rgba(0,0,0,0.5),
-    inset -3px 0 6px rgba(0,0,0,0.5),
-    0 -1px 0 rgba(255,255,255,0.06);
-  position: relative;
-}
-
-.tv-bezel {
+  max-width: 960px;
+  max-width: min(960px, calc((100dvh - 10rem) * 1.2));
+  /* Beside the props it is a flex item, and a flex item will not shrink past
+     its content without this. */
   min-width: 0;
-}
-
-/* CRT screen well — slightly curved via border-radius and inner shadow */
-.tv-screen {
-  position: relative;
-  border-radius: 6px;
-  overflow: hidden;
-  min-width: 0;
-  /* Centred, so any sub-pixel left over by the scaling below is split either side
-     rather than all falling on one edge. */
-  text-align: center;
-  /* Measured by the rule below, the same trick the manage previews use. */
+  /* No 300ms tap delay on a control panel: these are buttons, not links. */
+  touch-action: manipulation;
+  /*
+   * The scale the picture is measured against. The SVG is the only thing in
+   * here and it is `width: 100%`, so this box and the artwork's 1000 user units
+   * are the same span: 100cqw is 1000 units, and one unit is 0.1cqw. That is
+   * what lets the picture be sized in the artwork's own numbers (see
+   * `.crt-glass`) without being inside the artwork.
+   */
   container-type: inline-size;
-  box-shadow:
-    inset 0 0 30px rgba(0,0,0,0.9),
-    inset 0 0 8px rgba(0,100,200,0.12),
-    0 0 0 2px #0a0a0a;
 }
 
-/* scanline overlay on screen */
-.tv-screen::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent 0px,
-    transparent 3px,
-    rgba(0,0,0,0.08) 3px,
-    rgba(0,0,0,0.08) 4px
-  );
-  pointer-events: none;
-  z-index: 10;
-  border-radius: inherit;
-}
-
-/* subtle screen glare / reflection */
-.tv-screen::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(
-    ellipse 70% 45% at 30% 20%,
-    rgba(255,255,255,0.045) 0%,
-    transparent 70%
-  );
-  pointer-events: none;
-  z-index: 11;
-  border-radius: inherit;
-}
-
-/*
- * The page, scaled to the screen it is in.
- *
- * The grid is 40 columns of 1em, so its width is exactly 40em and the font size
- * is the only dial: at `(container - 28px) / 40` the screen lands exactly on the
- * well's width, the 28px being `.teletext-screen`'s own 12px padding either side
- * plus its 2px border. `min()` caps it at the 14px it has always been, so a
- * desktop is pixel-identical and only narrow viewports scale down.
- *
- * A teletext page only means anything whole — 40 columns is the medium — so it
- * shrinks rather than cropping or scrolling.
- */
-.tv-screen .teletext-screen {
-  font-size: min(14px, calc((100cqw - 28px) / 40));
-}
-
-/* Older engines without container units keep the fixed size; the max-width on
-   the cabinet still stops it overflowing a desktop. */
-@supports not (width: 1cqw) {
-  .tv-screen .teletext-screen {
-    font-size: 14px;
-  }
-}
-
-/* ── TV controls bar (speaker + knobs) ──── */
-.tv-controls {
+.crt-tv-svg {
+  display: block;
   width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 8px 20px 8px;
-  box-sizing: border-box;
-  gap: 1rem;
+  height: auto;
 }
 
-/* Speaker grille — rows of dots via radial-gradient */
-.tv-speaker {
-  flex: 1 1 auto;
-  height: 42px;
-  border-radius: 4px;
-  background:
-    radial-gradient(circle, rgba(0,0,0,0.7) 35%, transparent 36%) 0 0 / 6px 6px,
-    linear-gradient(160deg, #1e1208 0%, #150d04 100%);
-  box-shadow:
-    inset 0 1px 3px rgba(0,0,0,0.8),
-    inset 0 -1px 2px rgba(255,255,255,0.04);
-  border: 1px solid #0d0802;
-}
+/* ── the glass ─────────────────────────────────────────────────────────────── */
 
 /*
- * The two rows of knobs: pages on top, subpages under them.
+ * The tube's face, laid over the hole in the artwork.
  *
- * Stacked rather than strung out along the chassis, because the second pair
- * moves *within* whatever the first pair landed on. Right-aligned so both rows
- * hang off the same edge and the small pair reads as subordinate to the big one
- * rather than as a separate cluster.
+ * Placed as a fraction of the set rather than in pixels, because the set has no
+ * fixed size: the artwork's glass sits at 180,80 and runs 640×480 on a 1000×830
+ * canvas, so those four numbers over 1000 and 830 are the four below and they
+ * hold at every width the cabinet is drawn at.
+ *
+ * Lengths *inside* the picture are `cqw`, at 0.1cqw to the user unit — the same
+ * numbers the artwork uses, moved one decimal place. They were plain `px` while
+ * this lived in a `<foreignObject>`, where a px *was* a user unit; out here a px
+ * is a px and would stay the same size as the television grew.
  */
-.tv-knob-stack {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
-}
-
-/* Knob cluster */
-.tv-knobs {
-  flex: 0 0 auto;
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-/* Closer together as well as smaller: one pair, not two controls. */
-.tv-knobs-sub {
-  gap: 4px;
-}
-
-.tv-knob {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 38% 32%, #555 0%, #2a2a2a 55%, #111 100%);
-  box-shadow:
-    0 2px 4px rgba(0,0,0,0.7),
-    inset 0 1px 2px rgba(255,255,255,0.15),
-    0 0 0 2px #1a1a1a,
-    0 0 0 3px #444;
-  position: relative;
-}
-
-/* indicator line on each knob */
-.tv-knob::after {
-  content: '';
+.crt-glass {
   position: absolute;
-  top: 4px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 2px;
-  height: 8px;
-  background: rgba(255,255,255,0.4);
-  border-radius: 1px;
-}
-
-/* make the second knob look turned differently */
-.tv-knob:last-child::after {
-  transform: translateX(-50%) rotate(60deg);
-  transform-origin: center bottom;
+  left: 18%; /* 180 / 1000 */
+  top: 9.6386%; /* 80 / 830 */
+  width: 64%; /* 640 / 1000 */
+  height: 57.8313%; /* 480 / 830 */
+  overflow: hidden;
+  background: #000;
+  border-radius: 0.6cqw; /* rx="6", as on the glass rect underneath */
 }
 
 /*
- * The knobs that actually do something: previous and next page.
- *
- * Same moulded shape, with the indicator line replaced by an arrow — a knob
- * whose position means nothing is decoration, and these have a direction.
+ * The tube's surface, over the picture and inert to the pointer — the teletext
+ * underneath has links in it, and glass is not something you click.
  */
-.tv-knob-btn {
+.crt-glass-surface {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.crt-raster {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
-  border: 0;
-  color: rgb(255 255 255 / 70%);
-  font-family: monospace;
-  font-size: 1rem;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.tv-knob-btn::after {
-  content: none;
-}
-
-.tv-knob-btn:hover {
-  color: #fff;
-  box-shadow:
-    0 2px 4px rgb(0 0 0 / 70%),
-    inset 0 1px 2px rgb(255 255 255 / 25%),
-    0 0 0 2px #1a1a1a,
-    0 0 0 3px #6a6a6a;
-}
-
-.tv-knob-btn:active {
-  /* Pressed in, like a knob being turned. */
-  transform: translateY(1px);
-}
-
-.tv-knob-btn:focus-visible {
-  outline: 2px solid #4cf;
-  outline-offset: 3px;
+  transform-origin: 50% 50%;
+  /* The tube is a bare, unlit surface until told otherwise; the animations
+     below take it from here. */
+  backface-visibility: hidden;
 }
 
 /*
- * The subpage knobs. Two thirds the size, with the moulding rings scaled to
- * match — copying the shadow from `.tv-knob` unchanged would leave a 5px collar
- * around an 18px knob, which is what makes a shrunk control look like a mistake
- * rather than a smaller version of the same thing.
+ * The page, sized to the tube rather than to a viewport.
+ *
+ * The tube is 640×480 and a teletext page is 40 columns by 24 (or 25) rows, so a
+ * real cell is exactly 16×19.2 — an oblong, which no `1em`-square cell is.
+ *
+ * This used to be reached by laying the grid out from `font-size` and then
+ * stretching it: the 40 columns came up 71 units short at 568.9, and a
+ * `transform: scaleX(1.08)` made up the shortfall. That transform was the thin
+ * black mesh over the picture. A scale applied *after* layout multiplies every
+ * cell edge by 1.08, so all forty of them land on fractional device pixels and
+ * get antialiased against the black tube behind — and two antialiased edges
+ * meeting do not add up to an opaque pixel, so a seam of tube showed through at
+ * every cell boundary. Nothing about the grid's own track sizing could fix it,
+ * because the seams were created at composite time, after layout had already
+ * agreed the cells touched.
+ *
+ * So the grid is simply given the tube's box and left to divide it. Its tracks
+ * are `fr` (see `styles/teletext.css`), which means 40 columns across an exact
+ * 640-unit width and 24 rows down an exact 480 — cells of 16×19.2 arrived at by
+ * layout rather than by stretching, and no transform in the picture at all.
+ * `font-size` now sets only the glyphs, which is all it should ever have set.
+ *
+ * The screen's own padding and border go: they are a frame, and the tube is
+ * already inside one.
  */
-.tv-knob-btn-sm {
-  width: 18px;
-  height: 18px;
-  font-size: 0.7rem;
-  box-shadow:
-    0 1px 3px rgb(0 0 0 / 70%),
-    inset 0 1px 1px rgb(255 255 255 / 15%),
-    0 0 0 1px #1a1a1a,
-    0 0 0 2px #444;
+.crt-raster .teletext-screen {
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  width: 100%;
+  height: 100%;
+  font-size: 1.48148cqw; /* 14.8148 units: 480 ÷ 32.4, for the 24-row grid */
 }
 
-.tv-knob-btn-sm:hover {
-  box-shadow:
-    0 1px 3px rgb(0 0 0 / 70%),
-    inset 0 1px 1px rgb(255 255 255 / 25%),
-    0 0 0 1px #1a1a1a,
-    0 0 0 2px #6a6a6a;
+.crt-raster .teletext-screen-with-index {
+  font-size: 1.42222cqw; /* 14.2222 units: 480 ÷ 33.75, the 25th row being the index line */
 }
 
-/* Bottom foot / base of the TV */
-.room-viewer-screen::after {
-  content: '';
+/* Fills the tube, so the `fr` tracks divide the glass's own pixel width and
+   height rather than a size derived from `em` (which would not reach the edges
+   and is what the old `scaleX` was compensating for). */
+.crt-raster .teletext-grid {
+  width: 100%;
+  height: 100%;
+}
+
+/* Shadow mask lines. Fine enough to read as a tube, not as a filter. */
+.crt-scanlines {
   position: absolute;
-  bottom: -10px;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgb(0 0 0 / 20%) 0 0.1cqw,
+    transparent 0.1cqw 0.3cqw
+  );
+  transition: opacity 0.2s ease;
+}
+
+/*
+ * The line the picture collapses into, and the dot the line collapses into.
+ *
+ * Two elements for one beam, because the two moments cannot share a transform.
+ * The line is the full width of the tube squeezed to nothing, which means
+ * scaling it horizontally — and a `box-shadow` squashed by `scaleX(0.01)` has no
+ * bloom left at exactly the moment the bloom *is* the effect. So the line takes
+ * the horizontal scale and the dot, which never scales unevenly, takes the glow.
+ */
+.crt-beam {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 0.4cqw;
+  margin-top: -0.2cqw;
+  border-radius: 0.2cqw;
+  background: linear-gradient(
+    90deg,
+    rgb(255 255 255 / 20%),
+    #fff 10%,
+    #fff 90%,
+    rgb(255 255 255 / 20%)
+  );
+  box-shadow:
+    0 0 1cqw 0.2cqw rgb(255 255 255 / 90%),
+    0 0 3.4cqw 0.8cqw rgb(165 210 255 / 50%);
+  opacity: 0;
+  transform-origin: 50% 50%;
+  pointer-events: none;
+}
+
+/*
+ * The dot, and the half-second after it — the part of switching a television off
+ * that everybody remembers. A gradient rather than a lit rectangle: what is
+ * actually being watched is a point of phosphor too bright to look at directly
+ * and the halo around it, and the halo is most of what the eye gets.
+ */
+.crt-dot {
+  position: absolute;
   left: 50%;
-  transform: translateX(-50%);
-  width: 55%;
-  height: 10px;
-  background: linear-gradient(180deg, #3a2010 0%, #221208 100%);
-  border-radius: 0 0 8px 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  top: 50%;
+  width: 4.4cqw;
+  height: 4.4cqw;
+  margin: -2.2cqw 0 0 -2.2cqw;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle closest-side,
+    #fff 0%,
+    #fff 9%,
+    rgb(222 240 255 / 90%) 17%,
+    rgb(160 205 255 / 40%) 36%,
+    rgb(120 180 255 / 0%) 72%
+  );
+  opacity: 0;
+  transform-origin: 50% 50%;
+  pointer-events: none;
+}
+
+/*
+ * The room in the glass, dimmed while the tube is lit.
+ *
+ * A reflection is only ever as visible as the picture behind it is dark, which
+ * is why a switched-off CRT is a mirror and a switched-on one is not.
+ */
+.crt-reflections {
+  transition: opacity 0.45s ease;
+}
+
+.crt-tv[data-power='on'] .crt-reflections,
+.crt-tv[data-power='powering-on'] .crt-reflections {
+  opacity: 0.5;
+}
+
+/* ── power ─────────────────────────────────────────────────────────────────── */
+
+.crt-tv[data-power='off'] .crt-raster {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.crt-tv[data-power='off'] .crt-scanlines {
+  opacity: 0;
+}
+
+/*
+ * Switching off, in three movements over 900ms:
+ *
+ *   0–165ms   vertical deflection fails, so the picture squashes into a sliver
+ *             and everything it was drawing piles into it — hence the rising
+ *             brightness rather than a fade.
+ *   165–470ms horizontal deflection follows it, pulling the line into a point.
+ *   470–900ms the point is gone but the phosphor is not, and that long dying
+ *             dot is what the whole animation is for.
+ */
+.crt-tv[data-power='powering-off'] .crt-raster {
+  animation: crt-off-raster 300ms cubic-bezier(0.55, 0, 0.85, 0.2) forwards;
+}
+
+.crt-tv[data-power='powering-off'] .crt-beam {
+  animation: crt-off-beam 900ms linear forwards;
+}
+
+.crt-tv[data-power='powering-off'] .crt-dot {
+  animation: crt-off-dot 900ms linear forwards;
+}
+
+@keyframes crt-off-raster {
+  0% {
+    transform: scale(1, 1);
+    filter: brightness(1);
+    opacity: 1;
+  }
+  55% {
+    transform: scale(1, 0.06);
+    filter: brightness(3.2);
+    opacity: 1;
+  }
+  75% {
+    transform: scale(1, 0.008);
+    filter: brightness(6);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1, 0.004);
+    filter: brightness(8);
+    opacity: 0;
+  }
+}
+
+@keyframes crt-off-beam {
+  0%,
+  16% {
+    opacity: 0;
+    transform: scale(1, 0.4);
+  }
+  24% {
+    opacity: 1;
+    transform: scale(1, 1.5);
+  }
+  32% {
+    opacity: 1;
+    transform: scale(1, 1);
+  }
+  46% {
+    opacity: 1;
+    transform: scale(0.08, 1.2);
+  }
+  /* Handed over to the dot, which is already at full brightness underneath. */
+  53%,
+  100% {
+    opacity: 0;
+    transform: scale(0.01, 1);
+  }
+}
+
+@keyframes crt-off-dot {
+  0%,
+  36% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  /* The line arrives; the dot is the brightest thing on the tube. */
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  58% {
+    opacity: 1;
+    transform: scale(0.62);
+  }
+  /* Then just phosphor cooling: smaller and dimmer, and slower than you expect. */
+  72% {
+    opacity: 0.72;
+    transform: scale(0.4);
+  }
+  88% {
+    opacity: 0.3;
+    transform: scale(0.28);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.22);
+  }
+}
+
+/*
+ * Switching on plays the same failure backwards, plus the two things a warming
+ * tube does that a collapsing one does not: it overshoots the height of the
+ * picture and then settles, and it comes up far too bright before the beam
+ * current stabilises.
+ */
+.crt-tv[data-power='powering-on'] .crt-raster {
+  animation: crt-on-raster 820ms cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+}
+
+.crt-tv[data-power='powering-on'] .crt-beam {
+  animation: crt-on-beam 420ms ease-out forwards;
+}
+
+.crt-tv[data-power='powering-on'] .crt-dot {
+  animation: crt-on-dot 260ms ease-out forwards;
+}
+
+@keyframes crt-on-dot {
+  0% {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  30% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  70% {
+    opacity: 0.7;
+    transform: scale(0.6);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+
+@keyframes crt-on-beam {
+  0%,
+  12% {
+    opacity: 0;
+    transform: scale(0.01, 0.8);
+  }
+  22% {
+    opacity: 1;
+    transform: scale(0.05, 1.4);
+  }
+  45% {
+    opacity: 1;
+    transform: scale(1, 1.2);
+  }
+  65% {
+    opacity: 0.8;
+    transform: scale(1, 1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1, 0.5);
+  }
+}
+
+@keyframes crt-on-raster {
+  0%,
+  18% {
+    transform: scale(1, 0.004);
+    filter: brightness(7);
+    opacity: 0;
+  }
+  26% {
+    transform: scale(1, 0.01);
+    filter: brightness(7);
+    opacity: 1;
+  }
+  48% {
+    transform: scale(1, 0.5);
+    filter: brightness(2.6);
+    opacity: 1;
+  }
+  66% {
+    transform: scale(1, 1.05);
+    filter: brightness(1.7);
+  }
+  80% {
+    transform: scale(1, 0.98);
+    filter: brightness(1.15);
+  }
+  92% {
+    transform: scale(1, 1.008);
+    filter: brightness(1.02);
+  }
+  100% {
+    transform: scale(1, 1);
+    filter: brightness(1);
+  }
+}
+
+/*
+ * Nothing to skip past: `CrtTelevision` never enters the transitional states
+ * under a reduced-motion preference, so the set simply is on or off. These rules
+ * only stop the keys from travelling under the finger.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .crt-tv .kb use,
+  .crt-tv .kb rect,
+  .crt-tv .kb .lg {
+    transition: none;
+  }
+}
+
+/* ── front panel ───────────────────────────────────────────────────────────── */
+
+.crt-tv .kb {
+  cursor: pointer;
+}
+
+/* `:not(.kb-hit)` throughout: the hit area is a fixed patch of the panel, and a
+   patch that moved or lit up with the key it belongs to would be neither. */
+.crt-tv .kb use,
+.crt-tv .kb rect:not(.kb-hit),
+.crt-tv .kb .lg {
+  transition: transform 0.05s ease, filter 0.12s ease;
+}
+
+.crt-tv .kb:hover use,
+.crt-tv .kb:hover rect:not(.kb-hit) {
+  filter: brightness(1.15);
+}
+
+/* Keys travel into the panel, caps and legends together — a legend that stayed
+   put while its cap moved would read as a printed sticker, not a moulding. */
+.crt-tv .kb:active use,
+.crt-tv .kb:active rect:not(.kb-hit),
+.crt-tv .kb:active .lg {
+  transform: translateY(1.5px);
+}
+
+/*
+ * The focus ring is the key lighting up rather than a box around it: an SVG
+ * outline would be drawn in user units and follow the group's bounding box,
+ * which on these keys includes the legend and lands nowhere near the cap.
+ */
+.crt-tv .kb:focus-visible {
+  outline: none;
+}
+
+.crt-tv .kb:focus-visible use,
+.crt-tv .kb:focus-visible > rect:not(.kb-hit) {
+  filter: drop-shadow(0 0 3px #6cf) drop-shadow(0 0 7px #6cf) brightness(1.25);
+}
+
+/* Moulded in, wired to nothing — see `PanelKey`. */
+.crt-tv .kb-inert {
+  cursor: default;
+  pointer-events: none;
+}
+
+.crt-tv .lg {
+  font-family: Michroma, 'Chakra Petch', Eurostile, Microgramma, 'Arial Narrow', sans-serif;
+  font-size: 12.5px;
+  letter-spacing: 0;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.crt-tv .cap {
+  font-family: Michroma, 'Chakra Petch', Eurostile, Microgramma, 'Arial Narrow', sans-serif;
+  font-size: 8px;
+  fill: #a8a8a4;
+  letter-spacing: 1.1px;
+  text-anchor: middle;
+}
+
+/* ── LED window ────────────────────────────────────────────────────────────── */
+
+.crt-tv .seg.on {
+  fill: #ff4a3a;
+  filter: url(#segBloom);
+}
+
+.crt-tv .seg.off {
+  fill: #2c0c0a;
+  opacity: 0.7;
+}
+
+.crt-tv .disp-dot,
+.crt-tv #led-power {
+  transition: opacity 0.25s ease;
 }
 
 /* Bar of realistic objects under the screen (remote control, yellow pages) */
@@ -1729,6 +1946,72 @@
   border-top-color: #1c1c1c;
 }
 
+/* --- The props, standing beside the set ---------------------------------- */
+/*
+ * On anything wider than a phone the remote, the directory and the magnifier
+ * form a vertical rail to the left of the television rather than a row beneath
+ * it. Under the set they were competing with it for the one dimension a 4:3
+ * cabinet actually needs — height — and the television was capped small to
+ * leave them room. Beside it they cost a hundred pixels of width, of which
+ * there is plenty, and the set grows into the rest (see `.crt-tv`).
+ *
+ * `order` rather than a reordered DOM: the television is the content and the
+ * props are what you use on it, so picture-then-tools is the right sequence to
+ * read and to tab through whichever side of the screen they end up on — and
+ * leaving the markup alone means the phone layout below is untouched.
+ */
+@media (min-width: 721px) {
+  .room-viewer {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 1.5rem;
+  }
+
+  .object-bar {
+    order: -1;
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 1.5rem;
+    flex-wrap: nowrap;
+    /* Lines the first prop up with the top of the cabinet rather than with the
+       artwork's box, which leaves 30 of its 830 units as clearance above. */
+    padding-top: 1.25rem;
+  }
+
+  /* Smaller than they were in a row: a rail is read down the side of the set,
+     not looked at, and three 110px props make a column taller than the TV. */
+  .object-img {
+    height: 88px;
+  }
+
+  /*
+   * The remote's panel opens sideways.
+   *
+   * Above the prop is where it went when the props sat under the set and there
+   * was a whole screen above them. From partway down a left-hand rail it would
+   * open over the top of the television, so it comes out beside it instead,
+   * pointing back at the remote it belongs to.
+   */
+  .remote-popover {
+    bottom: auto;
+    top: 50%;
+    left: calc(100% + 14px);
+    transform: translateY(-50%);
+  }
+
+  .remote-popover::after {
+    top: 50%;
+    left: auto;
+    right: 100%;
+    transform: translateY(-50%);
+    border-top-color: transparent;
+    border-right-color: #1c1c1c;
+  }
+}
+
 /* --- The watch screens on a phone ---------------------------------------- */
 /*
  * One breakpoint, at the width the TV stops being able to hold its natural size.
@@ -1759,45 +2042,17 @@
     max-height: 12rem;
   }
 
+  /*
+   * The set has nothing to give back on a phone: it is one drawing, and it
+   * shrinks as one. What it can have is the gutter — the cabinet is the widest
+   * thing on the page and the front panel's keys are the smallest, so every
+   * pixel of width goes into making them hittable. Each key carries a hit area
+   * wider than its cap for the same reason (see `PanelKey`).
+   */
   .room-viewer {
     gap: 1rem;
     padding: 0.5rem 0 1.5rem;
-  }
-
-  /* The cabinet's own trim, in proportion: 28px/32px of wood around a 300px-wide
-     screen is most of the screen. */
-  .room-viewer-screen {
-    padding: 14px 14px 0;
-    border-radius: 12px 12px 10px 10px;
-  }
-
-  .tv-bezel {
-    padding: 8px 8px 10px;
-    border-radius: 7px 7px 5px 5px;
-  }
-
-  .tv-controls {
-    padding: 8px 4px 12px;
-    gap: 0.5rem;
-  }
-
-  .tv-speaker {
-    height: 28px;
-  }
-
-  /* A 28px knob is not a tap target. The moulding scales with it. */
-  .tv-knob-btn {
-    width: 44px;
-    height: 44px;
-    font-size: 1.25rem;
-  }
-
-  /* Still the smaller pair, but past the 24px floor a finger can actually hit.
-     The proportion is what carries the hierarchy on a phone, not the size. */
-  .tv-knob-btn-sm {
-    width: 30px;
-    height: 30px;
-    font-size: 0.9rem;
+    margin-inline: -0.5rem;
   }
 
   .object-bar {
@@ -2302,6 +2557,9 @@ button.yellow-pages-number:hover {
 
 /* --- Room viewer: back-to-home link in the header --- */
 .room-back-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   color: #4cf;
   font-family: monospace;
   font-size: 0.8rem;
@@ -2310,8 +2568,22 @@ button.yellow-pages-number:hover {
   white-space: nowrap;
 }
 
-.room-back-link:hover {
-  text-decoration: underline;
+.room-back-arrow {
+  color: #fff;
+  font-size: 2.8rem;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.room-back-logo {
+  width: 44px;
+  height: 44px;
+  display: block;
+  transition: transform 0.2s ease;
+}
+
+.room-back-link:hover .room-back-logo {
+  transform: rotate(20deg);
 }
 
 /* --- Manage archive (/manage): choosing what the site shows --- */

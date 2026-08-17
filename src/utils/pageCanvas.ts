@@ -41,8 +41,10 @@ export function pageHeight(skipHeaderRow = false): number {
   return (ROWS - (skipHeaderRow ? 1 : 0)) * CELL_H;
 }
 
-const FONT_PX = 14;
-const FONT_STACK = '"Press Start 2P", "Courier New", Courier, monospace';
+/** Exported so anything drawing *beside* a page — the watched picture's index
+ *  row, say — sets type the same way and cannot drift from it. */
+export const FONT_PX = 14;
+export const FONT_STACK = '"Press Start 2P", "Courier New", Courier, monospace';
 
 /** Where the `X/Y` subpage counter sits, matching the DOM renderer. */
 const SUBPAGE_COL = 4;

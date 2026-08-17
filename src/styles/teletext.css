@@ -8,14 +8,14 @@
 .teletext-fg-cyan { color: #00ffff; }
 .teletext-fg-white { color: #ffffff; }
 
-.teletext-bg-black { background-color: #000000; }
-.teletext-bg-red { background-color: #ff0000; }
-.teletext-bg-green { background-color: #00ff00; }
-.teletext-bg-yellow { background-color: #ffff00; }
-.teletext-bg-blue { background-color: #0000ff; }
-.teletext-bg-magenta { background-color: #ff00ff; }
-.teletext-bg-cyan { background-color: #00ffff; }
-.teletext-bg-white { background-color: #ffffff; }
+.teletext-bg-black { background-color: #000000; --cell-bg: #000000; }
+.teletext-bg-red { background-color: #ff0000; --cell-bg: #ff0000; }
+.teletext-bg-green { background-color: #00ff00; --cell-bg: #00ff00; }
+.teletext-bg-yellow { background-color: #ffff00; --cell-bg: #ffff00; }
+.teletext-bg-blue { background-color: #0000ff; --cell-bg: #0000ff; }
+.teletext-bg-magenta { background-color: #ff00ff; --cell-bg: #ff00ff; }
+.teletext-bg-cyan { background-color: #00ffff; --cell-bg: #00ffff; }
+.teletext-bg-white { background-color: #ffffff; --cell-bg: #ffffff; }
 
 /* Pixelated teletext font (SAA5050-style); accentuated chars appear squished in same cell */
 .teletext-screen {
@@ -46,12 +46,15 @@
 }
 
 .teletext-screen-compact .teletext-grid {
-  grid-template-columns: repeat(40, 1em);
-  grid-template-rows: repeat(24, 1.35em);
+  width: 40em;
+  height: 32.4em; /* 24 * 1.35em */
+  grid-template-columns: repeat(40, 1fr);
+  grid-template-rows: repeat(24, 1fr);
 }
 
 .teletext-screen-compact .teletext-grid-with-index {
-  grid-template-rows: repeat(25, 1.35em);
+  height: 33.75em; /* 25 * 1.35em */
+  grid-template-rows: repeat(25, 1fr);
 }
 
 .teletext-screen-wrapper {
@@ -94,17 +97,33 @@
   background: #333;
 }
 
+/*
+ * Tracks are `fr`, not a fixed `1em` / `1.35em` each.
+ *
+ * A fixed length per track gets rounded to a device pixel independently for
+ * every one of the 40 columns; at almost any font size that remainder doesn't
+ * vanish, and 40 tracks each keeping (or losing) a fraction of a pixel shows
+ * up as a hairline gap — or overlap — at every cell boundary. `fr` tracks
+ * divide the container's own already-rounded pixel width across the 40 of
+ * them by the grid spec's own remainder-distribution algorithm, which is
+ * defined to land on exact pixels with nothing left over. The container needs
+ * a definite size for that distribution to have something to divide, which is
+ * what the explicit `width`/`height` below are for — `fit-content` no longer
+ * means anything once the tracks are flexible instead of fixed.
+ */
 .teletext-grid {
   display: grid;
-  grid-template-columns: repeat(40, 1em);
-  grid-template-rows: repeat(24, 1.35em);
+  width: 40em;
+  height: 32.4em; /* 24 * 1.35em */
+  grid-template-columns: repeat(40, 1fr);
+  grid-template-rows: repeat(24, 1fr);
   gap: 0;
-  width: fit-content;
 }
 
 /* View mode: extra row for index line so row 23 stays drawable */
 .teletext-grid-with-index {
-  grid-template-rows: repeat(25, 1.35em);
+  height: 33.75em; /* 25 * 1.35em */
+  grid-template-rows: repeat(25, 1fr);
 }
 
 /*
@@ -120,12 +139,16 @@
   display: contents;
 }
 
-/* Squished look for accented/wider characters (real teletext fitted them in same cell) */
+/*
+ * Squished look for accented/wider characters (real teletext fitted them in
+ * same cell). No explicit `width`/`height` here: a grid item with `auto` size
+ * stretches to fill its track by default, and it's that stretch — onto a `fr`
+ * track sized by the grid's own remainder-distribution algorithm — that keeps
+ * every cell's edge landing on exactly the same device pixel as its neighbour
+ * (see `.teletext-grid`). A fixed `1em` here would override the stretch and
+ * go back to rounding each cell's box independently of the others.
+ */
 .teletext-cell {
-  width: 1em;
-  height: 1.35em;
-  min-width: 1em;
-  max-width: 1em;
   overflow: hidden;
   text-overflow: clip;
   display: flex;
@@ -136,6 +159,18 @@
   box-sizing: border-box;
   user-select: none;
   -webkit-user-select: none;
+  /*
+   * A second line of defence beyond the `fr` tracks above: those settle the
+   * *layout*, but any scaled ancestor multiplies the settled edges again at
+   * paint time and can put a cell's painted edge a fraction of a pixel away
+   * from its neighbour's — which over the black screen behind reads as a
+   * hairline seam, because two antialiased edges meeting do not add up to one
+   * opaque pixel. (The CRT's switch-on and switch-off animate exactly such a
+   * scale.) Bleeding each cell's own background half a pixel past its box
+   * covers the seam wherever it comes from; a neighbour paints over the bleed,
+   * so it costs nothing when there is no seam to cover.
+   */
+  box-shadow: 0 0 0 0.5px var(--cell-bg, transparent);
 }
 
 .teletext-cell.cursor {
@@ -145,13 +180,13 @@
 }
 
 /* Double-height text: the cell's grid box spans two rows (inline `gridRow`),
-   but `.teletext-cell`'s own fixed `height: 1.35em` would otherwise fight that
-   span instead of filling it — override it to the doubled height explicitly.
-   The inner content box is sized at ONE normal row height (50% of that) and
-   then scaled 2x, so it fills the doubled box exactly instead of the scale
-   compounding with an already-doubled box and overflowing/clipping. */
+   and with no explicit height of its own (see `.teletext-cell`) it simply
+   stretches to fill that two-row span — exactly double a normal row, with no
+   separate calc to keep in sync. The inner content box is sized at ONE normal
+   row height (50% of that) and then scaled 2x, so it fills the doubled box
+   exactly instead of the scale compounding with an already-doubled box and
+   overflowing/clipping. */
 .teletext-cell.teletext-cell-double-height {
-  height: calc(1.35em * 2);
   z-index: 1;
 }
 
@@ -190,6 +225,8 @@
   min-width: 2px;
   min-height: 2px;
   /* Background comes from .teletext-bg-* class per part */
+  /* Same subpixel-gap fix as `.teletext-cell` — this is a `fr`-tracked grid too. */
+  box-shadow: 0 0 0 0.5px var(--cell-bg, transparent);
 }
 
 /* The sixth the pixel brush is aimed at, so a 1/6 click can be targeted. */
