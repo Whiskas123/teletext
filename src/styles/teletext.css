@@ -9,25 +9,19 @@
 .teletext-fg-white { color: #ffffff; }
 
 /*
- * Black alone does not bleed — see the `box-shadow` on `.teletext-cell`.
- *
- * The bleed covers a seam by painting a cell's own colour over its neighbours'
- * edges, and black is the one colour that must never do that: the screen behind
- * the grid is already black, so a black cell has no seam to cover, while its
- * bleed is the only one dark enough to *be* a visible line on the neighbour it
- * lands on. A page of block graphics is exactly this case — cyan sixels on
- * cells whose background is black — and with black bleeding it drew a black
- * mesh over the whole picture.
- *
- * `transparent` rather than simply leaving the property out, because custom
- * properties inherit: a black sixel dot inside a red cell would otherwise pick
- * up the cell's `--cell-bg` and bleed red.
+ * Nothing here bleeds past its own box. Covering a seam by painting each cell's
+ * colour a half pixel over its neighbours was tried and reverted: the bleed
+ * lands on the neighbour, so it trades a hairline of tube for a hairline of the
+ * wrong colour, and black — of which a page of block graphics is mostly made —
+ * bleeds a visible mesh over everything. Cell edges are kept on whole pixels
+ * instead, so there is no seam to cover; see `.crt-raster .teletext-screen` in
+ * `App.css`.
  */
 .teletext-bg-black { background-color: #000000; }
-.teletext-bg-red { background-color: #ff0000;}
+.teletext-bg-red { background-color: #ff0000; }
 .teletext-bg-green { background-color: #00ff00; }
-.teletext-bg-yellow { background-color: #ffff00;}
-.teletext-bg-blue { background-color: #0000ff;  }
+.teletext-bg-yellow { background-color: #ffff00; }
+.teletext-bg-blue { background-color: #0000ff; }
 .teletext-bg-magenta { background-color: #ff00ff; }
 .teletext-bg-cyan { background-color: #00ffff; }
 .teletext-bg-white { background-color: #ffffff; }
@@ -179,26 +173,6 @@
   box-sizing: border-box;
   user-select: none;
   -webkit-user-select: none;
-  /*
-   * A second line of defence beyond the `fr` tracks above: those settle the
-   * *layout*, but any scale between the settled box and the screen — a zoomed
-   * page, a composited layer, the CRT's own switch-on — multiplies the edges
-   * again at paint time and can leave a cell's painted edge a fraction of a
-   * pixel from its neighbour's. Over the black screen behind that reads as a
-   * hairline seam, because two antialiased edges meeting do not add up to one
-   * opaque pixel. Each cell therefore bleeds its own background past its box,
-   * and a neighbour paints over the bleed, so it costs nothing when there is
-   * no seam to cover.
-   *
-   * Half a pixel, and deliberately not a share of the cell. The bleed lands on
-   * the *neighbour* — cells paint in DOM order, so a cell's bleed covers the
-   * right edge of the one before it — which is invisible while it stays under a
-   * pixel and becomes a coloured fringe along every boundary as soon as it does
-   * not. A seam is sub-pixel by nature, so the thing that hides it has to be.
-   *
-   * Black opts out entirely, because its bleed is the one that would show: see
-   * `.teletext-bg-black`.
-   */
 }
 
 .teletext-cell.cursor {
@@ -249,15 +223,19 @@
   padding: 0;
 }
 
+/*
+ * Background comes from the `.teletext-bg-*` class per part, and the box is
+ * left entirely to the `1fr` tracks above.
+ *
+ * No minimum size in particular. `1fr` is `minmax(auto, 1fr)`, so a floor here
+ * raises the track's floor too, and a sixel that will not fit in half a cell
+ * overflows one the enclosing `.teletext-cell` then clips — a cropped sixth
+ * instead of a small one. A sixth of a cell is always the right size for a
+ * sixth of a cell.
+ */
 .teletext-sixel-dot {
-  min-width: 2px;
-  min-height: 2px;
-  /* Background comes from .teletext-bg-* class per part */
-  /* Same bleed as `.teletext-cell`, for the same reason: a sixel is a cell in
-     halves and thirds, so its sub-boxes have their own boundaries to seam
-     along. Black opts out here too, which is what keeps an unlit sixth from
-     drawing a line across the lit one beside it. */
-  box-shadow: 0 0 0 0.5px var(--cell-bg, transparent);
+  min-width: 0;
+  min-height: 0;
 }
 
 /* The sixth the pixel brush is aimed at, so a 1/6 click can be targeted. */

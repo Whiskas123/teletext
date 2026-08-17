@@ -1417,11 +1417,26 @@
  * because the seams were created at composite time, after layout had already
  * agreed the cells touched.
  *
- * So the grid is simply given the tube's box and left to divide it. Its tracks
- * are `fr` (see `styles/teletext.css`), which means 40 columns across an exact
- * 640-unit width and 24 rows down an exact 480 — cells of 16×19.2 arrived at by
- * layout rather than by stretching, and no transform in the picture at all.
- * `font-size` now sets only the glyphs, which is all it should ever have set.
+ * Removing the transform was necessary but not sufficient, because it left the
+ * grid dividing a *fractional* box. The television has no fixed size, so the
+ * glass is 64% of a `min(960px, …)` cabinet — 614.4px at the largest, and some
+ * other fraction at every width below it. Forty `fr` tracks across 614.4px are
+ * 15.36px each, so all 41 column edges fall mid-pixel and the painter has to
+ * antialias both cells that meet there. Where it lands inward the tube shows
+ * through as a seam; where it lands outward a cell's colour covers a sliver of
+ * its neighbour. Both are the same artefact, and which one you get depends on
+ * the exact width the cabinet happens to be drawn at — which is why nudging the
+ * box by a few pixels (adding a border, say) appears to fix it at one size and
+ * not the next.
+ *
+ * So the cell is snapped to a whole pixel and the page is 40 × 24 of those,
+ * which makes every edge in the grid an integer and leaves nothing to
+ * antialias. The remainder — under a cell's worth in each direction — is
+ * letterboxed by `.crt-raster`'s centring, against a tube that is already
+ * black, so there is nothing to see at the rim.
+ *
+ * `font-size` sets only the glyphs, which is all it should ever have set; it
+ * tracks the snapped row so type stays the same fraction of a cell as before.
  *
  * The screen's own padding and border go: they are a frame, and the tube is
  * already inside one.
@@ -1430,6 +1445,8 @@
   padding: 0;
   border: 0;
   box-shadow: none;
+  /* Fallback where `round()` is missing: fill the tube exactly, seams and all.
+     A whole picture with hairlines in it beats no picture. */
   width: 100%;
   height: 100%;
   font-size: 1.48148cqw; /* 14.8148 units: 480 ÷ 32.4, for the 24-row grid */
@@ -1439,9 +1456,25 @@
   font-size: 1.42222cqw; /* 14.2222 units: 480 ÷ 33.75, the 25th row being the index line */
 }
 
-/* Fills the tube, so the `fr` tracks divide the glass's own pixel width and
-   height rather than a size derived from `em` (which would not reach the edges
-   and is what the old `scaleX` was compensating for). */
+@supports (width: round(down, 1em, 1px)) {
+  .crt-raster .teletext-screen {
+    --crt-cell-w: round(down, 1.6cqw, 1px); /* the glass's 64cqw ÷ 40 columns */
+    --crt-cell-h: round(down, 2cqw, 1px); /* the glass's 48cqw ÷ 24 rows */
+    width: calc(var(--crt-cell-w) * 40);
+    height: calc(var(--crt-cell-h) * 24);
+    /* 1.35 is the grid's line-height, so this is the row's own font size. */
+    font-size: calc(var(--crt-cell-h) / 1.35);
+  }
+
+  .crt-raster .teletext-screen-with-index {
+    --crt-cell-h: round(down, 1.92cqw, 1px); /* 48cqw ÷ 25 rows */
+    height: calc(var(--crt-cell-h) * 25);
+  }
+}
+
+/* Fills the screen, which is now a whole number of cells (above), so the `fr`
+   tracks divide an exact multiple of 40 and 24 and every track comes out an
+   integer. */
 .crt-raster .teletext-grid {
   width: 100%;
   height: 100%;
