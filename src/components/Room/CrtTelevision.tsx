@@ -926,7 +926,7 @@ export function CrtTelevision({
           {/* wordmark on bezel, bottom-left, as on the real thing */}
           <text
             x="188"
-            y="580"
+            y="576"
             fontFamily="Michroma,'Chakra Petch',Eurostile,Microgramma,'Arial Narrow',sans-serif"
             fontSize="11.5"
             letterSpacing="2.6"
