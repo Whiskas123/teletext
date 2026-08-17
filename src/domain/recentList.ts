@@ -32,16 +32,21 @@ export type Equals<T> = (a: T, b: T) => boolean;
  * cursor.
  */
 export function recordRecent<T>(
-  history: readonly T[],
-  index: number,
+  state: RecentList<T>,
   item: T,
   equals: Equals<T>,
   max: number,
 ): RecentList<T> {
+  const { history, index } = state;
   const current = history[index];
-  if (current !== undefined && equals(current, item)) {
-    return { history: [...history], index };
-  }
+  // The same state object, not a copy of it.
+  //
+  // Recording happens on *use*, and use is continuous: a stroke of the brush
+  // records once per cell it paints, and typing once per character. Returning a
+  // fresh object for a brush that had not changed made every one of those a new
+  // React state and so a re-render of the whole editor — a page's worth of
+  // renders for a stroke that changed nothing about the strip.
+  if (current !== undefined && equals(current, item)) return state;
   const next = [item, ...history.filter((entry) => !equals(entry, item))];
   return { history: next.slice(0, Math.max(1, max)), index: 0 };
 }

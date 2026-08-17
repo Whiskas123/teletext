@@ -107,6 +107,19 @@
   grid-template-rows: repeat(25, 1.35em);
 }
 
+/*
+ * A row of forty cells.
+ *
+ * `display: contents` places nothing itself, so the cells inside stay direct
+ * grid items of `.teletext-grid` and keep the explicit `grid-column` /
+ * `grid-row` they each carry. The wrapper exists purely so React has a memo
+ * boundary the size of a row rather than a whole page — see `sameRow` in
+ * `TeletextGrid.tsx`. Remove it and the grid collapses to one column.
+ */
+.teletext-row {
+  display: contents;
+}
+
 /* Squished look for accented/wider characters (real teletext fitted them in same cell) */
 .teletext-cell {
   width: 1em;

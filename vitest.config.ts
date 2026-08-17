@@ -8,7 +8,10 @@ import react from '@vitejs/plugin-react'
 //   the default environment.
 // Run via `bun run test` (single-run) or `bun run test:watch`.
 export default defineConfig({
-  plugins: [react()],
+  // The same React Compiler pass the app is built with (see `vite.config.ts`),
+  // so the components under test are the components that ship rather than an
+  // unmemoised version of them.
+  plugins: [react({ babel: { plugins: ['babel-plugin-react-compiler'] } })],
   test: {
     globals: true,
     environment: 'jsdom',

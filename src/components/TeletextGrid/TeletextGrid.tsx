@@ -42,6 +42,12 @@ function getPageLinkMap(page: TeletextPage): Map<number, number> {
   return map;
 }
 
+/**
+ * The link map an editing grid uses: there are no page links while editing, and
+ * a fresh `new Map()` each render would be a changed prop on every row.
+ */
+const NO_PAGE_LINKS: ReadonlyMap<number, number> = new Map();
+
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 function formatHeaderDateTime(d: Date): string {
@@ -333,6 +339,197 @@ const CellView = memo(function CellView({
   );
 });
 
+/**
+ * The three header fields, which are the only part of the grid that ticks.
+ *
+ * Passed to row 0 and to nothing else, so the clock — which changes once a
+ * second, forever — cannot invalidate the twenty-three rows that do not show it.
+ */
+interface HeaderOverlay {
+  pageStr: string;
+  subpageStr: string;
+  dateTimeStr: string;
+}
+
+interface GridRowProps {
+  page: TeletextPage;
+  row: number;
+  /** Header fields on row 0; null on every other row. */
+  header: HeaderOverlay | null;
+  /** Column of the local cursor within this row, or null when it is elsewhere. */
+  cursorCol: number | null;
+  /** Sixth to outline on the cursor cell, when the cursor is in this row. */
+  hoverPart: number | null;
+  /** Column showing the double-height typing preview, or null. */
+  previewCol: number | null;
+  /** Column covered by a double-height preview on the row above, or null. */
+  previewShadowCol: number | null;
+  pageLinkMap: ReadonlyMap<number, number>;
+  readOnly: boolean;
+  pageNumberClickable: boolean;
+  onCellClick?: (index: number, e?: React.MouseEvent) => void;
+  onCellMouseDown?: (index: number, e?: React.MouseEvent) => void;
+  onCellMouseEnter?: (index: number, e?: React.MouseEvent) => void;
+  onCellMouseMove?: (index: number, e?: React.MouseEvent) => void;
+  onIndexPageSelect?: (page: number) => void;
+  onPageNumberClick?: () => void;
+}
+
+/**
+ * Whether a row would render identically, so React can skip it whole.
+ *
+ * `CellView` being memoised stops a cell *re-rendering*, but not the grid
+ * building all 960 of its elements and React walking all 960 fibres to discover
+ * that 959 of them bailed out. At a stroke's pointer rate that walk is the cost;
+ * a keystroke or a painted cell only ever touches one or two rows.
+ *
+ * The page is compared by cell *identity*, which is meaningful because
+ * `domain/pageReuse.ts` keeps the identity of cells that did not change. Two
+ * rows are compared, not one: a double-height cell's box spans down into the
+ * row below, so a row's appearance depends on the row above it as well as its
+ * own (see `isDoubleHeightShadow`).
+ *
+ * Every prop is listed. A prop added above and forgotten here is a row that
+ * silently stops updating, which is why there are no spreads in `GridRowProps`.
+ */
+function sameRow(prev: GridRowProps, next: GridRowProps): boolean {
+  if (
+    prev.row !== next.row ||
+    prev.cursorCol !== next.cursorCol ||
+    prev.hoverPart !== next.hoverPart ||
+    prev.previewCol !== next.previewCol ||
+    prev.previewShadowCol !== next.previewShadowCol ||
+    prev.pageLinkMap !== next.pageLinkMap ||
+    prev.readOnly !== next.readOnly ||
+    prev.pageNumberClickable !== next.pageNumberClickable ||
+    prev.onCellClick !== next.onCellClick ||
+    prev.onCellMouseDown !== next.onCellMouseDown ||
+    prev.onCellMouseEnter !== next.onCellMouseEnter ||
+    prev.onCellMouseMove !== next.onCellMouseMove ||
+    prev.onIndexPageSelect !== next.onIndexPageSelect ||
+    prev.onPageNumberClick !== next.onPageNumberClick
+  ) {
+    return false;
+  }
+
+  // Compared by value: the header object is rebuilt every tick, but its
+  // contents only change when the clock's second — or the page number — does.
+  const a = prev.header;
+  const b = next.header;
+  if (a !== b) {
+    if (a == null || b == null) return false;
+    if (
+      a.pageStr !== b.pageStr ||
+      a.subpageStr !== b.subpageStr ||
+      a.dateTimeStr !== b.dateTimeStr
+    ) {
+      return false;
+    }
+  }
+
+  if (prev.page !== next.page) {
+    const from = next.row > 0 ? (next.row - 1) * COLS : 0;
+    const to = (next.row + 1) * COLS;
+    for (let i = from; i < to; i += 1) {
+      if (prev.page[i] !== next.page[i]) return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * One row of forty cells.
+ *
+ * `display: contents` — the wrapper places nothing itself, so the cells stay
+ * direct grid items of `.teletext-grid` and keep the explicit `gridColumn` /
+ * `gridRow` they already carried. The row exists only to give React a memo
+ * boundary at a useful size.
+ */
+const GridRow = memo(function GridRow({
+  page,
+  row,
+  header,
+  cursorCol,
+  hoverPart,
+  previewCol,
+  previewShadowCol,
+  pageLinkMap,
+  readOnly,
+  pageNumberClickable,
+  onCellClick,
+  onCellMouseDown,
+  onCellMouseEnter,
+  onCellMouseMove,
+  onIndexPageSelect,
+  onPageNumberClick,
+}: GridRowProps) {
+  const start = row * COLS;
+  const cells: React.ReactNode[] = [];
+
+  for (let col = 0; col < COLS; col += 1) {
+    const index = start + col;
+
+    // A cell covered by a double-height cell directly above it renders nothing
+    // — that cell's own box already spans down into this row. The cursor
+    // preview covers its cell below the same way, before anything is typed.
+    if (col === previewShadowCol || isDoubleHeightShadow(page, index)) continue;
+
+    const doubleHeight = col === previewCol || isEffectiveDoubleHeight(page, index);
+
+    const isPageCell = header != null && col < 3;
+    const isSubpageCell =
+      header != null && col >= SUBPAGE_COL && col < SUBPAGE_COL + header.subpageStr.length;
+    const isDateTimeCell = header != null && col >= 20;
+    const headerChar = isPageCell
+      ? header.pageStr[col]
+      : isSubpageCell
+        ? header.subpageStr[col - SUBPAGE_COL]
+        : isDateTimeCell
+          ? header.dateTimeStr[col - 20]
+          : null;
+    // Cyan, so the counter reads as a separate fact from the page number it
+    // sits beside rather than as more digits of it.
+    const headerFg = isPageCell
+      ? 'white'
+      : isSubpageCell
+        ? 'cyan'
+        : isDateTimeCell
+          ? 'yellow'
+          : null;
+
+    cells.push(
+      <CellView
+        key={index}
+        cell={page[index]}
+        index={index}
+        col={col}
+        row={row}
+        doubleHeight={doubleHeight}
+        isCursor={col === cursorCol}
+        // Only the cell under the pointer is told about the sixth, so the other
+        // thirty-nine in the row are not re-rendered every time it moves.
+        hoverPart={col === cursorCol ? hoverPart : null}
+        headerChar={headerChar}
+        headerFg={headerFg as Cell['fg'] | null}
+        pageLinkTarget={headerChar === null ? pageLinkMap.get(index) : undefined}
+        readOnly={readOnly}
+        pageNumberClickable={pageNumberClickable}
+        onCellClick={onCellClick}
+        onCellMouseDown={onCellMouseDown}
+        onCellMouseEnter={onCellMouseEnter}
+        onCellMouseMove={onCellMouseMove}
+        onIndexPageSelect={onIndexPageSelect}
+        onPageNumberClick={onPageNumberClick}
+      />,
+    );
+  }
+
+  return <div className="teletext-row">{cells}</div>;
+}, sameRow);
+
+const ROW_INDICES = Array.from({ length: ROWS }, (_, row) => row);
+
 export function TeletextGrid({
   page,
   pageNumber = 100,
@@ -361,7 +558,45 @@ export function TeletextGrid({
   const showIndexLine = showIndexLineProp ?? readOnly;
   const indexClickable = showIndexLine && onIndexPageSelect != null;
   const pageNumberClickable = readOnly && onPageNumberClick != null;
-  const pageLinkMap = useMemo(() => (readOnly && onIndexPageSelect ? getPageLinkMap(page) : new Map<number, number>()), [page, readOnly, onIndexPageSelect]);
+  const pageLinkMap = useMemo(
+    () => (readOnly && onIndexPageSelect ? getPageLinkMap(page) : NO_PAGE_LINKS),
+    [page, readOnly, onIndexPageSelect],
+  );
+
+  /**
+   * The grid's box, measured when it could have moved rather than per sample.
+   *
+   * `getBoundingClientRect` forces the browser to lay the grid out *there and
+   * then* — nearly a thousand cells, immediately after React has mutated some
+   * of them for the previous sample. Doing that inside every `pointermove` of a
+   * stroke means a full synchronous layout per sample, which on a phone is most
+   * of the frame, and it is what made the brush trail behind the finger.
+   *
+   * The box only changes when the grid is resized, scrolled or reflowed, so it
+   * is cached until one of those happens (and re-read at the start of each
+   * stroke, which costs one layout per stroke instead of one per sample).
+   */
+  const rectRef = useRef<DOMRect | null>(null);
+
+  useEffect(() => {
+    const element = gridRef.current;
+    if (element == null) return;
+    const invalidate = () => {
+      rectRef.current = null;
+    };
+    // Absent in jsdom, and its absence must not take the grid with it.
+    const observer =
+      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(invalidate);
+    observer?.observe(element);
+    // Capturing, so a scroll of any ancestor counts and not just the window's.
+    window.addEventListener('scroll', invalidate, true);
+    window.addEventListener('resize', invalidate);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('scroll', invalidate, true);
+      window.removeEventListener('resize', invalidate);
+    };
+  }, []);
 
   /**
    * Which cell, and which sixth of it, a pointer is over.
@@ -374,7 +609,11 @@ export function TeletextGrid({
     (event: React.PointerEvent): { index: number; part: number } | null => {
       const element = gridRef.current;
       if (element == null) return null;
-      const rect = element.getBoundingClientRect();
+      let rect = rectRef.current;
+      if (rect == null) {
+        rect = element.getBoundingClientRect();
+        rectRef.current = rect;
+      }
       if (rect.width <= 0 || rect.height <= 0) return null;
 
       const cellWidth = rect.width / COLS;
@@ -398,6 +637,10 @@ export function TeletextGrid({
   const handlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
       if (onPointerCell == null) return;
+      // One fresh measurement per stroke: cheap here, and it means a layout
+      // change nothing thought to announce cannot leave a stroke painting in
+      // the wrong place.
+      rectRef.current = null;
       const hit = resolvePointer(event);
       if (hit == null) return;
       // Capture, so a stroke that wanders off the grid — or off the window —
@@ -430,6 +673,10 @@ export function TeletextGrid({
     cursorPreviewRow >= MIN_DOUBLE_HEIGHT_ROW &&
     cursorPreviewRow <= MAX_DOUBLE_HEIGHT_ROW;
 
+  const cursorRow = cursorIndex != null ? Math.floor(cursorIndex / COLS) : -1;
+  const cursorCol = cursorIndex != null ? cursorIndex % COLS : -1;
+  const header: HeaderOverlay = { pageStr, subpageStr, dateTimeStr };
+
   return (
     <div className={`teletext-screen${compact ? ' teletext-screen-compact' : ''}${showIndexLine ? ' teletext-screen-with-index' : ''}`}>
       <div
@@ -442,73 +689,37 @@ export function TeletextGrid({
         onPointerUp={onPointerEnd}
         onPointerCancel={onPointerEnd}
       >
-        {/* All 24 rows of page content — no overlay on row 23 when we have a separate index row */}
-        {page.map((cell, index) => {
-          const row = Math.floor(index / COLS);
-          const col = index % COLS;
-
-          // A cell covered by a double-height cell directly above it renders
-          // nothing — that cell's own box already spans down into this row (see
-          // the `gridRow` span in `CellView`). Every other cell gets explicit
-          // grid placement so these gaps don't get backfilled by auto-placement.
-          // The cursor preview (see `cursorDoubleHeight`) covers its cell below
-          // the same way, even though nothing has actually been typed yet.
-          const isCursorPreviewShadow =
-            cursorPreviewEligible && index === (cursorIndex as number) + COLS;
-          if (isDoubleHeightShadow(page, index) || isCursorPreviewShadow) return null;
-          const isCursorPreviewDoubleHeight =
-            cursorPreviewEligible && index === cursorIndex;
-          const doubleHeight =
-            isEffectiveDoubleHeight(page, index) || isCursorPreviewDoubleHeight;
-
-          const isHeaderRow = row === 0;
-          const isPageCell = isHeaderRow && col < 3;
-          const isSubpageCell =
-            isHeaderRow && col >= SUBPAGE_COL && col < SUBPAGE_COL + subpageStr.length;
-          const isDateTimeCell = isHeaderRow && col >= 20;
-          const headerChar = isPageCell
-            ? pageStr[col]
-            : isSubpageCell
-              ? subpageStr[col - SUBPAGE_COL]
-              : isDateTimeCell
-                ? dateTimeStr[col - 20]
-                : null;
-          // Cyan, so the counter reads as a separate fact from the page number
-          // it sits beside rather than as more digits of it.
-          const headerFg = isPageCell
-            ? 'white'
-            : isSubpageCell
-              ? 'cyan'
-              : isDateTimeCell
-                ? 'yellow'
-                : null;
-
-          return (
-            <CellView
-              key={index}
-              cell={cell}
-              index={index}
-              col={col}
-              row={row}
-              doubleHeight={doubleHeight}
-              isCursor={cursorIndex === index}
-              // Only the cell under the pointer is told about the sixth, so the
-              // other 959 are not re-rendered every time it moves.
-              hoverPart={cursorIndex === index ? hoverPartIndex : null}
-              headerChar={headerChar}
-              headerFg={headerFg as Cell['fg'] | null}
-              pageLinkTarget={headerChar === null ? pageLinkMap.get(index) : undefined}
-              readOnly={readOnly}
-              pageNumberClickable={pageNumberClickable}
-              onCellClick={onPointerCell == null ? onCellClick : undefined}
-              onCellMouseDown={onPointerCell == null ? onCellMouseDown : undefined}
-              onCellMouseEnter={onPointerCell == null ? onCellMouseEnter : undefined}
-              onCellMouseMove={onPointerCell == null ? onCellMouseMove : undefined}
-              onIndexPageSelect={onIndexPageSelect}
-              onPageNumberClick={onPageNumberClick}
-            />
-          );
-        })}
+        {/*
+          * All 24 rows of page content, a memoised component each — no overlay
+          * on row 23 when we have a separate index row.
+          *
+          * Row by row rather than cell by cell so that a keystroke, or a cell
+          * of a stroke, reconciles the forty cells it could have changed rather
+          * than all nine hundred and sixty (see `sameRow`).
+          */}
+        {ROW_INDICES.map((row) => (
+          <GridRow
+            key={row}
+            page={page}
+            row={row}
+            header={row === 0 ? header : null}
+            cursorCol={row === cursorRow ? cursorCol : null}
+            hoverPart={row === cursorRow ? hoverPartIndex : null}
+            previewCol={cursorPreviewEligible && row === cursorPreviewRow ? cursorCol : null}
+            previewShadowCol={
+              cursorPreviewEligible && row === cursorPreviewRow + 1 ? cursorCol : null
+            }
+            pageLinkMap={pageLinkMap}
+            readOnly={readOnly}
+            pageNumberClickable={pageNumberClickable}
+            onCellClick={onPointerCell == null ? onCellClick : undefined}
+            onCellMouseDown={onPointerCell == null ? onCellMouseDown : undefined}
+            onCellMouseEnter={onPointerCell == null ? onCellMouseEnter : undefined}
+            onCellMouseMove={onPointerCell == null ? onCellMouseMove : undefined}
+            onIndexPageSelect={onIndexPageSelect}
+            onPageNumberClick={onPageNumberClick}
+          />
+        ))}
         {/* Extra row 25: index line (INDEX / TV GUIDE / WORLD / FINANCE) when in view mode */}
         {showIndexLine &&
           Array.from({ length: COLS }, (_, col) => {

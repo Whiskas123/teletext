@@ -335,13 +335,13 @@ export function Editor({
 
   /** Remember a brush that was just painted with (see `domain/brush.ts`). */
   const rememberBrush = useCallback((brush: Brush) => {
-    setBrushes((prev) => recordBrush(prev.history, prev.index, brush));
+    setBrushes((prev) => recordBrush(prev, brush));
   }, []);
 
   /** Remember a text style that was just typed with (see `domain/textStyle.ts`). */
   const rememberTextStyle = useCallback((style: TextStyle) => {
     if (!isRecordableTextStyle(style)) return;
-    setTextStyles((prev) => recordTextStyle(prev.history, prev.index, style));
+    setTextStyles((prev) => recordTextStyle(prev, style));
   }, []);
 
   /** Make a remembered style the active one, and go back to typing. */

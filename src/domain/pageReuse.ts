@@ -20,7 +20,7 @@
 import type { Cell, TeletextPage } from '../types/teletext';
 
 /** Whether two cells would render identically. */
-function sameCell(a: Cell, b: Cell): boolean {
+export function sameCell(a: Cell, b: Cell): boolean {
   if (a === b) return true;
   if (
     a.char !== b.char ||

@@ -70,14 +70,14 @@ export type BrushHistoryState = RecentList<Brush>;
 
 /**
  * Record a brush that was just painted with. See {@link recordRecent} for the
- * ordering rule, which the text-style strip shares.
+ * ordering rule — and for why this returns `state` itself, rather than a copy,
+ * when the strip would not change.
  */
 export function recordBrush(
-  history: readonly Brush[],
-  index: number,
+  state: BrushHistoryState,
   brush: Brush,
 ): BrushHistoryState {
-  return recordRecent(history, index, brush, brushesEqual, BRUSH_HISTORY_MAX);
+  return recordRecent(state, brush, brushesEqual, BRUSH_HISTORY_MAX);
 }
 
 /**

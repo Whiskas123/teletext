@@ -59,19 +59,16 @@ export function isRecordableTextStyle(style: TextStyle): boolean {
   return style.fg !== style.bg;
 }
 
-/** Record a style that was just typed with. */
+/**
+ * Record a style that was just typed with. Returns `state` itself when the
+ * strip would not change, so typing does not re-render the editor per keystroke
+ * (see {@link recordRecent}).
+ */
 export function recordTextStyle(
-  history: readonly TextStyle[],
-  index: number,
+  state: TextStyleHistoryState,
   style: TextStyle,
 ): TextStyleHistoryState {
-  return recordRecent(
-    history,
-    index,
-    style,
-    textStylesEqual,
-    TEXT_STYLE_HISTORY_MAX,
-  );
+  return recordRecent(state, style, textStylesEqual, TEXT_STYLE_HISTORY_MAX);
 }
 
 /** Move the cursor by `delta` (negative = towards more recent). */

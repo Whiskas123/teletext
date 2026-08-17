@@ -39,6 +39,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePageData } from '@playhtml/react';
 
 import { isValidCell } from '../domain/cellEdit';
+import { unsettledEdits, withLocalEdits, type LocalEdits } from '../domain/localEdits';
 import { normalizePage } from '../domain/pageOps';
 import { reuseUnchangedCells } from '../domain/pageReuse';
 import { MIN_SUBPAGE, pageKey } from '../domain/subpages';
@@ -51,6 +52,18 @@ import {
 
 /** Stable playhtml channel id for the GLOBAL map of page content. */
 export const PAGES_CHANNEL = 'pages';
+
+/**
+ * How long edits are allowed to accumulate before they are written to the
+ * shared store.
+ *
+ * Short enough that a collaborator watching the page sees a stroke arrive as it
+ * is drawn rather than after it, and that a member who types and immediately
+ * closes the tab has been persisted; long enough that the store's per-write
+ * cost — a deep clone of every page in the workshop, see {@link editCell} — is
+ * paid a handful of times a second instead of once per pointer sample.
+ */
+const FLUSH_INTERVAL_MS = 150;
 
 /**
  * Result of an {@link EditPageApi.editCell} request.
@@ -130,6 +143,18 @@ export function useEditPage(
    */
   const previousPageRef = useRef<TeletextPage | null>(null);
 
+  /**
+   * Edits made here that the store has not confirmed yet (`domain/localEdits.ts`).
+   *
+   * The editor renders these on top of the stored page, so an edit is on screen
+   * in the same frame it was made rather than after a round trip through Yjs —
+   * a round trip whose cost is a deep clone of every page in the workshop, and
+   * so grows with the workshop rather than with the edit.
+   */
+  const localRef = useRef<LocalEdits>(new Map());
+  /** Bumped on each local edit so the page below is rebuilt to show it. */
+  const [localVersion, setLocalVersion] = useState(0);
+
   // Normalize the stored cell-indexed map (or absent entry) into a valid
   // 960-cell page for rendering (Req 6.4, 7.4, 7.7).
   const page = useMemo<TeletextPage>(() => {
@@ -149,40 +174,47 @@ export function useEditPage(
      * The sanctioned alternative — deriving the cache with `useState` and
      * setting it during render — costs a second pass through this hook on every
      * keystroke, in the exact path being optimised.
+     *
+     * `localRef` is read here for the same reason and is safe for a stronger
+     * one: dropping a settled edit is idempotent, so a discarded render that
+     * loses the pruning simply prunes again on the next one.
      */
-    // eslint-disable-next-line react-hooks/refs
-    const normalized = reuseUnchangedCells(normalizePage(stored), previousPageRef.current);
-    // eslint-disable-next-line react-hooks/refs
+    const storedPage = normalizePage(stored);
+    // Local edits the store has caught up with are dropped here, which is the
+    // only place that can know: it is the one place the two are both in hand.
+    const local = unsettledEdits(storedPage, localRef.current);
+    localRef.current = local;
+    const previous = previousPageRef.current;
+    const normalized = reuseUnchangedCells(withLocalEdits(storedPage, local), previous);
     previousPageRef.current = normalized;
     return normalized;
-  }, [stored]);
+    // `localVersion` is the dependency that matters and the one the rule cannot
+    // see: the local edits live in a ref, so bumping the counter is what tells
+    // this memo an edit was made. Removing it would leave the editor showing
+    // only what the store had last said, which is the round trip being avoided.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stored, localVersion]);
 
   // A different page shares nothing with the last one; keeping its cells would
-  // only make the comparison do work that cannot succeed.
+  // only make the comparison do work that cannot succeed. Its unconfirmed edits
+  // belong to it too — they are flushed by the effect below before this runs.
   useEffect(() => {
     previousPageRef.current = null;
+    localRef.current = new Map();
   }, [key]);
 
-  /**
-   * Cells edited but not yet written, and which page they belong to.
-   *
-   * A stroke of the brush is not one cell. Since the editor started
-   * interpolating between pointer samples (`domain/strokeLine.ts`) a single
-   * `mousemove` can cover half a dozen cells, and each one used to be its own
-   * `setPages` — its own Yjs transaction, its own state update, and its own
-   * re-render of all 960 cells. Six of those inside one event is what made a
-   * quick stroke lag behind the pointer.
-   *
-   * They are collected here instead and written together.
-   */
-  const pendingRef = useRef<{ key: number; cells: Map<number, Cell> } | null>(null);
-  const flushScheduledRef = useRef(false);
+  /** Which page the outstanding local edits belong to. */
+  const localKeyRef = useRef(key);
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const writePending = useCallback(() => {
-    flushScheduledRef.current = false;
-    const pending = pendingRef.current;
-    pendingRef.current = null;
-    if (pending == null || pending.cells.size === 0) return;
+    if (flushTimerRef.current != null) {
+      clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+    const cells = localRef.current;
+    const pending = { key: localKeyRef.current, cells };
+    if (cells.size === 0) return;
 
     try {
       // Still one key per cell, so the merge guarantees above are untouched:
@@ -217,27 +249,41 @@ export function useEditPage(
 
       // Edits waiting for a different page belong to that page: write them
       // where they were made before starting a batch for this one.
-      if (pendingRef.current != null && pendingRef.current.key !== key) {
+      if (localKeyRef.current !== key) {
         writePending();
+        localRef.current = new Map();
+        localKeyRef.current = key;
       }
-      if (pendingRef.current == null) {
-        pendingRef.current = { key, cells: new Map() };
-      }
-      pendingRef.current.cells.set(index, cell);
+
+      localRef.current.set(index, cell);
+      // The page is rebuilt from this, so the edit is on screen on the next
+      // render — it does not wait to be told about by the store. Bumping a
+      // counter rather than holding the edits in state: clearing a page is 960
+      // of these in a loop, and 960 new maps for it would be quadratic.
+      setLocalVersion((version) => version + 1);
 
       /*
-       * Flushed on the microtask queue, not on a frame.
+       * Written to the store on a timer, not on the microtask after every edit.
        *
-       * A microtask runs as soon as the current event handler finishes, so an
-       * edit is in the store before the next pointer event is delivered — the
-       * painters read the page back to decide what to write (the pixel brush
-       * changes one sixth and keeps the other five), and deferring across
-       * frames would let two events in one frame read the same stale cell and
-       * the second would undo the first.
+       * The painters no longer need it to be immediate: they read the page,
+       * and the page now carries the local edits already (`localRef`), so a
+       * pixel brush changing one sixth still sees the other five it just
+       * painted. That was the only thing the microtask was buying.
+       *
+       * What it cost was severe. Every write hands the store's subscribers a
+       * `structuredClone` of the whole `pages` channel — every page in the
+       * workshop, not just this one — so a stroke that samples the pointer a
+       * hundred times a second asked for a hundred deep copies of the entire
+       * document a second. Batching them into one write per
+       * {@link FLUSH_INTERVAL_MS} leaves the merge semantics untouched (the
+       * same cells, the same keys, last-writer-wins per cell) and takes that
+       * off the drawing path.
        */
-      if (!flushScheduledRef.current) {
-        flushScheduledRef.current = true;
-        queueMicrotask(writePending);
+      if (flushTimerRef.current == null) {
+        flushTimerRef.current = setTimeout(() => {
+          flushTimerRef.current = null;
+          writePending();
+        }, FLUSH_INTERVAL_MS);
       }
 
       return 'ok';
@@ -248,6 +294,28 @@ export function useEditPage(
   // Nothing in hand when the editor goes away, or when it moves to another
   // page: an unflushed stroke would simply be lost.
   useEffect(() => writePending, [writePending, key]);
+
+  /*
+   * Nothing in hand when the tab goes away either.
+   *
+   * Deferring the write by {@link FLUSH_INTERVAL_MS} opens a window in which
+   * closing the tab, or switching away from it on a phone — where the system
+   * may discard the page without ever running an unload handler — would lose
+   * the last edits. `pagehide` and a hidden `visibilitychange` are the two
+   * events that survive that, so both flush.
+   */
+  useEffect(() => {
+    const flush = () => writePending();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') writePending();
+    };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [writePending]);
 
   return { page, editCell, saveError };
 }
