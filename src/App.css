@@ -1334,14 +1334,6 @@
   min-width: 0;
   /* No 300ms tap delay on a control panel: these are buttons, not links. */
   touch-action: manipulation;
-  /*
-   * The scale the picture is measured against. The SVG is the only thing in
-   * here and it is `width: 100%`, so this box and the artwork's 1000 user units
-   * are the same span: 100cqw is 1000 units, and one unit is 0.1cqw. That is
-   * what lets the picture be sized in the artwork's own numbers (see
-   * `.crt-glass`) without being inside the artwork.
-   */
-  container-type: inline-size;
 }
 
 .crt-tv-svg {
@@ -1356,14 +1348,18 @@
  * The tube's face, laid over the hole in the artwork.
  *
  * Placed as a fraction of the set rather than in pixels, because the set has no
- * fixed size: the artwork's glass sits at 180,80 and runs 640×480 on a 1000×830
- * canvas, so those four numbers over 1000 and 830 are the four below and they
- * hold at every width the cabinet is drawn at.
+ * fixed size: the artwork's glass sits at 180,80 and runs 640×480, so those four
+ * numbers over the `viewBox` on show are the four below, and they hold at every
+ * width the cabinet is drawn at. The phone build crops that `viewBox` to the
+ * bezel, which changes all four — see `.crt-tv[data-compact] .crt-glass`.
  *
- * Lengths *inside* the picture are `cqw`, at 0.1cqw to the user unit — the same
- * numbers the artwork uses, moved one decimal place. They were plain `px` while
- * this lived in a `<foreignObject>`, where a px *was* a user unit; out here a px
- * is a px and would stay the same size as the television grew.
+ * Lengths *inside* the picture are `cqw` against the glass, which is why the
+ * glass is a container itself and not just the thing inside one: 640 units is
+ * 100cqw here whichever box the set is drawn in, so the picture, the scanlines
+ * and the beam are written once and the crop cannot reach them. Against the
+ * *set* they would have had to be restated for each build. They were plain `px`
+ * while this lived in a `<foreignObject>`, where a px *was* a user unit; out
+ * here a px is a px and would stay the same size as the television grew.
  */
 .crt-glass {
   position: absolute;
@@ -1373,7 +1369,22 @@
   height: 57.8313%; /* 480 / 830 */
   overflow: hidden;
   background: #000;
-  border-radius: 0.6cqw; /* rx="6", as on the glass rect underneath */
+  /* rx="6", as on the glass rect underneath — as a percentage rather than in
+     `cqw`, because an element's own lengths resolve against its *ancestor*
+     container, and this one's ancestor is the part that changes size. */
+  border-radius: 0.94%;
+  container-type: inline-size;
+}
+
+/*
+ * The phone build's tube, in the cropped box — same glass, same artwork
+ * coordinates, divided by the `viewBox` that is on show (146 46 708 566).
+ */
+.crt-tv[data-compact] .crt-glass {
+  left: 4.8023%; /* (180 - 146) / 708 */
+  top: 6.0071%; /* (80 - 46) / 566 */
+  width: 90.3955%; /* 640 / 708 */
+  height: 84.8057%; /* 480 / 566 */
 }
 
 /*
@@ -1449,17 +1460,17 @@
      A whole picture with hairlines in it beats no picture. */
   width: 100%;
   height: 100%;
-  font-size: 1.48148cqw; /* 14.8148 units: 480 ÷ 32.4, for the 24-row grid */
+  font-size: 2.31481cqw; /* 480 ÷ 32.4 of the glass's 640, for the 24-row grid */
 }
 
 .crt-raster .teletext-screen-with-index {
-  font-size: 1.42222cqw; /* 14.2222 units: 480 ÷ 33.75, the 25th row being the index line */
+  font-size: 2.22222cqw; /* 480 ÷ 33.75, the 25th row being the index line */
 }
 
 @supports (width: round(down, 1em, 1px)) {
   .crt-raster .teletext-screen {
-    --crt-cell-w: round(down, 1.6cqw, 1px); /* the glass's 64cqw ÷ 40 columns */
-    --crt-cell-h: round(down, 2cqw, 1px); /* the glass's 48cqw ÷ 24 rows */
+    --crt-cell-w: round(down, 2.5cqw, 1px); /* the glass ÷ 40 columns */
+    --crt-cell-h: round(down, 3.125cqw, 1px); /* the glass's 75cqw ÷ 24 rows */
     width: calc(var(--crt-cell-w) * 40);
     height: calc(var(--crt-cell-h) * 24);
     /* 1.35 is the grid's line-height, so this is the row's own font size. */
@@ -1467,7 +1478,7 @@
   }
 
   .crt-raster .teletext-screen-with-index {
-    --crt-cell-h: round(down, 1.92cqw, 1px); /* 48cqw ÷ 25 rows */
+    --crt-cell-h: round(down, 3cqw, 1px); /* 75cqw ÷ 25 rows */
     height: calc(var(--crt-cell-h) * 25);
   }
 }
@@ -1487,8 +1498,8 @@
   pointer-events: none;
   background: repeating-linear-gradient(
     0deg,
-    rgb(0 0 0 / 8%) 0 0.1cqw,
-    transparent 0.1cqw 0.3cqw
+    rgb(0 0 0 / 8%) 0 0.15625cqw,
+    transparent 0.15625cqw 0.46875cqw
   );
   transition: opacity 0.2s ease;
 }
@@ -1507,9 +1518,9 @@
   left: 0;
   right: 0;
   top: 50%;
-  height: 0.4cqw;
-  margin-top: -0.2cqw;
-  border-radius: 0.2cqw;
+  height: 0.625cqw;
+  margin-top: -0.3125cqw;
+  border-radius: 0.3125cqw;
   background: linear-gradient(
     90deg,
     rgb(255 255 255 / 20%),
@@ -1518,8 +1529,8 @@
     rgb(255 255 255 / 20%)
   );
   box-shadow:
-    0 0 1cqw 0.2cqw rgb(255 255 255 / 90%),
-    0 0 3.4cqw 0.8cqw rgb(165 210 255 / 50%);
+    0 0 1.5625cqw 0.3125cqw rgb(255 255 255 / 90%),
+    0 0 5.3125cqw 1.25cqw rgb(165 210 255 / 50%);
   opacity: 0;
   transform-origin: 50% 50%;
   pointer-events: none;
@@ -1535,9 +1546,9 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 4.4cqw;
-  height: 4.4cqw;
-  margin: -2.2cqw 0 0 -2.2cqw;
+  width: 6.875cqw;
+  height: 6.875cqw;
+  margin: -3.4375cqw 0 0 -3.4375cqw;
   border-radius: 50%;
   background: radial-gradient(
     circle closest-side,
@@ -1781,37 +1792,46 @@
  * only stop the keys from travelling under the finger.
  */
 @media (prefers-reduced-motion: reduce) {
-  .crt-tv .kb use,
-  .crt-tv .kb rect,
-  .crt-tv .kb .lg {
+  :is(.crt-tv, .crt-remote) .kb use,
+  :is(.crt-tv, .crt-remote) .kb rect,
+  :is(.crt-tv, .crt-remote) .kb .lg {
     transition: none;
   }
 }
 
 /* ── front panel ───────────────────────────────────────────────────────────── */
+/*
+ * How a key behaves, wherever the key happens to be.
+ *
+ * `:is(.crt-tv, .crt-remote)` throughout: these are the same controls moulded
+ * into the cabinet on a desktop and held in the hand on a phone (see `compact`
+ * in `CrtTelevision.tsx`), and the travel, the hover, the focus glow and the
+ * dead-key treatment belong to the key, not to where it was fitted. What the
+ * handset does override is in its own block below.
+ */
 
-.crt-tv .kb {
+:is(.crt-tv, .crt-remote) .kb {
   cursor: pointer;
 }
 
 /* `:not(.kb-hit)` throughout: the hit area is a fixed patch of the panel, and a
    patch that moved or lit up with the key it belongs to would be neither. */
-.crt-tv .kb use,
-.crt-tv .kb rect:not(.kb-hit),
-.crt-tv .kb .lg {
+:is(.crt-tv, .crt-remote) .kb use,
+:is(.crt-tv, .crt-remote) .kb rect:not(.kb-hit),
+:is(.crt-tv, .crt-remote) .kb .lg {
   transition: transform 0.05s ease, filter 0.12s ease;
 }
 
-.crt-tv .kb:hover use,
-.crt-tv .kb:hover rect:not(.kb-hit) {
+:is(.crt-tv, .crt-remote) .kb:hover use,
+:is(.crt-tv, .crt-remote) .kb:hover rect:not(.kb-hit) {
   filter: brightness(1.15);
 }
 
 /* Keys travel into the panel, caps and legends together — a legend that stayed
    put while its cap moved would read as a printed sticker, not a moulding. */
-.crt-tv .kb:active use,
-.crt-tv .kb:active rect:not(.kb-hit),
-.crt-tv .kb:active .lg {
+:is(.crt-tv, .crt-remote) .kb:active use,
+:is(.crt-tv, .crt-remote) .kb:active rect:not(.kb-hit),
+:is(.crt-tv, .crt-remote) .kb:active .lg {
   transform: translateY(1.5px);
 }
 
@@ -1820,22 +1840,22 @@
  * outline would be drawn in user units and follow the group's bounding box,
  * which on these keys includes the legend and lands nowhere near the cap.
  */
-.crt-tv .kb:focus-visible {
+:is(.crt-tv, .crt-remote) .kb:focus-visible {
   outline: none;
 }
 
-.crt-tv .kb:focus-visible use,
-.crt-tv .kb:focus-visible > rect:not(.kb-hit) {
+:is(.crt-tv, .crt-remote) .kb:focus-visible use,
+:is(.crt-tv, .crt-remote) .kb:focus-visible > rect:not(.kb-hit) {
   filter: drop-shadow(0 0 3px #6cf) drop-shadow(0 0 7px #6cf) brightness(1.25);
 }
 
 /* Moulded in, wired to nothing — see `PanelKey`. */
-.crt-tv .kb-inert {
+:is(.crt-tv, .crt-remote) .kb-inert {
   cursor: default;
   pointer-events: none;
 }
 
-.crt-tv .lg {
+:is(.crt-tv, .crt-remote) .lg {
   font-family: Michroma, 'Chakra Petch', Eurostile, Microgramma, 'Arial Narrow', sans-serif;
   font-size: 12.5px;
   letter-spacing: 0;
@@ -1843,7 +1863,7 @@
   pointer-events: none;
 }
 
-.crt-tv .cap {
+:is(.crt-tv, .crt-remote) .cap {
   font-family: Michroma, 'Chakra Petch', Eurostile, Microgramma, 'Arial Narrow', sans-serif;
   font-size: 8px;
   fill: #a8a8a4;
@@ -1853,19 +1873,77 @@
 
 /* ── LED window ────────────────────────────────────────────────────────────── */
 
-.crt-tv .seg.on {
+:is(.crt-tv, .crt-remote) .seg.on {
   fill: #ff4a3a;
   filter: url(#segBloom);
 }
 
-.crt-tv .seg.off {
+:is(.crt-tv, .crt-remote) .seg.off {
   fill: #2c0c0a;
   opacity: 0.7;
 }
 
-.crt-tv .disp-dot,
-.crt-tv #led-power {
+:is(.crt-tv, .crt-remote) .disp-dot,
+:is(.crt-tv, .crt-remote) #led-power {
   transition: opacity 0.25s ease;
+}
+
+/* ── the remote ────────────────────────────────────────────────────────────── */
+/*
+ * The handset, at the bottom of the phone layout.
+ *
+ * `sticky` rather than `fixed`: in flow it reserves its own height, so the page
+ * ends where the remote ends and nothing has to guess how tall it is to pad
+ * around it — and when the page is longer than the window it still pins to the
+ * bottom, which is where a control you press twenty times ought to stay. Fixed
+ * would have done the second half and none of the first.
+ *
+ * `order` puts it last in the column. The set renders it as its own sibling —
+ * it is the set's front panel and shares the set's state (see the note in
+ * `CrtTelevision.tsx`) — which lands it in the markup ahead of the props under
+ * the picture, and that is not the order it is used in.
+ */
+.crt-remote {
+  order: 1;
+  position: sticky;
+  bottom: 0;
+  align-self: stretch;
+  width: 100%;
+  /* Wider than this and the keys stop being a hand's width apart; a tablet-sized
+     handset is not one. */
+  max-width: 30rem;
+  margin-inline: auto;
+  /* Clear of the home indicator, and of whatever the browser puts down there. */
+  padding: 0 0.4rem env(safe-area-inset-bottom, 0px);
+  /* Above the props, below the directory and the search (z-index 400). */
+  z-index: 320;
+  /* No 300ms tap delay: these are buttons, not links. */
+  touch-action: manipulation;
+  filter: drop-shadow(0 -0.35rem 0.9rem rgb(0 0 0 / 55%));
+}
+
+.crt-remote-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Type on the handset's own canvas, which spans 680 units against the cabinet's
+   1000 across a fraction of the width — so a user unit is worth about half as
+   many pixels here, and the panel's 12.5 and 8 would come out illegible. */
+.crt-remote .lg {
+  font-size: 34px;
+}
+
+.crt-remote .cap {
+  font-size: 13px;
+  letter-spacing: 1.6px;
+}
+
+/* Bigger keys, further to travel. */
+.crt-remote .kb:active rect:not(.kb-hit),
+.crt-remote .kb:active .lg {
+  transform: translateY(2.5px);
 }
 
 /* Bar of realistic objects under the screen (remote control, yellow pages) */
@@ -2076,16 +2154,85 @@
   }
 
   /*
-   * The set has nothing to give back on a phone: it is one drawing, and it
-   * shrinks as one. What it can have is the gutter — the cabinet is the widest
-   * thing on the page and the front panel's keys are the smallest, so every
-   * pixel of width goes into making them hittable. Each key carries a hit area
-   * wider than its cap for the same reason (see `PanelKey`).
+   * The set takes the gutter: the cabinet is the widest thing on the page, and
+   * every pixel of width it gains is a pixel of picture.
    */
   .room-viewer {
     gap: 1rem;
     padding: 0.5rem 0 1.5rem;
     margin-inline: -0.5rem;
+  }
+
+  /*
+   * The watching screen with the set cropped to its bezel and its panel in the
+   * hand (see `compact` in `CrtTelevision.tsx`).
+   *
+   * No bottom padding, because the handset is the bottom: it sticks to the foot
+   * of the window while there is page below it and settles into the flow when
+   * there is not, and padding underneath would leave it hovering short of the
+   * edge at the end of the scroll.
+   */
+  .room-viewer-phone {
+    gap: 0.75rem;
+    padding-bottom: 0;
+    /* Fills whatever the header left, so the `margin-top: auto` below has
+       something to push against. */
+    min-height: 100%;
+  }
+
+  /*
+   * The phone watching screen is the window, and the column runs to the bottom
+   * of it.
+   *
+   * A 4:3 tube spanning a phone is about 310px tall, so on anything but a short
+   * window there is height left over once the picture, the props and the handset
+   * have had theirs. Left alone it collects *underneath* the remote, stranding
+   * the one control you hold a fifth of the way up the screen. The sticky rule
+   * above cannot help: it only pins a page that is too long, and this one is too
+   * short.
+   *
+   * So the column is made to fill the window and the whole surplus is given to
+   * the gap above the handset. That leaves the set and the objects you use on it
+   * as one group under the header, and the thing you hold at the very bottom —
+   * which is where each of them was in the room this is a picture of. Sharing
+   * the surplus out between several gaps only produced several voids.
+   *
+   * Scoped by `:has()` rather than applied to `.room-layout` at large: a room
+   * has a chat below the set that is glad of the page being as long as it needs.
+   */
+  .room-layout:has(.room-viewer-phone) {
+    min-height: 100dvh;
+  }
+
+  .room-layout:has(.room-viewer-phone) .room-layout-body {
+    flex: 1 1 auto;
+    align-items: stretch;
+  }
+
+  .room-viewer-phone .crt-remote {
+    margin-top: auto;
+  }
+
+  /*
+   * The cropped set, capped by what is left of the window.
+   *
+   * 708 × 566 to the `viewBox` now, so 1.25 is the ratio that turns a height
+   * budget into the width producing it. What is subtracted is everything else on
+   * the screen — the header, the props, and the handset, whose own height is a
+   * fraction of this same width, which is why the reservation is an estimate and
+   * not a sum. The floor stops a very short window from solving the arithmetic
+   * with a television an inch wide.
+   */
+  .crt-tv[data-compact] {
+    max-width: 960px;
+    max-width: min(960px, max(15rem, calc((100dvh - 24rem) * 1.25)));
+  }
+
+  /* Watching solo there are no props between the picture and the handset, so
+     the five rems they stood in go back to the tube. */
+  .room-viewer-solo .crt-tv[data-compact] {
+    max-width: 960px;
+    max-width: min(960px, max(15rem, calc((100dvh - 19rem) * 1.25)));
   }
 
   .object-bar {
@@ -2094,6 +2241,11 @@
 
   .object-img {
     height: 64px;
+  }
+
+  /* Two props rather than three, and a handset under them wanting the room. */
+  .room-viewer-phone .object-img {
+    height: 56px;
   }
 
   .object-caption {
@@ -2119,6 +2271,67 @@
 
   .remote-popover::after {
     display: none;
+  }
+}
+
+/* --- Watching solo: the set centred, the directory folded beside it ------- */
+/*
+ * A room needs its props on the table — a remote to ask for a page with, the
+ * book, the magnifier — because asking is the whole activity. Alone there is
+ * nobody to ask: the television's own front panel dials, steps and turns the
+ * carousel, so the bar of objects under it was three icons repeating controls
+ * that were already moulded into the cabinet, and they cost the picture the one
+ * dimension a 4:3 set actually needs.
+ *
+ * So on `/watch` the set is the screen — centred in both directions and grown
+ * into the room the props gave back — and the one thing that had no equivalent
+ * on the cabinet, the directory, folds against the left edge as a leaflet.
+ */
+:root {
+  --yp-drawer-width: min(23rem, 88vw);
+}
+
+@media (min-width: 721px) {
+  /* The column fills the window, so there is a surplus to centre the set in. */
+  .room-layout:has(.room-viewer-solo) {
+    min-height: 100dvh;
+  }
+
+  .room-layout:has(.room-viewer-solo) .room-layout-body {
+    flex: 1 1 auto;
+    align-items: center;
+  }
+
+  .room-viewer-solo {
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    /*
+     * Room made for the leaflet while it is open, so the set is centred in what
+     * is left of the screen rather than sitting behind the thing you opened.
+     * Padding rather than a transform: the picture stays wholly on screen even
+     * when the window is barely wider than the two of them together.
+     */
+    padding-left: 0;
+    transition: padding-left 260ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+
+  /* The leaflet's own width, and a gap so the set is beside it rather than
+     against it. */
+  .room-viewer-solo.room-viewer-drawer-open {
+    padding-left: calc(var(--yp-drawer-width) + 1.5rem);
+  }
+
+  /*
+   * Bigger than the set in a room, because the height it is capped by is no
+   * longer shared with anything. What is subtracted is the chrome above it —
+   * the layout's padding, the header, the gap under it — and 1.2 is the
+   * cabinet's 1000/830, turning a height budget into the width that produces
+   * it. The plain `max-width` first is the fallback for engines without `dvh`.
+   */
+  .room-viewer-solo .crt-tv {
+    max-width: 1180px;
+    max-width: min(1180px, calc((100dvh - 7.5rem) * 1.2));
   }
 }
 
@@ -2586,6 +2799,435 @@ button.yellow-pages-number:hover {
   margin: 0.75rem 0 0;
   font-size: 0.85rem;
   font-style: italic;
+}
+
+/* --- The Yellow Pages leaflet, folded against the left edge --------------- */
+/*
+ * Closed, it shows nothing but a thumb tab at the edge of the screen. Pull the
+ * tab and the book opens out: the listings in one scrolling column, with the
+ * search field at the top of them — "what is on this service?" and "which page
+ * said that?" are two ways of looking something up in the same book, and there
+ * was never a reason for them to be two separate objects.
+ *
+ * Fixed and translated by its own width, so the panel is off screen while the
+ * tab — positioned at `left: 100%`, i.e. on the panel's outer edge — rides
+ * exactly to the edge of the window. The same control opens it and folds it
+ * back, which is why it travels with the leaflet instead of being pinned to the
+ * window.
+ */
+.yp-drawer {
+  position: fixed;
+  left: 0;
+  /* Clear of the header: the way home stays visible with the book open. */
+  top: 4.75rem;
+  bottom: 1rem;
+  width: var(--yp-drawer-width);
+  display: flex;
+  z-index: 400;
+  transform: translateX(-100%);
+  transition: transform 260ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  /* The container is only a rail for the two things inside it; while it is
+     folded away nothing it covers should stop taking clicks. */
+  pointer-events: none;
+}
+
+.yp-drawer > * {
+  pointer-events: auto;
+}
+
+.yp-drawer-open {
+  transform: none;
+}
+
+/*
+ * The leaflet itself: the printed book of `.yellow-pages-book`, re-cut as a
+ * panel. It keeps the paper, the condensed face and the rules; what it gives up
+ * is being a free-floating card — it is bound to the left edge, so it is as tall
+ * as the rail and square down that side.
+ */
+.yp-drawer-leaflet {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 0.9rem 1rem 0.8rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  /* Nothing scrolls but the listings — see `.yp-drawer-body`. */
+  overflow: hidden;
+  border: 1px solid #b8940f;
+  border-left: 0;
+  /* No ink down the open side: the tab is joined to the sheet there, and a
+     border would draw a line between two pieces of the same paper. */
+  border-right: 0;
+  border-radius: 0 4px 4px 0;
+  box-shadow: 6px 0 34px rgb(0 0 0 / 55%);
+}
+
+.yp-drawer-masthead {
+  align-items: center;
+}
+
+/* The two things you can do to the book itself, kept together at the end of its
+   masthead rather than spread across it. */
+.yp-drawer-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+  margin-left: auto;
+}
+
+/*
+ * The magnifier that brings the search field out.
+ *
+ * Folded away by default: the field, its placeholder and the rule under it were
+ * three rows of directory spent on a question you only sometimes have. Pressed,
+ * it inverts — the field below is the panel it opened, and a control that stays
+ * lit is how you know which of the two indexes you are looking at.
+ */
+.yp-drawer-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  color: #141007;
+  cursor: pointer;
+}
+
+.yp-drawer-tool:hover {
+  background: rgb(20 16 7 / 12%);
+  border-color: transparent;
+}
+
+.yp-drawer-tool[aria-expanded='true'],
+.yp-drawer-tool[aria-expanded='true']:hover {
+  background: #141007;
+  color: #ffcf1f;
+}
+
+/* The brand at book size does not fit a panel one column wide. */
+.yp-drawer-leaflet .yellow-pages-brand {
+  font-size: 1.45rem;
+}
+
+/*
+ * The listings, and the only thing on the leaflet that scrolls.
+ *
+ * The full-screen book turns sheets because it has a screen of columns to turn.
+ * A leaflet is one column wide with nothing to turn, so it does what a leaflet
+ * does and runs on down the page.
+ */
+.yp-drawer-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 0.4rem;
+  scrollbar-width: thin;
+  scrollbar-color: #b8940f transparent;
+}
+
+/*
+ * The results are already inside the scroller; a second one nested in it would
+ * trap the wheel halfway down the list. Two classes deep because the height it
+ * is undoing — `.page-search-list`, written for a popup that has to stop
+ * somewhere — is set further down this file.
+ */
+.yp-drawer-body .yp-drawer-results {
+  max-height: none;
+  overflow: visible;
+}
+
+/*
+ * The tab. Yellow board, square against the panel and rounded on the outside,
+ * with the title running up it the way it runs up a spine.
+ */
+.yp-drawer-knob {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 1rem 0.4rem;
+  background: #ffcf1f;
+  color: #141007;
+  border: 1px solid #b8940f;
+  border-left: 0;
+  border-radius: 0 9px 9px 0;
+  /* Overlaps the sheet's edge by a hair, so no seam can open between them at a
+     fractional zoom. Closed, the pixel it loses is off the side of the window. */
+  margin-left: -1px;
+  cursor: pointer;
+  font-family: 'Univers Condensed', 'UniversNextW10-Cond', 'Helvetica Neue',
+    'Roboto Condensed', 'Arial Narrow', Arial, sans-serif;
+  font-stretch: condensed;
+  transform: translateY(-50%);
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+
+/*
+ * Open, the tab is not an object beside the book but the corner of the sheet
+ * itself, so it loses its outline: same paper, cut to a shape. Transparent
+ * rather than removed, because a border that stops existing takes a pixel of
+ * the tab's size with it and nudges the title inside.
+ *
+ * Closed it keeps the outline — out there on its own against the dark page, the
+ * edge is what says it is a thing you can take hold of.
+ */
+.yp-drawer-open .yp-drawer-knob {
+  border-color: transparent;
+}
+
+/* Beats the global `button:hover` grey. */
+.yp-drawer-knob:hover,
+.yp-drawer-knob:focus-visible {
+  background: #ffcf1f;
+}
+
+/* Leans out as if being pulled — only while there is something to pull. Once
+   the leaflet is open the tab is the corner you fold it back by, and a tab that
+   still leans outwards is offering the wrong direction, so it keeps neither the
+   lean nor the edge that goes with it. */
+.yp-drawer:not(.yp-drawer-open) .yp-drawer-knob:hover,
+.yp-drawer:not(.yp-drawer-open) .yp-drawer-knob:focus-visible {
+  border-color: #b8940f;
+  transform: translateY(-50%) translateX(3px);
+  box-shadow: 6px 5px 20px rgb(0 0 0 / 50%);
+}
+
+.yp-drawer-knob-label {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  text-transform: uppercase;
+  font-weight: 800;
+  font-size: 0.78rem;
+  letter-spacing: 0.16em;
+  line-height: 1;
+}
+
+.yp-drawer-knob-caret {
+  font-size: 1rem;
+  line-height: 1;
+  font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yp-drawer,
+  .yp-drawer-knob,
+  .room-viewer-solo {
+    transition: none;
+  }
+}
+
+/* --- The leaflet on a phone: tucked under the remote --------------------- */
+/*
+ * A phone screen has no side to spare — a book pulled out of the left edge is
+ * the whole window, and it hides the picture it is there to choose. What it has
+ * instead is a table: the set at the top, the handset at the bottom, and the
+ * leaflet lying half under the handset with its masthead showing, the way a
+ * folded thing ends up under whatever was put down on top of it.
+ *
+ * That edge is the whole control. There is no tab and no button drawn on the
+ * screen — you press the sheet itself, and it comes out from under the remote
+ * and takes the remote's place, because a phone has room for the picture and
+ * one thing under it, and nobody dials a number and looks it up at once.
+ */
+@media (max-width: 720px) {
+  .room-viewer-solo.room-viewer-phone .yp-drawer {
+    /* Back into the flow, between the set and the handset. Positioned, so the
+       press target below can be laid over the sheet's showing edge. */
+    position: relative;
+    /*
+     * The rail's offsets and its z-index belong to the drawer that hangs off
+     * the left edge of a desktop window, and both do damage here: `top` on a
+     * relative box is a shove downwards rather than a place to sit — it was
+     * pushing the sheet 4.75rem into the handset — and 400 drew it over a
+     * handset that sits at 320, when the whole idea is that it slides under.
+     */
+    inset: auto;
+    z-index: auto;
+    order: 1;
+    /* Stretched to the column and inset a little, so the sheet lies within the
+       window's edges and a shade narrower than the handset over it. */
+    align-self: stretch;
+    width: auto;
+    flex-direction: column;
+    transform: none;
+    /*
+     * Folded, the surplus goes above it, so it lies on the handset. Open, it
+     * grows into that surplus instead — flex-grow takes the free space before
+     * an auto margin can, so one state does not need to undo the other.
+     */
+    flex: 0 1 auto;
+    margin: auto 0.5rem 0;
+    pointer-events: auto;
+    /*
+     * It grows rather than slides, so what is animated is the share of the
+     * column it is taking: `flex-grow` interpolates as a number, and at 0.4 the
+     * sheet has 40% of the space the handset is giving up. The rail's
+     * `transform` transition is no use here — nothing moves sideways.
+     */
+    transition: flex-grow 280ms cubic-bezier(0.22, 0.61, 0.36, 1),
+      margin-bottom 280ms cubic-bezier(0.22, 0.61, 0.36, 1),
+      padding-bottom 280ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+
+  /* Under the handset rather than up against it: enough of a negative margin to
+     swallow the column's gap and let the artwork lie over the sheet's edge. */
+  .room-viewer-solo.room-viewer-phone .yp-drawer:not(.yp-drawer-open) {
+    margin-bottom: -1.35rem;
+  }
+
+  .room-viewer-solo.room-viewer-phone .yp-drawer-open {
+    flex-grow: 1;
+    /* Standing where the handset stood, it inherits the handset's clearance of
+       the home indicator. */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* The handset keeps the floor; the leaflet is what the surplus now goes to. */
+  .room-viewer-solo.room-viewer-phone .crt-remote {
+    order: 2;
+    margin-top: 0;
+    /*
+     * A cap it can never reach, so that closing it has somewhere to travel
+     * from: a height of `auto` has nothing to interpolate against. Clipped
+     * rather than squashed — the artwork keeps its proportions and the box
+     * takes the edge off it — and its bottom is pinned to the foot of the
+     * window, so what you see is a handset sliding down out of the picture as
+     * the sheet comes up.
+     */
+    max-height: 40rem;
+    overflow: hidden;
+    transition: max-height 280ms cubic-bezier(0.22, 0.61, 0.36, 1),
+      opacity 180ms ease, visibility 0s;
+  }
+
+  /*
+   * One tool at a time: the book takes the handset's place rather than sharing
+   * the screen with it. Sharing gave the leaflet the few rows the handset could
+   * spare — a directory you could not read — while the keypad sat unused
+   * underneath it.
+   */
+  .room-viewer-solo.room-viewer-phone.room-viewer-drawer-open .crt-remote {
+    max-height: 0;
+    padding-bottom: 0;
+    opacity: 0;
+    /* Only once it has gone: `display: none` would take the space back in one
+       frame, and there would be nothing to animate. Hidden rather than merely
+       clipped, so a keypad nobody can see is not still on the tab order. */
+    visibility: hidden;
+    transition: max-height 280ms cubic-bezier(0.22, 0.61, 0.36, 1),
+      opacity 160ms ease, visibility 0s 280ms;
+  }
+
+  .room-viewer-solo.room-viewer-phone .yp-drawer-leaflet {
+    flex: 1 1 0;
+    /*
+     * The showing edge, and the least the sheet is ever drawn at. Stated once
+     * for both states: the sheet's height is the drawer's to give, so opening
+     * is one number moving and not a swap between two different rules.
+     */
+    min-height: 3.2rem;
+    border-width: 1px 1px 0;
+    border-radius: 6px 6px 0 0;
+    box-shadow: 0 -8px 26px rgb(0 0 0 / 50%);
+    padding: 0.7rem 0.9rem 0.5rem;
+  }
+
+  /*
+   * Nothing to press on an edge that is only showing its name — the search and
+   * the × belong to a book that is open, and they fade up with it. Faded rather
+   * than removed: the folded sheet is `inert`, so there is nothing to click on
+   * either way, and opacity is something the opening can carry.
+   */
+  .room-viewer-solo.room-viewer-phone .yp-drawer-tools {
+    transition: opacity 220ms ease 60ms;
+  }
+
+  .room-viewer-solo.room-viewer-phone
+    .yp-drawer:not(.yp-drawer-open)
+    .yp-drawer-tools {
+    opacity: 0;
+    transition-delay: 0s;
+  }
+
+  /*
+   * The way in, laid over the showing edge and drawn as nothing at all: the
+   * sheet is the control, so the control must not be visible as a second object
+   * on top of it. It keeps being a real <button> underneath, which is what says
+   * "open Yellow Pages" to anything not looking at the screen.
+   */
+  .room-viewer-solo.room-viewer-phone .yp-drawer-knob {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    transform: none;
+  }
+
+  .room-viewer-solo.room-viewer-phone .yp-drawer-knob-label,
+  .room-viewer-solo.room-viewer-phone .yp-drawer-knob-caret {
+    display: none;
+  }
+
+  /*
+   * Open, the sheet is the screen: a target across the whole of it would eat
+   * every tap meant for a listing, and the × in the masthead is how a book that
+   * is open gets closed.
+   */
+  .room-viewer-solo.room-viewer-phone .yp-drawer-open .yp-drawer-knob {
+    display: none;
+  }
+
+  /*
+   * Nothing to lean or lift: the desktop tab's hover belongs to a tab. Restated
+   * at this weight because the rules it undoes are four classes deep, and a
+   * shadow on a transparent button still paints.
+   */
+  .room-viewer-solo.room-viewer-phone
+    .yp-drawer:not(.yp-drawer-open)
+    .yp-drawer-knob:hover,
+  .room-viewer-solo.room-viewer-phone
+    .yp-drawer:not(.yp-drawer-open)
+    .yp-drawer-knob:focus-visible {
+    transform: none;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  /* Invisible, so a keyboard needs to be told where it is. */
+  .room-viewer-solo.room-viewer-phone .yp-drawer-knob:focus-visible {
+    outline: 3px solid #141007;
+    outline-offset: -3px;
+  }
+}
+
+/*
+ * Same swap, no travel. Written at the phone rules' own weight because a
+ * `.yp-drawer` on its own no longer outranks them.
+ */
+@media (max-width: 720px) and (prefers-reduced-motion: reduce) {
+  .room-viewer-solo.room-viewer-phone .yp-drawer,
+  .room-viewer-solo.room-viewer-phone .crt-remote,
+  .room-viewer-solo.room-viewer-phone.room-viewer-drawer-open .crt-remote,
+  .room-viewer-solo.room-viewer-phone .yp-drawer-tools {
+    transition: none;
+  }
 }
 
 /* --- Room viewer: back-to-home link in the header --- */
