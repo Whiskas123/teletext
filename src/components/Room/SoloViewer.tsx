@@ -117,10 +117,10 @@ export function SoloViewer({ pageNumber: pageNumberProp }: SoloViewerProps) {
   // carries the screen it matched on, so choosing it lands on the words that
   // were found rather than on the first screen of the carousel holding them.
   //
-  // The leaflet is left open on a wide screen — the set has already moved over
-  // to make room for it, so the page you chose is in plain sight and the next
-  // one is a click away. On a phone the open leaflet *is* the screen, so it
-  // folds itself back to show you what you asked for.
+  // The leaflet is left open on a wide screen: it is held against the corner of
+  // the picture rather than pushing it aside, so the page you chose is still in
+  // plain sight and the next one is a click away. On a phone the open leaflet
+  // *is* the screen, so it folds itself back to show you what you asked for.
   const handleSelectPage = useCallback(
     (target: number, subpage?: number) => {
       setDisplayedPage(target, subpage);
