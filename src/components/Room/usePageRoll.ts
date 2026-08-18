@@ -109,11 +109,34 @@ export function usePageRoll(
     }, PAGE_ROLL_MS);
   }, [targetPageNumber, stopRoll, setDisplayNumber]);
 
-  // Keep the latest content available to the roll timer, and keep what's shown
-  // live while idle (so edits to the watched page appear) — but never mid-roll,
-  // where the content stays frozen until the number lands.
+  /*
+   * Keep the latest content available to the roll timer, and keep what's shown
+   * live while idle (so edits to the watched page appear) — but never mid-roll,
+   * where the content stays frozen until the number lands.
+   *
+   * `react-hooks/set-state-in-effect` is suppressed rather than satisfied here,
+   * which deserves an explanation.
+   *
+   * The rule is right in general and wrong about this hook: it is an imperative
+   * animation driver, and the external system it synchronises with is an
+   * interval. What it needs is the *previous* page — the one to hold on screen
+   * while the number counts — and a value from the previous render can only come
+   * from a ref or from render-phase state adjustment. Both of the obvious
+   * rewrites trade this warning for a worse one: deriving `shownPage` from a ref
+   * read during render trips `react-hooks/refs` instead, and freezing the content
+   * from the roll effect below moves the same write four lines up without
+   * changing anything about it.
+   *
+   * There is a genuinely declarative version of this hook — hold one `landed:
+   * {number, page}` in state, write it only from the interval callback, and
+   * derive both outputs from it — but it changes what is on the glass during a
+   * roll (you would see the old page as of the last landing rather than as of the
+   * dial), and this transition is shared by both watching screens with no test
+   * covering it. That is a deliberate refactor, not a drive-by one.
+   */
   useEffect(() => {
     pageRef.current = page;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- see above
     if (!rollingRef.current) setShownPage(page);
   }, [page]);
 

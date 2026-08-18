@@ -117,9 +117,13 @@ export function usePresence(): PresenceApi {
   });
 
   // Keep the latest identity in a ref so the heartbeat interval always writes
-  // current values without being re-armed on every change.
+  // current values without being re-armed on every change. Written from an
+  // effect, and declared above the heartbeat so it has landed before the first
+  // beat reads it — effects run in declaration order.
   const identityRef = useRef({ memberId, name: displayName, color });
-  identityRef.current = { memberId, name: displayName, color };
+  useEffect(() => {
+    identityRef.current = { memberId, name: displayName, color };
+  }, [memberId, displayName, color]);
 
   // Heartbeat: publish our entry immediately, then on an interval; prune stale
   // entries so departed members drop out. Remove our entry on unmount (Req 2.6).
@@ -181,10 +185,29 @@ export function usePresence(): PresenceApi {
     [memberId, displayName, color],
   );
 
+  /*
+   * The clock, as state rather than as a `Date.now()` in the middle of the memo
+   * below.
+   *
+   * Membership is a question about *now* — an entry counts if its heartbeat is
+   * recent — so the answer changes with time and not only with the data. Sampled
+   * during render it changed only when something else did, which meant a member
+   * who closed their tab stayed in the list until the next heartbeat from anyone
+   * happened to re-run the memo. Ticking a value in state instead makes the
+   * passage of time an input like any other, and the list empties on its own.
+   *
+   * One tick per heartbeat: the stale window is a little under three of them, so
+   * this is as often as the answer can actually change.
+   */
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), HEARTBEAT_MS);
+    return () => clearInterval(timer);
+  }, []);
+
   // The present members: entries with a recent heartbeat, deduped, with the
   // local member authoritative for its own Identity (so `me` always appears).
   const members = useMemo<MemberIdentity[]>(() => {
-    const now = Date.now();
     const byId = new Map<string, MemberIdentity>();
     for (const entry of Object.values(data ?? {})) {
       if (!entry || typeof entry.memberId !== 'string') continue;
@@ -203,7 +226,7 @@ export function usePresence(): PresenceApi {
     }
     byId.set(me.memberId, me);
     return Array.from(byId.values());
-  }, [data, me]);
+  }, [data, me, now]);
 
   const count = useMemo(() => presenceCount(members), [members]);
 
