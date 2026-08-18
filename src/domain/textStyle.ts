@@ -15,7 +15,7 @@
  * (see `recentList.ts`).
  */
 
-import { recordRecent, stepRecent, type RecentList } from './recentList';
+import { recordRecent, type RecentList } from './recentList';
 import type { TeletextColor } from '../types/teletext';
 
 /** What typing puts on a cell. */
