@@ -467,17 +467,6 @@ export function Editor({
     [holdTool],
   );
 
-  /** Step the style cursor and switch to whatever it lands on. */
-  const stepTextStyleHistory = useCallback(
-    (delta: number) => {
-      const index = stepTextStyle(textStyles.history, textStyles.index, delta);
-      const style = textStyles.history[index];
-      if (!style) return;
-      applyTextStyle(style);
-      setTextStyles((prev) => ({ ...prev, index }));
-    },
-    [textStyles, applyTextStyle],
-  );
 
   /** Jump straight to a style in the strip. */
   const selectTextStyleFromHistory = useCallback(

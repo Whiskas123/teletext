@@ -186,7 +186,7 @@ export function SoloEditor() {
       setDialError(true);
       setPageError(
         target >= MIN_PAGE && target <= MAX_PAGE && !isModerator
-          ? `Pages ${MIN_PAGE}–${PLAYGROUND_MIN_PAGE - 1} are archive pages. You may not edit them.`
+          ? `Pages ${MIN_PAGE}–${PLAYGROUND_MIN_PAGE - 1} are reserved.`
           : `Pages are numbered ${MIN_PAGE}–${MAX_PAGE}.`,
       );
     },
