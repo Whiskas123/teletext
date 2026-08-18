@@ -37,6 +37,13 @@
  * difference it can see is that a request made in a room can come back refused —
  * see `refusals`. See {@link RoomViewer} and {@link SoloViewer}.
  *
+ * What the keypad *does* — three digits then go, a half-dialled number
+ * abandoned after a few seconds, `042` refused rather than rounded — is no
+ * longer written here. Those are the set's rules rather than this panel's, and
+ * they moved out to `domain/dialling.ts` and {@link useDialPad} when the
+ * exhibition screen needed to dial with a keyboard and no panel at all. See
+ * {@link useExhibitMode}.
+ *
  * ## The phone build
  *
  * `compact` draws the same set with the cabinet cropped away — the artwork is
@@ -75,15 +82,12 @@ import {
 import { INDEX_LINE } from '../../domain/indexLine';
 import { SevenSegment } from '../chrome/SevenSegment';
 import { useMediaQuery } from '../../utils/useMediaQuery';
+import { useDialPad } from './useDialPad';
 
 /** How long the switch-off animation runs, in step with `@keyframes crt-off-*`. */
 const POWER_OFF_MS = 900;
 /** How long the switch-on animation runs, in step with `@keyframes crt-on-*`. */
 const POWER_ON_MS = 820;
-/** A half-dialled page number is abandoned after this long, as a real set does. */
-const DIAL_TIMEOUT_MS = 3000;
-/** How long `---` shows after a page number that cannot exist. */
-const DIAL_ERROR_MS = 700;
 
 /** The four states of the tube: two settled, two mid-animation. */
 type Power = 'on' | 'off' | 'powering-on' | 'powering-off';
@@ -766,10 +770,6 @@ function RemoteHandset({
 
 /* ── the set ───────────────────────────────────────────────────────────────── */
 
-/** Lowest and highest Page_Number a keypad entry can name. */
-const MIN_DIALLED_PAGE = 100;
-const MAX_DIALLED_PAGE = 999;
-
 /**
  * The numeric keypad, laid out 5×2 as on the artwork.
  *
@@ -810,9 +810,13 @@ export function CrtTelevision({
 }: CrtTelevisionProps) {
   const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
   const [power, setPower] = useState<Power>('on');
-  const [dial, setDial] = useState('');
-  const [dialError, setDialError] = useState(false);
   const powerTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // The entry in progress. The rules it follows are the set's, not the front
+  // panel's, so they live in `domain/dialling.ts` and the exhibition screen —
+  // which has a keyboard and no keypad at all — dials by exactly the same ones.
+  // See {@link useDialPad}.
+  const dial = useDialPad(onPageEntry);
 
   // Powered for everything except a tube that has finished collapsing: the
   // switch-off animation is still showing a picture, so the panel stays lit
@@ -826,8 +830,7 @@ export function CrtTelevision({
   const togglePower = useCallback(() => {
     if (power === 'powering-on' || power === 'powering-off') return;
     clearTimeout(powerTimer.current);
-    setDial('');
-    setDialError(false);
+    dial.reset();
     const goingOff = power === 'on';
     if (reduceMotion) {
       setPower(goingOff ? 'off' : 'on');
@@ -838,80 +841,44 @@ export function CrtTelevision({
       goingOff ? POWER_OFF_MS : POWER_ON_MS,
     );
     setPower(goingOff ? 'powering-off' : 'powering-on');
-  }, [power, reduceMotion]);
+  }, [power, reduceMotion, dial]);
 
   useEffect(() => () => clearTimeout(powerTimer.current), []);
-
-  // A page half dialled and then abandoned should not sit on the display
-  // waiting forever — nor should it still be there to be completed by a digit
-  // pressed minutes later, which would go somewhere nobody asked for.
-  useEffect(() => {
-    if (dial === '') return;
-    const timer = setTimeout(() => setDial(''), DIAL_TIMEOUT_MS);
-    return () => clearTimeout(timer);
-  }, [dial]);
-
-  useEffect(() => {
-    if (!dialError) return;
-    const timer = setTimeout(() => setDialError(false), DIAL_ERROR_MS);
-    return () => clearTimeout(timer);
-  }, [dialError]);
 
   /*
    * A refusal from outside, said in the window's own words.
    *
-   * The count is watched rather than read: two refusals in a row are two
-   * separate noes and both should show, and a prop that has to be set back to
-   * `false` afterwards would put the set's display in somebody else's hands. The
+   * The count is watched rather than read: two refusals in a row are two separate
+   * noes and both should show, and a boolean somebody has to set back to `false`
+   * afterwards would put the set's own display in another component's hands. The
    * first render is not a refusal, so the seen-count starts where the prop does.
+   *
+   * The reading itself belongs to the dial — `---` is the dial's word for "no",
+   * whether the no came from arithmetic or from the room. See {@link useDialPad}.
    */
   const refusalsSeen = useRef(refusals);
   useEffect(() => {
     if (refusals === refusalsSeen.current) return;
     refusalsSeen.current = refusals;
-    setDial('');
-    setDialError(true);
-  }, [refusals]);
-
-  const pressDigit = useCallback(
-    (digit: string) => {
-      const next = dial + digit;
-      if (next.length < 3) {
-        setDial(next);
-        return;
-      }
-      setDial('');
-      const target = Number(next);
-      // Only 100–999 name a page. A set given 0xx simply refused it, which is
-      // more honest than silently rounding the entry up to something valid.
-      if (target < MIN_DIALLED_PAGE || target > MAX_DIALLED_PAGE) {
-        setDialError(true);
-        return;
-      }
-      onPageEntry?.(target);
-    },
-    [dial, onPageEntry],
-  );
+    dial.refuse();
+  }, [refusals, dial]);
 
   // A dead set stays dead. Dropping the handler rather than ignoring the press
   // is what makes the key go inert and `aria-hidden` (see `PanelKey`), which is
   // the truth of it: on an unplugged television these are pieces of plastic.
   // Power is deliberately not gated — otherwise there would be no way back.
-  const digitPress = lit ? (onPageEntry != null ? pressDigit : undefined) : undefined;
+  const digitPress = lit ? (onPageEntry != null ? dial.press : undefined) : undefined;
   const pageStep = lit ? onPageStep : undefined;
   const subpageStep = lit ? onSubpageStep : undefined;
   const fastext = lit ? onFastext : undefined;
 
   // What the LED window reads. A dial in progress shows the digits so far and a
   // dash for each still to come (`2--`), which is what told you the set had
-  // heard the first press and was waiting for the rest.
+  // heard the first press and was waiting for the rest; with nothing being
+  // dialled the readout is `null` and the page number itself shows.
   const pageDigits = !lit
     ? '   '
-    : dialError
-      ? '---'
-      : dial !== ''
-        ? dial.padEnd(3, '-')
-        : String(pageNumber).padStart(3, '0').slice(-3);
+    : (dial.readout ?? String(pageNumber).padStart(3, '0').slice(-3));
   const subDigits = !lit ? '  ' : String(subpage).padStart(2, '0').slice(-2);
 
   /*

@@ -62,15 +62,33 @@ export interface SegmentVisorProps {
 }
 
 export function SegmentVisor({ readouts, label, className }: SegmentVisorProps) {
-  // Placed in one pass so each readout knows where the one before it ended.
+  /*
+   * Placed in one pass so each readout knows where the one before it ended.
+   *
+   * A plain loop rather than a `map` closing over a running cursor: the compiler
+   * cannot tell that a callback mutating a variable from the enclosing scope is
+   * finished with it by the time the render is, so it refuses the reassignment.
+   * The loop says the same thing without a callback to be suspicious of.
+   */
+  const placed: (VisorReadout & {
+    x: number;
+    width: number;
+    scale: number;
+    y: number;
+  })[] = [];
   let cursor = PLATE_X + 2 + PAD;
-  const placed = readouts.map((readout) => {
+  for (const readout of readouts) {
     const scale = readout.small ? SMALL : 1;
     const width = (DIGIT_W + (readout.digits.length - 1) * PITCH) * scale;
-    const x = cursor;
-    cursor = x + width + GAP;
-    return { ...readout, x, width, scale, y: BASELINE - DIGIT_H * scale };
-  });
+    placed.push({
+      ...readout,
+      x: cursor,
+      width,
+      scale,
+      y: BASELINE - DIGIT_H * scale,
+    });
+    cursor += width + GAP;
+  }
 
   // The last readout took a gap it had no successor for; the plate ends a
   // well's padding past its right edge instead.

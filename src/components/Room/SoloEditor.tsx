@@ -23,7 +23,11 @@
  * Everything else the page needs — its title, its carousel of subpages — sits
  * under the keypad on the same moulded panel, and is handed to {@link Editor} as
  * the two console slots it renders: `display`, which is on screen at all times,
- * and `pageControls`, which travels with the rest of the tools.
+ * and `pageControls`, which travels with the rest of the tools. Which of those
+ * two a control belongs in is the whole of the split: the readout and its
+ * rockers are how you always know what you are drawing on, so on a desk they
+ * ride out on the toolbar, while the keypad, the title and the carousel are
+ * things you go and do and are kept behind one key.
  *
  * The {@link Editor} itself is driven by {@link useEditPage} (injected `page` +
  * an `onEditCell` cell-level writer). Editing is solo — no cursor / presence.
@@ -298,9 +302,11 @@ export function SoloEditor() {
   /*
    * The display block: what page is open, and the two rockers that change it.
    *
-   * The head of the page panel, where the rest of choosing a page is. It reads
-   * out what the keypad under it is about to change, which is the arrangement
-   * the set's own front panel is in — window first, then the keys that drive it.
+   * Handed to the editor on its own, because it is the part of choosing a page
+   * that is never put away. On a desk it sits out on the toolbar; on a handset,
+   * which has no strip to sit on, it heads the page panel and reads out what the
+   * keypad under it is about to change — which is the arrangement the set's own
+   * front panel is in, window first and then the keys that drive it.
    */
   const display = (
     <div
@@ -391,8 +397,6 @@ export function SoloEditor() {
    */
   const pageControls = (
     <>
-      <section className="rc-cluster">{display}</section>
-
       <section className="rc-cluster" aria-label="Page number">
         <div className="rc-keypad" role="group" aria-label="Dial a page number">
           {KEYPAD_DIGITS.map((digit) => (
@@ -515,6 +519,7 @@ export function SoloEditor() {
       page={page}
       onEditCell={handleEditCell}
       brand={brand}
+      display={display}
       pageControls={pageControls}
     />
   );

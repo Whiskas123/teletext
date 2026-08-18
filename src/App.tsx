@@ -17,6 +17,10 @@ import { SoloViewer } from './components/Room/SoloViewer';
 import { validateRoomId } from './domain/roomId';
 import './App.css';
 import './styles/teletext.css';
+// After `teletext.css`, because the exhibition screen unframes the same
+// `.teletext-screen` the CRT does and has to win the same way `.crt-raster`
+// does. It touches nothing else: every rule in it is under `.exhibit`.
+import './styles/exhibit.css';
 // Last, so the editor console's own surface wins over the shared editor
 // layout it borrows from `teletext.css`. See the note at the top of the file.
 import './styles/console.css';

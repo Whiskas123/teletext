@@ -113,17 +113,30 @@ export function VotePanel() {
 
   const [draftTarget, setDraftTarget] = useState('');
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [voteMessage, setVoteMessage] = useState<string | null>(null);
   const [settled, setSettled] = useState<SettledVote | null>(null);
   const [refused, setRefused] = useState(false);
 
+  /*
+   * A rejected vote's message, tagged with the request it was about.
+   *
+   * It used to be a bare string cleared from an effect whenever `active.id`
+   * changed. Stamping the id on it instead makes "this message belongs to a vote
+   * that is no longer the one on screen" something the render can see, so nothing
+   * has to be cleared: a message from the previous request simply stops matching.
+   * Which also closes the gap the effect had — for one render after a new request
+   * arrived, the old message was still on screen under the new vote.
+   */
+  const [voteNote, setVoteNote] = useState<{
+    requestId: string | null;
+    text: string;
+  } | null>(null);
+
   const isActive = active !== null;
 
-  // Clear any stale vote message once the active request resolves/changes so
-  // messages never linger across separate votes.
-  useEffect(() => {
-    setVoteMessage(null);
-  }, [active?.id]);
+  const voteMessage =
+    voteNote != null && voteNote.requestId === (active?.id ?? null)
+      ? voteNote.text
+      : null;
 
   /*
    * The running reading, kept one step behind so the console has something to
@@ -152,7 +165,11 @@ export function VotePanel() {
         reject: tally.reject,
         threshold: tally.threshold,
       };
-      setSettled(null);
+      // No `setSettled(null)` here. A closing reading is only ever *read* when
+      // nothing is active (see `state` below), so one left in the slot under a
+      // running vote is invisible, and the next vote to end overwrites it. The
+      // timer that would have cleared it is torn down by this effect re-running,
+      // which is the only thing that actually needed to happen.
       return;
     }
     const closing = runningRef.current;
@@ -190,10 +207,13 @@ export function VotePanel() {
   const handleVote = (decision: 'accept' | 'reject') => {
     const result: VoteResult = vote(decision);
     if (!result.ok) {
-      setVoteMessage(VOTE_MESSAGES[result.reason] ?? 'Vote not recorded');
+      setVoteNote({
+        requestId: active?.id ?? null,
+        text: VOTE_MESSAGES[result.reason] ?? 'Vote not recorded',
+      });
       return;
     }
-    setVoteMessage(null);
+    setVoteNote(null);
   };
 
   /*

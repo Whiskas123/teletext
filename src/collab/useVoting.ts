@@ -186,8 +186,18 @@ export function useVoting(): VotingApi {
   // guard makes this "first observer writes": once resolved on any client the
   // guard is false everywhere and redundant writes are skipped, converging via
   // Yjs LWW (design's deterministic-timeout note).
+  /*
+   * Written from an effect, not during render.
+   *
+   * Declared here rather than beside the resolution effect below because effects
+   * run in declaration order: this one has to have landed before that one calls
+   * `resolveNow`, or the first resolution after a member joins or leaves would
+   * be decided against the previous membership.
+   */
   const presentRef = useRef(presentMemberIds);
-  presentRef.current = presentMemberIds;
+  useEffect(() => {
+    presentRef.current = presentMemberIds;
+  }, [presentMemberIds]);
 
   const resolveNow = useCallback(() => {
     const current = data?.active ?? null;

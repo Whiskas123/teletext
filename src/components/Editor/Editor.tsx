@@ -198,6 +198,75 @@ const BRUSH_KEYS: readonly {
 ];
 
 /**
+ * Which toolbar keys have something to open, and what the panel is called in
+ * the markup.
+ *
+ * Two of the five tools have nothing to configure — blink paints blink, and the
+ * eyedropper takes what it is pointed at — so their keys are keys and no more,
+ * with what used to be a paragraph of panel now carried as the cap's own
+ * tooltip. A key that opens an empty drawer is a key you press twice and then
+ * stop trusting.
+ */
+const FLYOUT_IDS: Readonly<Record<ConsoleTab, string>> = {
+  page: 'rc-flyout-page',
+  off: 'rc-flyout-text',
+  block: 'rc-flyout-block',
+  pixel: 'rc-flyout-pixel',
+  blink: 'rc-flyout-blink',
+  picker: 'rc-flyout-picker',
+};
+
+const CLEAR_FLYOUT_ID = 'rc-flyout-clear';
+
+/** The tabs with a drawer behind them; the rest are plain keys. */
+const FLYOUT_TABS: ReadonlySet<ConsoleTab> = new Set<ConsoleTab>([
+  'page',
+  'off',
+  'block',
+  'pixel',
+]);
+
+/**
+ * A drawer hanging off a toolbar key.
+ *
+ * Absolutely positioned under its own key rather than placed by measurement:
+ * the strip is one row along the top of the window, so "under the key, hanging
+ * into the desk" is a fact of the layout and not something that has to be
+ * computed against the viewport every time one opens. The two keys at the far
+ * end open theirs `end`-aligned, which is the whole of the edge handling this
+ * needs.
+ *
+ * Dismissal is not in here. One drawer is open at a time and the strip owns
+ * which — see `closeFlyouts` and the effect beside it — so the pointer and
+ * Escape listeners are registered once for the strip instead of once per key.
+ */
+function Flyout({
+  open,
+  panelId,
+  label,
+  align = 'start',
+  children,
+}: {
+  open: boolean;
+  panelId: string;
+  label: string;
+  align?: 'start' | 'end';
+  children: React.ReactNode;
+}) {
+  if (!open) return null;
+  return (
+    <div
+      id={panelId}
+      className={`rc-flyout${align === 'end' ? ' rc-flyout-end' : ''}`}
+      role="group"
+      aria-label={label}
+    >
+      {children}
+    </div>
+  );
+}
+
+/**
  * The panel's own keyboard, in two layers of four rows.
  *
  * Ten slots to a row throughout, which is what lets the caps be one flexible
@@ -296,14 +365,26 @@ interface EditorProps {
   /** When set, renders a "Back to grid" key in the console actions that calls this. */
   onBackToGrid?: () => void | Promise<void>;
   /**
-   * The nameplate along the top of the console: where the host puts its way out
-   * of the editor and whatever lamp it wants lit.
+   * The nameplate: the host's way out of the editor and whatever lamp it wants
+   * lit. It rides at the near end of the toolbar, where an appliance puts its
+   * badge. The handset has no room for one and does not render it.
    */
   brand?: import('react').ReactNode;
   /**
-   * The host's page panel — its readout, its dialling, its title, its subpages.
-   * Everything behind the strip's `Page` tab; supplied by the host, because only
-   * the host knows what a page is here.
+   * The host's readout and the rockers beside it: what page is open, and the
+   * keys that step off it.
+   *
+   * Handed over apart from {@link EditorProps.pageControls} because it is the
+   * one part of choosing a page that is never put away — the toolbar keeps it on
+   * the strip at all times, where the old console kept it at the top of a tab
+   * you had to open first.
+   */
+  display?: import('react').ReactNode;
+  /**
+   * The rest of the host's page panel — its dialling, its title, its subpages.
+   * Behind one key on the toolbar and behind the strip's `Page` tab on the
+   * handset; supplied by the host, because only the host knows what a page is
+   * here.
    */
   pageControls?: import('react').ReactNode;
   /** The page to edit, supplied by the host (e.g. `useEditPage`'s normalized page). */
@@ -332,6 +413,7 @@ export function Editor({
   subpageCount = 1,
   onBackToGrid,
   brand,
+  display,
   pageControls,
   page,
   onEditCell,
@@ -373,6 +455,17 @@ export function Editor({
   const [brushMode, setBrushMode] = useState<BrushMode>("off");
   /** Which panel the tab strip has open; see {@link ConsoleTab}. */
   const [tab, setTab] = useState<ConsoleTab>("off");
+  /**
+   * Whether the toolbar has {@link tab}'s drawer pulled out.
+   *
+   * Deliberately *whether* and not a second *which*: `tab` already says which
+   * panel belongs to the moment, and on the strip it goes on saying so while the
+   * drawer is shut. Keeping the two apart is what makes a drawer follow the
+   * tool — the eyedropper landing on Block moves `tab`, and a drawer already out
+   * swaps its contents instead of being left describing a tool nobody is
+   * holding. The handset never reads this: its panel is never shut.
+   */
+  const [flyoutOpen, setFlyoutOpen] = useState(false);
   /** Which layer the panel's keyboard is showing, and whether it is in caps. */
   const [padLayer, setPadLayer] = useState<"letters" | "symbols">("letters");
   const [padShift, setPadShift] = useState(true);
@@ -423,6 +516,8 @@ export function Editor({
    */
   const lastPaintedRef = useRef<number | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  /** The toolbar, so a pointer landing anywhere else can shut whatever is open. */
+  const toolbarRef = useRef<HTMLDivElement>(null);
   const hiddenInputRef = useRef<HTMLInputElement>(null);
   const sixelColorTooltipRef = useRef<HTMLDivElement>(null);
   const brushSixelPreviewRef = useRef<HTMLDivElement>(null);
@@ -454,6 +549,51 @@ export function Editor({
   const holdTool = useCallback((mode: BrushMode) => {
     setBrushMode(mode);
     setTab(mode);
+  }, []);
+
+  /** Shut everything the toolbar has open. */
+  const closeFlyouts = useCallback(() => {
+    setFlyoutOpen(false);
+    setClearConfirmShown(false);
+  }, []);
+
+  /**
+   * A tool key on the strip: take the tool up, and show what configures it.
+   *
+   * Pressing a tool you are not holding opens its drawer as well as taking it
+   * up, because the two are almost always one intention — nobody reaches for the
+   * block brush without a mosaic in mind. Pressing the tool you *are* holding
+   * shuts the drawer again, so the same cap is also how you get the desk back.
+   * A tool with nothing to configure just shuts whatever was open.
+   */
+  const pressToolKey = useCallback(
+    (mode: BrushMode) => {
+      const wasShowing = flyoutOpen && tab === mode;
+      holdTool(mode);
+      setClearConfirmShown(false);
+      setFlyoutOpen(FLYOUT_TABS.has(mode) && !wasShowing);
+    },
+    [flyoutOpen, tab, holdTool],
+  );
+
+  /**
+   * The page key: the keypad, the title and the carousel, all behind one cap.
+   *
+   * `setTab` rather than `holdTool`, exactly as the tab strip does it — going to
+   * the page is not putting the tool down, and you come back to whatever you
+   * were drawing with.
+   */
+  const pressPageKey = useCallback(() => {
+    const wasShowing = flyoutOpen && tab === "page";
+    setTab("page");
+    setClearConfirmShown(false);
+    setFlyoutOpen(!wasShowing);
+  }, [flyoutOpen, tab]);
+
+  /** The red key: ask before wiping, in a drawer of its own. */
+  const pressClearKey = useCallback(() => {
+    setFlyoutOpen(false);
+    setClearConfirmShown((shown) => !shown);
   }, []);
 
   const applyTextStyle = useCallback(
@@ -1135,8 +1275,77 @@ export function Editor({
    * Below 900px the console is rebuilt as the handset it already resembles:
    * pinned under the picture, tool keys along its head where they are never
    * scrolled away from, and the rest of the panel scrolling beneath them.
+   *
+   * Above it the panel is not beside the page either, any more. It was a column
+   * twenty-three rems wide holding a readout, six keys and whichever of them was
+   * open — width the page wanted and the panel never earned — so the same
+   * controls are moulded into a strip along the top instead, and whatever needs
+   * more than a cap hangs off its key as a drawer. See `toolbar`.
    */
   const isNarrow = useMediaQuery("(max-width: 900px)");
+
+  /**
+   * Which drawer the strip has out, if any.
+   *
+   * Derived rather than stored, so there is no second copy of "which panel" to
+   * fall out of step with `tab` — and so a tool with nothing behind it can never
+   * leave an empty drawer hanging open, however it came to be the tab.
+   */
+  const openFlyout: ConsoleTab | null =
+    flyoutOpen && FLYOUT_TABS.has(tab) ? tab : null;
+
+  /*
+   * The strip shuts when you go back to the page, and when you say so.
+   *
+   * Registered once for the whole toolbar rather than once per drawer: only one
+   * is ever out, and a listener per key would be four ways for the same rule to
+   * be spelled slightly differently. A pointer landing inside the strip is
+   * ignored, which is what lets a cap toggle its own drawer — otherwise the
+   * press would shut it here and reopen it in the handler, or the other way
+   * about, depending on the order two listeners happened to fire in.
+   *
+   * The handset has no drawers, and its clear-page confirmation is inline where
+   * a stray tap should not dismiss it, so none of this is armed there.
+   */
+  const flyoutShown = flyoutOpen || clearConfirmShown;
+  useEffect(() => {
+    if (isNarrow || !flyoutShown) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (target != null && toolbarRef.current?.contains(target)) return;
+      closeFlyouts();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeFlyouts();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isNarrow, flyoutShown, closeFlyouts]);
+
+  /**
+   * The strip does not take the page's focus away from it.
+   *
+   * On a desk the keyboard *is* the input — there is no moulded pad up here to
+   * type with — so focus belongs to the grid and a control panel that stole it
+   * every time you chose a colour would be a control panel you had to click your
+   * way back out of. Preventing the default on `mousedown` is the whole of it:
+   * the cap never becomes the focused element, the grid never blurs, and the
+   * next thing typed still lands on the page. It is the same trick the handset's
+   * own keyboard uses, one level up, so a drawer's contents get it too.
+   *
+   * The exceptions are the controls that are *about* focus: a text field, and
+   * the LED window, which takes typed digits while it holds it.
+   */
+  const keepGridFocus = useCallback((event: React.MouseEvent) => {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest("input, textarea, select, [contenteditable], .rc-display"))
+      return;
+    event.preventDefault();
+  }, []);
 
   /*
    * One set of controls, in one of two shells.
@@ -1147,22 +1356,26 @@ export function Editor({
    */
 
   /**
-   * The tab strip: the page, then the five tools.
+   * The tab strip: the page, then the five tools. The handset's, only.
    *
-   * The same row on the console and on the handset, and the only navigation the
-   * panel has — what is under it is whatever this row has open, and nothing
-   * else. A brush's colours, its motifs and its history are its own; so is the
-   * text style, which belongs to typing and to nothing else on this panel and
-   * used to sit above all five tools as though it belonged to all of them.
+   * The only navigation that panel has — what is under it is whatever this row
+   * has open, and nothing else. A brush's colours, its motifs and its history
+   * are its own; so is the text style, which belongs to typing and to nothing
+   * else on this panel and used to sit above all five tools as though it
+   * belonged to all of them.
    *
    * Page is set apart by a gap rather than by a different shape, the way a
    * moulded panel groups keys. Pressing it opens the page panel and leaves the
    * tool exactly where it was: the held tool keeps a lit pip in its corner so
    * you can see what you will still be drawing with when you come back.
+   *
+   * The toolbar spells the same six keys out again — as buttons with drawers
+   * rather than as tabs — but off {@link BRUSH_KEYS}, which is the table both
+   * read from and the reason a sixth tool is still one line of data.
    */
   const tabs = (
     <div className="rc-tabs" role="tablist" aria-label="Console">
-      {pageControls != null && (
+      {(display != null || pageControls != null) && (
         <button
           type="button"
           role="tab"
@@ -1195,19 +1408,6 @@ export function Editor({
     </div>
   );
 
-  /*
-   * The TEXT tab: what a typed character is made of.
-   *
-   * No heading of its own — the lit key in the strip above is the heading, and
-   * writing "Text style" under a key that already says TEXT is the panel telling
-   * you where you are twice. What the section is called survives as its
-   * `aria-label`, which is the one reader that cannot see the strip.
-   *
-   * Only ever shown with the text cursor up. A foreground, a background and a
-   * double-height switch are settings for *typing* — the block brush paints its
-   * six colours from its own motif and the pixel brush has a colour of its own —
-   * so on a panel that shows one tool at a time this is the one tool's.
-   */
   /*
    * The keyboard, moulded into the panel.
    *
@@ -1295,8 +1495,21 @@ export function Editor({
     </div>
   );
 
-  const textStyleSection = (
-    <section className="rc-cluster" aria-label="Text style">
+  /*
+   * TEXT: what a typed character is made of.
+   *
+   * No heading of its own — the lit key that opened this is the heading, and
+   * writing "Text style" under a cap that already says TEXT is the panel telling
+   * you where you are twice. What it is called survives as the `aria-label` on
+   * whatever is holding it, which is the one reader that cannot see the key.
+   *
+   * A foreground, a background and a double-height switch are settings for
+   * *typing* — the block brush paints its six colours from its own motif and the
+   * pixel brush has a colour of its own — so they belong to the one tool and are
+   * never shown beside another.
+   */
+  const textStyleControls = (
+    <>
       <div className="text-preview-three-col">
         <div className="text-preview-col">
           <span className="text-preview-label">Color</span>
@@ -1343,27 +1556,59 @@ export function Editor({
         <IconDoubleHeight className="rc-key-icon" />
         <span>Double height</span>
       </button>
+    </>
+  );
+
+  /*
+   * The two racks, as their caps alone.
+   *
+   * A remembered style or brush is one swatch and a click, and the strip of them
+   * is wanted in two places that frame it differently: labelled inside a panel on
+   * the handset, bare and elastic along the toolbar. So what is written once is
+   * the caps — the frame is whatever is holding them.
+   */
+  const textStyleChips = textStyles.history.map((style, idx) => (
+    <button
+      key={textStyleKey(style)}
+      type="button"
+      className={`brush-history-btn ${idx === textStyles.index ? "brush-history-btn-active" : ""}`}
+      title={describeTextStyle(style)}
+      onClick={() => selectTextStyleFromHistory(idx)}
+      aria-label={`Use recent text style ${idx + 1}: ${describeTextStyle(style)}`}
+      aria-pressed={idx === textStyles.index}
+    >
+      <TextStyleSwatch style={style} />
+    </button>
+  ));
+
+  const brushChips = brushes.history.map((brush, idx) => (
+    <button
+      key={brushKey(brush)}
+      type="button"
+      className={`brush-history-btn ${idx === brushes.index ? "brush-history-btn-active" : ""}`}
+      title={
+        brush.kind === "pixel"
+          ? `Pixel brush (${brush.color})`
+          : `${MOTIF_PATTERNS[brush.motifIndex]?.name ?? "Block"} brush`
+      }
+      onClick={() => selectBrushFromHistory(idx)}
+      aria-label={`Use recent brush ${idx + 1}`}
+      aria-pressed={idx === brushes.index}
+    >
+      <BrushSwatch brush={brush} />
+    </button>
+  ));
+
+  const textStyleSection = (
+    <section className="rc-cluster" aria-label="Text style">
+      {textStyleControls}
 
       {textPad}
 
-      {textStyles.history.length > 0 && (
+      {textStyleChips.length > 0 && (
         <div className="color-block brush-history">
           <span className="sidebar-field-label">Recent text styles</span>
-          <div className="brush-history-strip">
-            {textStyles.history.map((style, idx) => (
-              <button
-                key={textStyleKey(style)}
-                type="button"
-                className={`brush-history-btn ${idx === textStyles.index ? "brush-history-btn-active" : ""}`}
-                title={describeTextStyle(style)}
-                onClick={() => selectTextStyleFromHistory(idx)}
-                aria-label={`Use recent text style ${idx + 1}: ${describeTextStyle(style)}`}
-                aria-pressed={idx === textStyles.index}
-              >
-                <TextStyleSwatch style={style} />
-              </button>
-            ))}
-          </div>
+          <div className="brush-history-strip">{textStyleChips}</div>
         </div>
       )}
     </section>
@@ -1378,254 +1623,267 @@ export function Editor({
    * thing except while the page panel is up, and the page panel replaces this
    * one outright.
    */
+  /*
+   * The three tools that have anything to say for themselves.
+   *
+   * Each is written once and framed twice: dropped straight into the
+   * handset's one open panel, or hung under its own cap on the toolbar. Blink
+   * and the eyedropper have no settings at all — a sentence each is the whole
+   * of what there is to know, and on the strip that sentence is the cap's
+   * tooltip rather than a drawer with a paragraph in it.
+   */
+  const pickerHint = (
+    <p className="sidebar-hint">
+      Click any cell to copy what made it. A cell with a character hands its
+      colours to the text tool and puts the cursor there; a mosaic cell hands
+      its shape and its six colours to the block brush.
+    </p>
+  );
+
+  const blinkHint = <p className="sidebar-hint">Click or drag to set blink on.</p>;
+
+  const blockOptions = (
+    <div className="brush-options">
+      {/*
+        * A lifted shape is otherwise invisible state: the motif previews
+        * all show full cells, so a half-filled brush would look identical
+        * to a solid one right up until it painted.
+        */}
+      {blockPattern !== SIXEL_MAX && (
+        <div className="brush-picked-pattern">
+          <div className="brush-picked-preview" aria-hidden>
+            {([0, 1, 2, 3, 4, 5] as const).map((i) => (
+              <span
+                key={i}
+                className={`preset-motif-dot teletext-bg-${
+                  sixelBit(blockPattern, i) ? brushColors[i] : "black"
+                }`}
+              />
+            ))}
+          </div>
+          <div className="brush-picked-text">
+            <span className="sidebar-field-label">Picked shape</span>
+            <button
+              type="button"
+              className="rc-key rc-key-wide"
+              onClick={() => setBlockPattern(SIXEL_MAX)}
+            >
+              <span>Fill the whole cell</span>
+            </button>
+          </div>
+        </div>
+      )}
+      <div className="color-block">
+        <div className="preset-motifs">
+          {MOTIF_PATTERNS.map((pattern, idx) => {
+            const previewColors =
+              motifColors[idx] ?? defaultColorsForMotif(pattern.slots);
+            return (
+              <button
+                key={pattern.name}
+                type="button"
+                className={`preset-motif-btn ${selectedMotifIndex === idx ? "preset-motif-btn-active" : ""}`}
+                title={pattern.name}
+                onClick={() => selectMotif(idx)}
+                aria-label={`Use ${pattern.name} motif`}
+                aria-pressed={selectedMotifIndex === idx}
+              >
+                <div className="preset-motif-preview">
+                  {([0, 1, 2, 3, 4, 5] as const).map((i) => (
+                    <span
+                      key={i}
+                      className={`preset-motif-dot teletext-bg-${previewColors[i]}`}
+                    />
+                  ))}
+                </div>
+                <span className="preset-motif-name">{pattern.name}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div
+          className="color-block sixel-color-tooltip-ref"
+          ref={sixelColorTooltipRef}
+        >
+          <span className="sidebar-field-label">
+            Click a part to change its color
+          </span>
+          <div
+            className="brush-sixel-preview"
+            ref={brushSixelPreviewRef}
+            aria-hidden
+          >
+            {([0, 1, 2, 3, 4, 5] as const).map((i) => {
+              const slotIndex = selectedMotif.slots[i];
+              const slots = selectedMotif.slots;
+              /* Grid is 2×3 row-major: [0][1] / [2][3] / [4][5]. Right = i+1 when left col; bottom = i+2 when row 0 or 1. */
+              const rightNeighbor = i % 2 === 0 && i < 5 ? i + 1 : null;
+              const bottomNeighbor = i <= 3 ? i + 2 : null;
+              const borderRight =
+                rightNeighbor !== null && slots[i] !== slots[rightNeighbor];
+              const borderBottom =
+                bottomNeighbor !== null &&
+                slots[i] !== slots[bottomNeighbor];
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  className={`brush-sixel-part brush-sixel-part-slot-${slotIndex} teletext-bg-${brushColors[i]} ${borderRight ? "brush-sixel-part-border-r" : ""} ${borderBottom ? "brush-sixel-part-border-b" : ""} ${hoveredSlotIndex === slotIndex ? "brush-sixel-part-hover" : ""} ${selectedSixelIndex === i && colorTooltipOpen ? "brush-sixel-part-active" : ""}`}
+                  title={`Part ${i + 1}`}
+                  onMouseEnter={() => setHoveredSlotIndex(slotIndex)}
+                  onMouseLeave={() => setHoveredSlotIndex(null)}
+                  onClick={(e) => {
+                    const open =
+                      colorTooltipOpen && selectedSixelIndex === i
+                        ? false
+                        : true;
+                    setSelectedSixelIndex(i);
+                    if (open && brushSixelPreviewRef.current) {
+                      const partRect = (
+                        e.currentTarget as HTMLButtonElement
+                      ).getBoundingClientRect();
+                      const previewRect =
+                        brushSixelPreviewRef.current.getBoundingClientRect();
+                      setTooltipAnchor({
+                        part: {
+                          left: partRect.left,
+                          top: partRect.top,
+                          width: partRect.width,
+                          height: partRect.height,
+                        },
+                        preview: {
+                          left: previewRect.left,
+                          top: previewRect.top,
+                          width: previewRect.width,
+                          height: previewRect.height,
+                        },
+                      });
+                    }
+                    setColorTooltipOpen(open);
+                  }}
+                  aria-label={`Part ${i + 1}, ${brushColors[i]}`}
+                  aria-expanded={
+                    selectedSixelIndex === i && colorTooltipOpen
+                  }
+                />
+              );
+            })}
+          </div>
+          {(() => {
+            const clamped = tooltipAnchor
+              ? clampTooltipToViewport(tooltipAnchor)
+              : null;
+            const slotCount = motifSlotCount(selectedMotif.slots);
+            const tooltipLabel =
+              slotCount === 1
+                ? "Color"
+                : SIXEL_PART_NAMES[selectedSixelIndex];
+            return (
+              <div
+                className={`sixel-color-tooltip ${colorTooltipOpen ? "sixel-color-tooltip-open" : ""}`}
+                role="tooltip"
+                aria-hidden={!colorTooltipOpen}
+                style={{
+                  position: "fixed",
+                  left: clamped ? clamped.left : -9999,
+                  top: clamped ? clamped.top : 0,
+                }}
+              >
+                <div
+                  className="sixel-color-tooltip-label"
+                  aria-live="polite"
+                >
+                  {tooltipLabel}
+                </div>
+                <div className="sixel-color-tooltip-swatches">
+                  {TELETEXT_COLORS.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      className={`color-swatch teletext-bg-${color}`}
+                      title={color}
+                      onClick={() => {
+                        const slotIndex =
+                          selectedMotif.slots[selectedSixelIndex];
+                        setMotifSlotColor(slotIndex, color);
+                        setColorTooltipOpen(false);
+                      }}
+                      aria-label={`Set to ${color}`}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      </div>
+
+    </div>
+  );
+
+  const pixelOptions = (
+    <div className="brush-options">
+      <div className="color-block">
+        <span className="sidebar-field-label">Pixel color</span>
+        <div className="text-preview-swatches text-preview-swatches-4x4">
+          {TELETEXT_COLORS.map((color) => (
+            <button
+              key={color}
+              type="button"
+              className={`color-swatch color-swatch-mini teletext-bg-${color} ${pixelColor === color ? "active" : ""}`}
+              title={`Pixel ${color}`}
+              onClick={() => setPixelColor(color)}
+              aria-label={`Pixel color ${color}`}
+              aria-pressed={pixelColor === color}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  const recentBrushes =
+    brushChips.length > 0 ? (
+      <div className="color-block brush-history">
+        <span className="sidebar-field-label">Recent brushes</span>
+        <div className="brush-history-strip">{brushChips}</div>
+      </div>
+    ) : null;
+
+  /*
+   * What the tool on the open tab needs, and nothing else — the handset's
+   * framing of the three above.
+   *
+   * One cluster rather than one per tool: only one tab is ever open there, so
+   * four of the five would always be empty panel. The tab it is describing is
+   * the one the strip has open, not the one the pointer is holding — those are
+   * the same thing except while the page panel is up, and the page panel
+   * replaces this one outright.
+   */
   const brushOptionsSection = (
     <section
       className="rc-cluster"
       aria-label={`${BRUSH_KEYS.find((k) => k.mode === brushMode)?.label ?? ""} options`}
     >
-      {brushMode === "picker" && (
-        <p className="sidebar-hint">
-          Click any cell to copy what made it. A cell with a character hands its
-          colours to the text tool and puts the cursor there; a mosaic cell hands
-          its shape and its six colours to the block brush.
-        </p>
-      )}
-      {brushMode === "block" && (
-        <div className="brush-options">
-          {/*
-            * A lifted shape is otherwise invisible state: the motif previews
-            * all show full cells, so a half-filled brush would look identical
-            * to a solid one right up until it painted.
-            */}
-          {blockPattern !== SIXEL_MAX && (
-            <div className="brush-picked-pattern">
-              <div className="brush-picked-preview" aria-hidden>
-                {([0, 1, 2, 3, 4, 5] as const).map((i) => (
-                  <span
-                    key={i}
-                    className={`preset-motif-dot teletext-bg-${
-                      sixelBit(blockPattern, i) ? brushColors[i] : "black"
-                    }`}
-                  />
-                ))}
-              </div>
-              <div className="brush-picked-text">
-                <span className="sidebar-field-label">Picked shape</span>
-                <button
-                  type="button"
-                  className="rc-key rc-key-wide"
-                  onClick={() => setBlockPattern(SIXEL_MAX)}
-                >
-                  <span>Fill the whole cell</span>
-                </button>
-              </div>
-            </div>
-          )}
-          <div className="color-block">
-            <div className="preset-motifs">
-              {MOTIF_PATTERNS.map((pattern, idx) => {
-                const previewColors =
-                  motifColors[idx] ?? defaultColorsForMotif(pattern.slots);
-                return (
-                  <button
-                    key={pattern.name}
-                    type="button"
-                    className={`preset-motif-btn ${selectedMotifIndex === idx ? "preset-motif-btn-active" : ""}`}
-                    title={pattern.name}
-                    onClick={() => selectMotif(idx)}
-                    aria-label={`Use ${pattern.name} motif`}
-                    aria-pressed={selectedMotifIndex === idx}
-                  >
-                    <div className="preset-motif-preview">
-                      {([0, 1, 2, 3, 4, 5] as const).map((i) => (
-                        <span
-                          key={i}
-                          className={`preset-motif-dot teletext-bg-${previewColors[i]}`}
-                        />
-                      ))}
-                    </div>
-                    <span className="preset-motif-name">{pattern.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <div
-              className="color-block sixel-color-tooltip-ref"
-              ref={sixelColorTooltipRef}
-            >
-              <span className="sidebar-field-label">
-                Click a part to change its color
-              </span>
-              <div
-                className="brush-sixel-preview"
-                ref={brushSixelPreviewRef}
-                aria-hidden
-              >
-                {([0, 1, 2, 3, 4, 5] as const).map((i) => {
-                  const slotIndex = selectedMotif.slots[i];
-                  const slots = selectedMotif.slots;
-                  /* Grid is 2×3 row-major: [0][1] / [2][3] / [4][5]. Right = i+1 when left col; bottom = i+2 when row 0 or 1. */
-                  const rightNeighbor = i % 2 === 0 && i < 5 ? i + 1 : null;
-                  const bottomNeighbor = i <= 3 ? i + 2 : null;
-                  const borderRight =
-                    rightNeighbor !== null && slots[i] !== slots[rightNeighbor];
-                  const borderBottom =
-                    bottomNeighbor !== null &&
-                    slots[i] !== slots[bottomNeighbor];
-                  return (
-                    <button
-                      key={i}
-                      type="button"
-                      className={`brush-sixel-part brush-sixel-part-slot-${slotIndex} teletext-bg-${brushColors[i]} ${borderRight ? "brush-sixel-part-border-r" : ""} ${borderBottom ? "brush-sixel-part-border-b" : ""} ${hoveredSlotIndex === slotIndex ? "brush-sixel-part-hover" : ""} ${selectedSixelIndex === i && colorTooltipOpen ? "brush-sixel-part-active" : ""}`}
-                      title={`Part ${i + 1}`}
-                      onMouseEnter={() => setHoveredSlotIndex(slotIndex)}
-                      onMouseLeave={() => setHoveredSlotIndex(null)}
-                      onClick={(e) => {
-                        const open =
-                          colorTooltipOpen && selectedSixelIndex === i
-                            ? false
-                            : true;
-                        setSelectedSixelIndex(i);
-                        if (open && brushSixelPreviewRef.current) {
-                          const partRect = (
-                            e.currentTarget as HTMLButtonElement
-                          ).getBoundingClientRect();
-                          const previewRect =
-                            brushSixelPreviewRef.current.getBoundingClientRect();
-                          setTooltipAnchor({
-                            part: {
-                              left: partRect.left,
-                              top: partRect.top,
-                              width: partRect.width,
-                              height: partRect.height,
-                            },
-                            preview: {
-                              left: previewRect.left,
-                              top: previewRect.top,
-                              width: previewRect.width,
-                              height: previewRect.height,
-                            },
-                          });
-                        }
-                        setColorTooltipOpen(open);
-                      }}
-                      aria-label={`Part ${i + 1}, ${brushColors[i]}`}
-                      aria-expanded={
-                        selectedSixelIndex === i && colorTooltipOpen
-                      }
-                    />
-                  );
-                })}
-              </div>
-              {(() => {
-                const clamped = tooltipAnchor
-                  ? clampTooltipToViewport(tooltipAnchor)
-                  : null;
-                const slotCount = motifSlotCount(selectedMotif.slots);
-                const tooltipLabel =
-                  slotCount === 1
-                    ? "Color"
-                    : SIXEL_PART_NAMES[selectedSixelIndex];
-                return (
-                  <div
-                    className={`sixel-color-tooltip ${colorTooltipOpen ? "sixel-color-tooltip-open" : ""}`}
-                    role="tooltip"
-                    aria-hidden={!colorTooltipOpen}
-                    style={{
-                      position: "fixed",
-                      left: clamped ? clamped.left : -9999,
-                      top: clamped ? clamped.top : 0,
-                    }}
-                  >
-                    <div
-                      className="sixel-color-tooltip-label"
-                      aria-live="polite"
-                    >
-                      {tooltipLabel}
-                    </div>
-                    <div className="sixel-color-tooltip-swatches">
-                      {TELETEXT_COLORS.map((color) => (
-                        <button
-                          key={color}
-                          type="button"
-                          className={`color-swatch teletext-bg-${color}`}
-                          title={color}
-                          onClick={() => {
-                            const slotIndex =
-                              selectedMotif.slots[selectedSixelIndex];
-                            setMotifSlotColor(slotIndex, color);
-                            setColorTooltipOpen(false);
-                          }}
-                          aria-label={`Set to ${color}`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-          </div>
-
-        </div>
-      )}
-      {brushMode === "pixel" && (
-        <div className="brush-options">
-          <div className="color-block">
-            <span className="sidebar-field-label">Pixel color</span>
-            <div className="text-preview-swatches text-preview-swatches-4x4">
-              {TELETEXT_COLORS.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  className={`color-swatch color-swatch-mini teletext-bg-${color} ${pixelColor === color ? "active" : ""}`}
-                  title={`Pixel ${color}`}
-                  onClick={() => setPixelColor(color)}
-                  aria-label={`Pixel color ${color}`}
-                  aria-pressed={pixelColor === color}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-      {brushMode === "blink" && (
-        <p className="sidebar-hint">
-          Click or drag to set blink on.
-        </p>
-      )}
+      {brushMode === "picker" && pickerHint}
+      {brushMode === "block" && blockOptions}
+      {brushMode === "pixel" && pixelOptions}
+      {brushMode === "blink" && blinkHint}
       {/*
-        * Remembered brushes live on the Block tab and nowhere else.
+        * On this panel, remembered brushes live on the Block tab and nowhere
+        * else.
         *
         * The strip is a rack of mosaics — that is what a brush is here, a shape
         * and six colours — and a rack of them under the blink tool or the
         * eyedropper was a shelf of things those tools cannot use. Pixel brushes
         * still go into it as they are used, and picking one off it takes you to
         * the tool it belongs to (see `applyBrush`).
+        *
+        * The toolbar keeps its rack out permanently instead, because there it is
+        * not shelved under a tool: it is a fixture of the strip, and the shelf
+        * argument does not reach it. See `toolbar`.
         */}
-      {brushMode === "block" && brushes.history.length > 0 && (
-        <div className="color-block brush-history">
-          <span className="sidebar-field-label">Recent brushes</span>
-          <div className="brush-history-strip">
-            {brushes.history.map((brush, idx) => (
-              <button
-                key={brushKey(brush)}
-                type="button"
-                className={`brush-history-btn ${idx === brushes.index ? "brush-history-btn-active" : ""}`}
-                title={
-                  brush.kind === "pixel"
-                    ? `Pixel brush (${brush.color})`
-                    : `${MOTIF_PATTERNS[brush.motifIndex]?.name ?? "Block"} brush`
-                }
-                onClick={() => selectBrushFromHistory(idx)}
-                aria-label={`Use recent brush ${idx + 1}`}
-                aria-pressed={idx === brushes.index}
-              >
-                <BrushSwatch brush={brush} />
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      {brushMode === "block" && recentBrushes}
     </section>
   );
 
@@ -1636,6 +1894,31 @@ export function Editor({
    * borrowed from the fastext strip for the one control here that cannot be
    * undone. It asks first, in place, rather than in a dialog over the picture.
    */
+  const clearConfirm = (
+    <div className="clear-confirm">
+      <span className="clear-confirm-label">Clear the whole page?</span>
+      <div className="rc-keyrow">
+        <button
+          type="button"
+          className="rc-key rc-key-wide rc-key-danger"
+          onClick={() => {
+            clearPage();
+            setClearConfirmShown(false);
+          }}
+        >
+          <span>Yes, clear</span>
+        </button>
+        <button
+          type="button"
+          className="rc-key rc-key-wide"
+          onClick={() => setClearConfirmShown(false)}
+        >
+          <span>Cancel</span>
+        </button>
+      </div>
+    </div>
+  );
+
   const actionsSection = (
     <section className="rc-cluster rc-cluster-actions" aria-label="Whole page">
       {onBackToGrid != null && (
@@ -1659,28 +1942,7 @@ export function Editor({
         <span>Export PNG</span>
       </button>
       {clearConfirmShown ? (
-        <div className="clear-confirm">
-          <span className="clear-confirm-label">Clear the whole page?</span>
-          <div className="rc-keyrow">
-            <button
-              type="button"
-              className="rc-key rc-key-wide rc-key-danger"
-              onClick={() => {
-                clearPage();
-                setClearConfirmShown(false);
-              }}
-            >
-              <span>Yes, clear</span>
-            </button>
-            <button
-              type="button"
-              className="rc-key rc-key-wide"
-              onClick={() => setClearConfirmShown(false)}
-            >
-              <span>Cancel</span>
-            </button>
-          </div>
-        </div>
+        clearConfirm
       ) : (
         <button
           type="button"
@@ -1695,10 +1957,15 @@ export function Editor({
   );
 
   /**
-   * What is under the tab strip.
+   * What is under the tab strip, on the handset.
    *
    * The page panel, or the open tool's. Exactly one, always — a tab strip whose
    * tabs can be empty is a strip you learn to distrust.
+   *
+   * The readout heads the page panel, in a cluster of its own: on a handset
+   * there is nowhere for it to be permanently, so it opens with the keypad that
+   * drives it, which is the arrangement the set's own front panel is in. (The
+   * toolbar has room to keep it out at all times, and does.)
    *
    * Exporting and clearing ride with the page, because that is what they are
    * about: they take the whole of it, not the cell the brush is over, and a red
@@ -1708,6 +1975,7 @@ export function Editor({
   const tabPanel =
     tab === "page" ? (
       <>
+        {display != null && <section className="rc-cluster">{display}</section>}
         {pageControls}
         {actionsSection}
       </>
@@ -1716,6 +1984,189 @@ export function Editor({
     ) : (
       brushOptionsSection
     );
+
+  /** What a tool key pulls out, or nothing if the tool has no settings. */
+  const toolPanel = (mode: BrushMode): import('react').ReactNode =>
+    mode === "off"
+      ? textStyleControls
+      : mode === "block"
+        ? blockOptions
+        : mode === "pixel"
+          ? pixelOptions
+          : null;
+
+  /*
+   * The control strip, laid across the top of the desk.
+   *
+   * One row, and it stays one row: the page's own controls at the near end where
+   * a set puts them, the tools next to them with the rack they draw from, and
+   * the two keys that act on the whole page at the far end. Anything that needs
+   * more than a cap — a palette, five motifs, a keypad — hangs off its key as a
+   * drawer, which is what buys the page the rest of the desk.
+   *
+   * Nothing here is hidden behind a tab. The old console could only ever show
+   * one of its six panels, so the readout — the one thing you always want to
+   * know — was behind a key like everything else; on a strip there is room for
+   * the window and both rockers to simply be out, and dialling stops being
+   * somewhere you go.
+   *
+   * The keyboard did not come across. A desk has one already, and the moulded
+   * pad exists because a phone's own keyboard slides up over the page you are
+   * drawing on (see `textPad`) — a problem no monitor has.
+   */
+  const toolbar = (
+    <div className="rc-toolbar" ref={toolbarRef} onMouseDown={keepGridFocus}>
+      {brand != null && (
+        <div className="rc-toolbar-group rc-toolbar-nameplate">{brand}</div>
+      )}
+
+      {(display != null || pageControls != null) && (
+        <div className="rc-toolbar-group" role="group" aria-label="Page">
+          {display}
+          {pageControls != null && (
+            <div className="rc-anchor">
+              {/*
+                * The keypad, behind a key.
+                *
+                * Ten caps is more than a one-row strip can spare for the slowest
+                * way of doing this: the window beside it is focusable and takes
+                * typed digits, which on a desk is how a page actually gets
+                * dialled. What is behind the cap is everything else the page
+                * needs anyway — its title, its carousel — so the drawer is not
+                * a keypad with two strangers in it but the page's own panel,
+                * with the readout lifted out onto the strip.
+                */}
+              <button
+                type="button"
+                className={`rc-key rc-key-square${
+                  openFlyout === "page" ? " rc-key-lit" : ""
+                }`}
+                onClick={pressPageKey}
+                title="Dial a page number, name the page, add or remove screens"
+                aria-label="Page setup"
+                aria-expanded={openFlyout === "page"}
+                aria-controls={FLYOUT_IDS.page}
+              >
+                <IconPage className="rc-key-icon" />
+              </button>
+              <Flyout
+                open={openFlyout === "page"}
+                panelId={FLYOUT_IDS.page}
+                label="Page setup"
+              >
+                {pageControls}
+              </Flyout>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="rc-toolbar-group rc-toolbar-tools" role="group" aria-label="Tools">
+        {BRUSH_KEYS.map(({ mode, label, title, Icon }) => {
+          const panel = toolPanel(mode);
+          const shown = openFlyout === mode;
+          return (
+            <div className="rc-anchor" key={mode}>
+              <button
+                type="button"
+                className={`rc-key rc-key-tool${
+                  brushMode === mode ? " rc-key-lit" : ""
+                }`}
+                onClick={() => pressToolKey(mode)}
+                title={title}
+                aria-pressed={brushMode === mode}
+                aria-expanded={panel != null ? shown : undefined}
+                aria-controls={panel != null ? FLYOUT_IDS[mode] : undefined}
+              >
+                <Icon className="rc-key-icon" />
+                <span className="rc-key-label">{label}</span>
+              </button>
+              {panel != null && (
+                <Flyout
+                  open={shown}
+                  panelId={FLYOUT_IDS[mode]}
+                  label={`${label} options`}
+                >
+                  {panel}
+                </Flyout>
+              )}
+            </div>
+          );
+        })}
+
+        {/*
+          * The rack, out on the strip beside the tools that fill it.
+          *
+          * Whichever rack the tool in hand can use: the styles you have typed
+          * with while the cursor is up, the brushes you have painted with while
+          * one is. It is left standing when there is nothing in it yet, because
+          * a rack that appears the first time you use a colour would move every
+          * key to its right at the moment you were least expecting it.
+          */}
+        <div
+          className="rc-toolbar-rack"
+          role="group"
+          aria-label={isBrushActive ? "Recent brushes" : "Recent text styles"}
+        >
+          <div className="brush-history-strip">
+            {isBrushActive ? brushChips : textStyleChips}
+          </div>
+          <span className="rc-cap">Recent</span>
+        </div>
+      </div>
+
+      <div
+        className="rc-toolbar-group rc-toolbar-actions"
+        role="group"
+        aria-label="Whole page"
+      >
+        {onBackToGrid != null && (
+          <button
+            type="button"
+            className="rc-key rc-key-square"
+            onClick={() => {
+              void onBackToGrid();
+            }}
+            title="Back to grid"
+            aria-label="Back to grid"
+          >
+            <IconBack className="rc-key-icon" />
+          </button>
+        )}
+        <button
+          type="button"
+          className="rc-key rc-key-square"
+          onClick={() => exportPageAsPng(page, "teletext.png", pageNumber ?? 100)}
+          title="Export this page as a PNG"
+          aria-label="Export PNG"
+        >
+          <IconExport className="rc-key-icon" />
+        </button>
+        <div className="rc-anchor">
+          {/* The one red key on the strip, and the one that asks first. */}
+          <button
+            type="button"
+            className="rc-key rc-key-square rc-key-danger"
+            onClick={pressClearKey}
+            title="Clear the whole page"
+            aria-label="Clear page"
+            aria-expanded={clearConfirmShown}
+            aria-controls={CLEAR_FLYOUT_ID}
+          >
+            <IconTrash className="rc-key-icon" />
+          </button>
+          <Flyout
+            open={clearConfirmShown}
+            panelId={CLEAR_FLYOUT_ID}
+            label="Clear the whole page"
+            align="end"
+          >
+            {clearConfirm}
+          </Flyout>
+        </div>
+      </div>
+    </div>
+  );
 
   const grid = (
     <div className="editor-main">
@@ -1842,15 +2293,11 @@ export function Editor({
   }
 
   return (
-    <div className="editor-layout editor-console">
-      <aside className="rc-console">
-        {brand}
+    <div className="editor-layout editor-layout-bar editor-console">
+      {toolbar}
 
-        <section className="rc-cluster rc-cluster-tabs">{tabs}</section>
-
-        {tabPanel}
-      </aside>
-
+      {/* Nothing between the strip and the page. The whole point of the strip is
+          that the desk below it belongs to the picture. */}
       {grid}
     </div>
   );
