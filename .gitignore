@@ -34,3 +34,5 @@ archive-corpus-sic/
 archive-samples/
 .env*
 .kiro
+# Agent worktrees: throwaway checkouts of this same repo.
+.claude/worktrees/
