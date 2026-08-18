@@ -10,7 +10,6 @@ import {
   describeTextStyle,
   isRecordableTextStyle,
   recordTextStyle,
-  stepTextStyle,
   textStyleKey,
   type TextStyle,
   type TextStyleHistoryState,

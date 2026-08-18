@@ -70,12 +70,3 @@ export function recordTextStyle(
 ): TextStyleHistoryState {
   return recordRecent(state, style, textStylesEqual, TEXT_STYLE_HISTORY_MAX);
 }
-
-/** Move the cursor by `delta` (negative = towards more recent). */
-export function stepTextStyle(
-  history: readonly TextStyle[],
-  index: number,
-  delta: number,
-): number {
-  return stepRecent(history, index, delta);
-}
