@@ -15,6 +15,18 @@ vi.mock('../../collab/useChat', () => ({
   useChat: () => useChatMock(),
 }));
 
+// The console now carries the presence roster in its head, and presence is
+// room-scoped — without this the component asks for a Room_ID that a bare render
+// has no way to provide.
+vi.mock('../../collab/usePresence', () => ({
+  usePresence: () => ({
+    members: [],
+    me: { memberId: 'me-1', name: 'Guest-0001', color: '#ffffff' },
+    count: 0,
+    setDisplayName: vi.fn(() => 'ok' as const),
+  }),
+}));
+
 describe('ChatSidebar', () => {
   it('shows the empty-chat indication when there are no messages (Req 5.2)', () => {
     useChatMock.mockReturnValue({

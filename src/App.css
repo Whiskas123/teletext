@@ -220,14 +220,6 @@
   gap: 1rem;
 }
 
-/* Chat sidebar (room chat stream + composer) */
-.chat-sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  min-height: 0;
-}
-
 .chat-empty {
   margin: 0;
   font-size: 0.8rem;
@@ -372,7 +364,6 @@
 }
 
 
-
 .tv-guide-entry-btn:focus-visible {
   outline: 2px solid #ffff00;
   outline-offset: -2px;
@@ -396,154 +387,11 @@
   font-style: italic;
 }
 
-/* Vote panel (remote control + live voting) */
-.vote-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-
-.vote-remote {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.vote-remote-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: stretch;
-}
-
-.vote-target-input {
-  /* Full width on its own line so the typed page number is always visible;
-     the Request button wraps to the line below. */
-  flex: 1 1 100%;
-  width: 100%;
-  min-width: 0;
-  padding: 0.6rem 0.7rem;
-  font-size: 1rem;
-  font-family: 'Courier New', Courier, monospace;
-  background: #000;
-  color: #fff;
-  border: 1px solid #404040;
-  border-radius: 6px;
-  box-sizing: border-box;
-}
-
-.vote-target-input::placeholder {
-  color: #666;
-}
-
-/* Beat the shared .sidebar-action-btn width:100% so the button sits sensibly. */
-.vote-remote-row .vote-submit-btn {
-  flex: 1 1 auto;
-  width: auto;
-}
-
-.vote-target-input:focus {
-  outline: 2px solid #ffff00;
-  outline-offset: -2px;
-}
-
-.vote-target-input[aria-invalid='true'] {
-  border-color: #c44;
-}
-
-.vote-target-input:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.vote-submit-btn {
-  width: auto;
-  flex: 0 0 auto;
-}
-
-.vote-submit-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .vote-error {
   margin: 0;
   font-size: 0.75rem;
   color: #f88;
   line-height: 1.4;
-}
-
-.vote-active {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid #2a2a2a;
-}
-
-.vote-active-target {
-  margin: 0;
-  font-size: 0.85rem;
-  color: #ddd;
-}
-
-.vote-active-page {
-  font-family: monospace;
-  color: #ffff00;
-  font-weight: 600;
-}
-
-.vote-tally {
-  display: flex;
-  gap: 0.75rem;
-  margin: 0;
-  flex-wrap: wrap;
-}
-
-.vote-tally-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-}
-
-.vote-tally-item dt {
-  font-size: 0.7rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #888;
-}
-
-.vote-tally-item dd {
-  margin: 0;
-  font-family: monospace;
-  font-size: 0.95rem;
-  color: #eee;
-}
-
-.vote-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.vote-accept-btn {
-  outline: 2px solid #2a7a2a;
-  outline-offset: 0;
-}
-
-.vote-accept-btn:hover {
-  border-color: #4c4;
-  outline-color: #4c4;
-}
-
-.vote-reject-btn {
-  outline: 2px solid #7a2a2a;
-  outline-offset: 0;
-}
-
-.vote-reject-btn:hover {
-  border-color: #c44;
-  outline-color: #c44;
 }
 
 .vote-message {
@@ -1238,7 +1086,6 @@
 }
 
 
-
 .sidebar-input {
   background: #000;
   color: #fff;
@@ -1930,117 +1777,6 @@
   transform: translateY(2.5px);
 }
 
-/* Bar of realistic objects under the screen (remote control, yellow pages) */
-.object-bar {
-  display: flex;
-  justify-content: center;
-  align-items: flex-end;
-  gap: 3rem;
-  position: relative;
-  flex-wrap: wrap;
-  /* Above the page, below the open directory and the search (z-index 400). A
-     click aimed at the yellow book while the directory is open lands on the
-     backdrop, which closes it — so the icon still closes what it opened, without
-     the objects being drawn over the directory itself. */
-  z-index: 300;
-}
-
-.object-slot {
-  position: relative;
-  display: flex;
-  justify-content: center;
-}
-
-.object-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.25rem;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  position: relative;
-}
-
-.object-img {
-  width: auto;
-  height: 110px;
-  object-fit: contain;
-  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.55));
-  transition: transform 0.12s ease, filter 0.12s ease;
-}
-
-.object-item:hover .object-img,
-.object-item:focus-visible .object-img {
-  transform: translateY(-5px) scale(1.04);
-  filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.6));
-}
-
-.object-item-active .object-img {
-  transform: translateY(-5px) scale(1.04);
-}
-
-.object-caption {
-  font-family: monospace;
-  font-size: 0.72rem;
-  letter-spacing: 0.02em;
-  color: #bbb;
-  text-transform: uppercase;
-}
-
-.object-badge {
-  position: absolute;
-  top: -6px;
-  right: 6px;
-  min-width: 1.15rem;
-  height: 1.15rem;
-  padding: 0 0.3rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #d33;
-  color: #fff;
-  font-family: monospace;
-  font-size: 0.8rem;
-  font-weight: 700;
-  border-radius: 999px;
-  box-shadow: 0 0 0 2px #111;
-  animation: object-badge-pulse 1.2s ease-in-out infinite;
-}
-
-@keyframes object-badge-pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.18); }
-}
-
-/* Remote control popover: anchored above the remote object */
-.remote-popover {
-  position: absolute;
-  bottom: calc(100% + 12px);
-  left: 50%;
-  transform: translateX(-50%);
-  width: 17rem;
-  max-width: 80vw;
-  padding: 0.85rem 1rem 1rem;
-  background: #1c1c1c;
-  border: 1px solid #444;
-  border-radius: 10px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
-  z-index: 30;
-}
-
-/* Little pointer at the bottom of the popover */
-.remote-popover::after {
-  content: '';
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  border: 8px solid transparent;
-  border-top-color: #1c1c1c;
-}
-
 /* --- The props, standing beside the set ---------------------------------- */
 /*
  * On anything wider than a phone the remote, the directory and the magnifier
@@ -2061,49 +1797,6 @@
     align-items: flex-start;
     justify-content: center;
     gap: 1.5rem;
-  }
-
-  .object-bar {
-    order: -1;
-    flex: 0 0 auto;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 1.5rem;
-    flex-wrap: nowrap;
-    /* Lines the first prop up with the top of the cabinet rather than with the
-       artwork's box, which leaves 30 of its 830 units as clearance above. */
-    padding-top: 1.25rem;
-  }
-
-  /* Smaller than they were in a row: a rail is read down the side of the set,
-     not looked at, and three 110px props make a column taller than the TV. */
-  .object-img {
-    height: 88px;
-  }
-
-  /*
-   * The remote's panel opens sideways.
-   *
-   * Above the prop is where it went when the props sat under the set and there
-   * was a whole screen above them. From partway down a left-hand rail it would
-   * open over the top of the television, so it comes out beside it instead,
-   * pointing back at the remote it belongs to.
-   */
-  .remote-popover {
-    bottom: auto;
-    top: 50%;
-    left: calc(100% + 14px);
-    transform: translateY(-50%);
-  }
-
-  .remote-popover::after {
-    top: 50%;
-    left: auto;
-    right: 100%;
-    transform: translateY(-50%);
-    border-top-color: transparent;
-    border-right-color: #1c1c1c;
   }
 }
 
@@ -2214,62 +1907,27 @@
 
   /* Watching solo there are no props between the picture and the handset, so
      the five rems they stood in go back to the tube. */
-  .room-viewer-solo .crt-tv[data-compact] {
+  .room-viewer .crt-tv[data-compact] {
     max-width: 960px;
     max-width: min(960px, max(15rem, calc((100dvh - 19rem) * 1.25)));
   }
-
-  .object-bar {
-    gap: 0.75rem;
-  }
-
-  .object-img {
-    height: 64px;
-  }
-
-  /* Two props rather than three, and a handset under them wanting the room. */
-  .room-viewer-phone .object-img {
-    height: 56px;
-  }
-
-  .object-caption {
-    font-size: 0.6rem;
-  }
-
-  /*
-   * The remote's panel, centred on the viewport rather than on the prop.
-   *
-   * Anchored to its slot it hung off whichever edge the remote happened to be
-   * near, and `max-width: 80vw` only narrowed it rather than moving it. Fixed and
-   * centred, it is reachable with a thumb and cannot overflow.
-   */
-  .remote-popover {
-    position: fixed;
-    top: auto;
-    bottom: 1rem;
-    left: 50%;
-    transform: translateX(-50%);
-    width: min(21rem, calc(100vw - 1.5rem));
-    max-width: none;
-  }
-
-  .remote-popover::after {
-    display: none;
-  }
 }
 
-/* --- Watching solo: the set centred, the directory folded beside it ------- */
+/* --- The set centred, the directory folded beside it ---------------------- */
 /*
- * A room needs its props on the table — a remote to ask for a page with, the
- * book, the magnifier — because asking is the whole activity. Alone there is
- * nobody to ask: the television's own front panel dials, steps and turns the
- * carousel, so the bar of objects under it was three icons repeating controls
- * that were already moulded into the cabinet, and they cost the picture the one
- * dimension a 4:3 set actually needs.
+ * Both watching screens are laid out this way now.
  *
- * So on `/watch` the set is the screen — centred in both directions and grown
- * into the room the props gave back — and the one thing that had no equivalent
- * on the cabinet, the directory, folds against the left edge as a leaflet.
+ * There used to be a bar of objects under the room's television — a remote to
+ * ask for a page with, the book, the magnifier — on the reasoning that asking is
+ * the whole activity in a room. Alone there was nobody to ask, so `/watch` did
+ * without them and gave the picture the width back.
+ *
+ * The objects have since gone from the room as well: the remote was three icons
+ * repeating controls already moulded into the cabinet, and the front panel does
+ * the asking now (a proposal rather than a page change — see `RoomViewer`). So
+ * both screens are the same arrangement: the set centred, the directory folded
+ * against the left edge as a leaflet, and in a room a rail of consoles down the
+ * right where the objects used to lie on the table.
  */
 :root {
   --yp-drawer-width: min(23rem, 88vw);
@@ -2277,13 +1935,24 @@
 
 @media (min-width: 721px) {
   /* The column fills the window, so there is a surplus to centre the set in. */
-  .room-layout:has(.room-viewer-solo) {
+  .room-layout:has(.room-viewer) {
     min-height: 100dvh;
   }
 
+  /*
+   * Centred bodily when the set is the only thing in the body, stretched when it
+   * is not: a room's rail is a full-height column beside the picture, and
+   * centring it would leave the chat floating in the middle of the window with
+   * air above and below it.
+   */
   .room-layout:has(.room-viewer-solo) .room-layout-body {
     flex: 1 1 auto;
     align-items: center;
+  }
+
+  .room-layout:has(.room-viewer):not(:has(.room-viewer-solo)) .room-layout-body {
+    flex: 1 1 auto;
+    align-items: stretch;
   }
 
   /*
@@ -2296,7 +1965,7 @@
    * reading about walks away while you reach for it. The leaflet is a sheet held
    * up against the corner of the screen instead, and the set stays where it was.
    */
-  .room-viewer-solo {
+  .room-viewer {
     align-items: center;
     justify-content: center;
     gap: 0;
@@ -2312,6 +1981,17 @@
   .room-viewer-solo .crt-tv {
     max-width: 1180px;
     max-width: min(1180px, calc((100dvh - 7.5rem) * 1.2));
+  }
+
+  /*
+   * The same arithmetic in a room, against a smaller ceiling: the rail beside the
+   * picture takes its own width, and a set allowed to grow to 1180px would push
+   * the vote console off the side of a 1280px monitor. The height budget is
+   * unchanged — the chrome above the set is the same on both screens.
+   */
+  .room-viewer:not(.room-viewer-solo) .crt-tv {
+    max-width: 880px;
+    max-width: min(880px, calc((100dvh - 7.5rem) * 1.2));
   }
 }
 
@@ -3004,7 +2684,7 @@ button.yellow-pages-number:hover {
 @media (prefers-reduced-motion: reduce) {
   .yp-drawer,
   .yp-drawer-knob,
-  .room-viewer-solo {
+  .room-viewer {
     transition: none;
   }
 }
@@ -3023,7 +2703,7 @@ button.yellow-pages-number:hover {
  * one thing under it, and nobody dials a number and looks it up at once.
  */
 @media (max-width: 720px) {
-  .room-viewer-solo.room-viewer-phone .yp-drawer {
+  .room-viewer-phone .yp-drawer {
     /* Back into the flow, between the set and the handset. Positioned, so the
        press target below can be laid over the sheet's showing edge. */
     position: relative;
@@ -3064,11 +2744,11 @@ button.yellow-pages-number:hover {
 
   /* Under the handset rather than up against it: enough of a negative margin to
      swallow the column's gap and let the artwork lie over the sheet's edge. */
-  .room-viewer-solo.room-viewer-phone .yp-drawer:not(.yp-drawer-open) {
+  .room-viewer-phone .yp-drawer:not(.yp-drawer-open) {
     margin-bottom: -1.35rem;
   }
 
-  .room-viewer-solo.room-viewer-phone .yp-drawer-open {
+  .room-viewer-phone .yp-drawer-open {
     flex-grow: 1;
     /* Standing where the handset stood, it inherits the handset's clearance of
        the home indicator. */
@@ -3076,7 +2756,7 @@ button.yellow-pages-number:hover {
   }
 
   /* The handset keeps the floor; the leaflet is what the surplus now goes to. */
-  .room-viewer-solo.room-viewer-phone .crt-remote {
+  .room-viewer-phone .crt-remote {
     order: 2;
     margin-top: 0;
     /*
@@ -3099,7 +2779,7 @@ button.yellow-pages-number:hover {
    * spare — a directory you could not read — while the keypad sat unused
    * underneath it.
    */
-  .room-viewer-solo.room-viewer-phone.room-viewer-drawer-open .crt-remote {
+  .room-viewer-phone.room-viewer-drawer-open .crt-remote {
     max-height: 0;
     padding-bottom: 0;
     opacity: 0;
@@ -3111,7 +2791,7 @@ button.yellow-pages-number:hover {
       opacity 160ms ease, visibility 0s 280ms;
   }
 
-  .room-viewer-solo.room-viewer-phone .yp-drawer-leaflet {
+  .room-viewer-phone .yp-drawer-leaflet {
     flex: 1 1 0;
     /*
      * The showing edge, and the least the sheet is ever drawn at. Stated once
@@ -3131,11 +2811,11 @@ button.yellow-pages-number:hover {
    * than removed: the folded sheet is `inert`, so there is nothing to click on
    * either way, and opacity is something the opening can carry.
    */
-  .room-viewer-solo.room-viewer-phone .yp-drawer-tools {
+  .room-viewer-phone .yp-drawer-tools {
     transition: opacity 220ms ease 60ms;
   }
 
-  .room-viewer-solo.room-viewer-phone
+  .room-viewer-phone
     .yp-drawer:not(.yp-drawer-open)
     .yp-drawer-tools {
     opacity: 0;
@@ -3148,7 +2828,7 @@ button.yellow-pages-number:hover {
    * on top of it. It keeps being a real <button> underneath, which is what says
    * "open Yellow Pages" to anything not looking at the screen.
    */
-  .room-viewer-solo.room-viewer-phone .yp-drawer-knob {
+  .room-viewer-phone .yp-drawer-knob {
     position: absolute;
     inset: 0;
     margin: 0;
@@ -3160,8 +2840,8 @@ button.yellow-pages-number:hover {
     transform: none;
   }
 
-  .room-viewer-solo.room-viewer-phone .yp-drawer-knob-label,
-  .room-viewer-solo.room-viewer-phone .yp-drawer-knob-caret {
+  .room-viewer-phone .yp-drawer-knob-label,
+  .room-viewer-phone .yp-drawer-knob-caret {
     display: none;
   }
 
@@ -3170,7 +2850,7 @@ button.yellow-pages-number:hover {
    * every tap meant for a listing, and the × in the masthead is how a book that
    * is open gets closed.
    */
-  .room-viewer-solo.room-viewer-phone .yp-drawer-open .yp-drawer-knob {
+  .room-viewer-phone .yp-drawer-open .yp-drawer-knob {
     display: none;
   }
 
@@ -3179,10 +2859,10 @@ button.yellow-pages-number:hover {
    * at this weight because the rules it undoes are four classes deep, and a
    * shadow on a transparent button still paints.
    */
-  .room-viewer-solo.room-viewer-phone
+  .room-viewer-phone
     .yp-drawer:not(.yp-drawer-open)
     .yp-drawer-knob:hover,
-  .room-viewer-solo.room-viewer-phone
+  .room-viewer-phone
     .yp-drawer:not(.yp-drawer-open)
     .yp-drawer-knob:focus-visible {
     transform: none;
@@ -3191,7 +2871,7 @@ button.yellow-pages-number:hover {
   }
 
   /* Invisible, so a keyboard needs to be told where it is. */
-  .room-viewer-solo.room-viewer-phone .yp-drawer-knob:focus-visible {
+  .room-viewer-phone .yp-drawer-knob:focus-visible {
     outline: 3px solid #141007;
     outline-offset: -3px;
   }
@@ -3202,10 +2882,10 @@ button.yellow-pages-number:hover {
  * `.yp-drawer` on its own no longer outranks them.
  */
 @media (max-width: 720px) and (prefers-reduced-motion: reduce) {
-  .room-viewer-solo.room-viewer-phone .yp-drawer,
-  .room-viewer-solo.room-viewer-phone .crt-remote,
-  .room-viewer-solo.room-viewer-phone.room-viewer-drawer-open .crt-remote,
-  .room-viewer-solo.room-viewer-phone .yp-drawer-tools {
+  .room-viewer-phone .yp-drawer,
+  .room-viewer-phone .crt-remote,
+  .room-viewer-phone.room-viewer-drawer-open .crt-remote,
+  .room-viewer-phone .yp-drawer-tools {
     transition: none;
   }
 }
@@ -4276,4 +3956,552 @@ button.yellow-pages-number:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+/* =====================================================================
+ * The rail: the room's two consoles, beside the television.
+ *
+ * A room is a television and the two things you can only do with other people
+ * around it — agree on what to watch, and talk about it. Those used to be a
+ * numeric field with a Request button and a definition list of counts, plus a
+ * chat that looked like a comment form: a web page parked next to a photograph
+ * of a television, which is the one thing this screen must not look like.
+ *
+ * So they are instruments now, out of the same factory as the set: the vote
+ * reads its numbers on the television's own LED glass with a third readout added
+ * (see `SegmentVisor.tsx`), and both consoles are moulded out of the plastic the
+ * editor's panel is made of. The materials are restated here rather than
+ * imported because `console.css` is scoped to `.editor-console` and has no
+ * business reaching into a room — what crosses over is the recipe, not the
+ * selector. Keep the two in step by hand; they are eleven custom properties.
+ *
+ * The conversation itself is deliberately *not* engraved. A chat lettered in a
+ * condensed panel face would be unreadable and slightly absurd, so the log is
+ * plain text on a dark ground inside a moulded box, and only the box is an
+ * instrument.
+ * ===================================================================== */
+
+.room-console {
+  /* --- the mouldings, off the cabinet's own gradients --------------------- */
+  --rc-cab: linear-gradient(
+    180deg,
+    #3a3937 0%,
+    #2f2e2c 12%,
+    #242321 85%,
+    #1a1918 100%
+  );
+  --rc-key: linear-gradient(
+    180deg,
+    #4a4947 0%,
+    #3b3a38 8%,
+    #2a2927 90%,
+    #1e1d1c 100%
+  );
+  --rc-alu: linear-gradient(
+    180deg,
+    #e6e8ea 0%,
+    #b9bdc0 30%,
+    #d9dcde 55%,
+    #8f9396 80%,
+    #5f6366 100%
+  );
+
+  /* --- what is printed on them ------------------------------------------- */
+  --rc-legend-ink: #dcdcda;
+  --rc-cap-ink: #a8a8a4;
+  --rc-lit: #7ee08c;
+  --rc-red: #b7302a;
+  --rc-panel-font: Michroma, 'Chakra Petch', Eurostile, Microgramma,
+    'Arial Narrow', sans-serif;
+
+  /* --- and the light falling on them -------------------------------------- */
+  --rc-cast: 1px 2px 2px rgb(0 0 0 / 75%);
+  --rc-mould-hi: rgb(154 154 148 / 55%);
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-height: 0;
+  padding: 0.55rem 0.75rem 0.8rem;
+  border: 1px solid #0a0a0a;
+  border-radius: 7px;
+  background-image: var(--rc-mould), var(--rc-grain), var(--rc-cab);
+  background-blend-mode: overlay, soft-light, normal;
+  background-size: 320px 320px, 160px 160px, auto;
+  background-color: #232220;
+  box-shadow:
+    inset 0 1px 0 rgb(125 124 120 / 55%),
+    inset 0 -2px 6px rgb(0 0 0 / 40%),
+    0 6px 18px rgb(0 0 0 / 50%);
+}
+
+/* The two noises the cabinet composites, as tiles. Declared on the room's own
+   consoles because `--rc-mould` and `--rc-grain` live in `console.css` under a
+   selector that does not reach here. */
+.room-console {
+  --rc-mould: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='320'%3E%3Cfilter id='rm'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.012' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='320' height='320' filter='url(%23rm)' opacity='.5'/%3E%3C/svg%3E");
+  --rc-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='rg'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23rg)' opacity='.55'/%3E%3C/svg%3E");
+}
+
+/* ── the nameplate ────────────────────────────────────────────────────────── */
+
+.room-console .rc-nameplate {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-bottom: 0.15rem;
+}
+
+.room-console .rc-nameplate-name {
+  flex: 1;
+  margin: 0;
+  font-family: var(--rc-panel-font);
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--rc-cap-ink);
+  /* Silk-screened onto the plastic rather than printed on top of it. */
+  text-shadow: 0 1px 0 rgb(0 0 0 / 80%);
+}
+
+/*
+ * The lamp, reading the console's state at a glance: dark while nothing is
+ * happening, amber while the room is deciding, green when it carried, red when
+ * it did not or when the set was refused.
+ */
+.room-console .rc-lamp {
+  flex: 0 0 auto;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 45%, #4a4a46, #2a2a27 60%, #171716);
+  box-shadow: 0 0 0 1.5px rgb(0 0 0 / 70%);
+}
+
+.room-console .rc-lamp[data-state='live'] {
+  background: radial-gradient(circle at 50% 45%, #ffe08a, #f0a81e 45%, #6b4405);
+  box-shadow: 0 0 0 1.5px rgb(0 0 0 / 70%), 0 0 7px rgb(240 168 30 / 60%);
+}
+
+.room-console .rc-lamp[data-state='carried'] {
+  background: radial-gradient(circle at 50% 45%, #b6ff9c, #3ddc4c 45%, #0d5a1c);
+  box-shadow: 0 0 0 1.5px rgb(0 0 0 / 70%), 0 0 7px rgb(61 220 76 / 55%);
+}
+
+.room-console .rc-lamp[data-state='lost'],
+.room-console .rc-lamp[data-state='refused'] {
+  background: radial-gradient(circle at 50% 45%, #ff9b8a, #d8321f 45%, #4a0d06);
+  box-shadow: 0 0 0 1.5px rgb(0 0 0 / 70%), 0 0 7px rgb(216 50 31 / 55%);
+}
+
+/* ── the lettering, the keys and the fields ───────────────────────────────── */
+
+.room-console .rc-legend {
+  margin: 0;
+  font-family: var(--rc-panel-font);
+  font-size: 0.52rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--rc-cap-ink);
+  text-shadow: 0 1px 0 rgb(0 0 0 / 75%);
+}
+
+/* What the console has to say in words: a refusal, a reason, a rejected vote.
+   Not engraved — it is a sentence, and sentences are not silk-screened. */
+.room-console .rc-note {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: #d8b9b3;
+}
+
+.room-console .rc-key {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 2.1rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid #0a0a0a;
+  border-radius: 6px;
+  background: var(--rc-key);
+  box-shadow: var(--rc-cast), inset 0 1px 0 var(--rc-mould-hi);
+  color: var(--rc-legend-ink);
+  font-family: var(--rc-panel-font);
+  font-size: 0.58rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: transform 0.05s ease, filter 0.12s ease, box-shadow 0.12s ease;
+}
+
+.room-console .rc-key:hover:not(:disabled) {
+  filter: brightness(1.15);
+}
+
+.room-console .rc-key:active:not(:disabled) {
+  transform: translateY(1.5px);
+  box-shadow: inset 0 1px 0 var(--rc-mould-hi);
+}
+
+/* The panel's own focus treatment: the key lights up rather than gaining a box
+   around it, because a box around a moulded cap is not a thing a set can do. */
+.room-console .rc-key:focus-visible {
+  outline: none;
+  box-shadow:
+    var(--rc-cast),
+    inset 0 1px 0 var(--rc-mould-hi),
+    0 0 0 2px #6cf,
+    0 0 9px rgb(102 204 255 / 65%);
+}
+
+/* Dead rather than gone: a control that disappears between votes reads as a
+   fault on a panel, where a dead one reads as "not now", which is the truth. */
+.room-console .rc-key:disabled {
+  cursor: default;
+  opacity: 0.42;
+  box-shadow: inset 0 1px 0 rgb(154 154 148 / 25%);
+}
+
+.room-console .rc-field {
+  min-width: 0;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid #0a0a0a;
+  border-radius: 4px;
+  background: #14140f;
+  box-shadow: inset 0 2px 5px rgb(0 0 0 / 85%);
+  color: var(--rc-legend-ink);
+  font-family: inherit;
+  font-size: 0.85rem;
+}
+
+.room-console .rc-field::placeholder {
+  color: #5f5f5a;
+}
+
+.room-console .rc-field:focus {
+  outline: none;
+  box-shadow: inset 0 2px 5px rgb(0 0 0 / 85%), 0 0 0 2px #6cf;
+}
+
+.room-console .rc-field:disabled {
+  opacity: 0.5;
+}
+
+.room-console .rc-field[aria-invalid='true'] {
+  box-shadow: inset 0 2px 5px rgb(0 0 0 / 85%), 0 0 0 1px var(--rc-red);
+}
+
+/* ── the vote console ─────────────────────────────────────────────────────── */
+
+.vote-visor {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* The lit segment and its bloom, as on the set. The filter is reached by id from
+   the plate's own `<defs>`, so the visor carries its own copy. */
+.vote-visor .seg.on {
+  fill: #ff4a3a;
+  filter: url(#led-bloom);
+}
+
+.vote-visor .seg.off {
+  fill: #2c0c0a;
+  opacity: 0.7;
+}
+
+.vote-visor .cap {
+  font-family: var(--rc-panel-font);
+  font-size: 10px;
+  fill: var(--rc-cap-ink);
+  letter-spacing: 1.4px;
+  text-anchor: middle;
+}
+
+/* The line under the glass, which is the only part of the console that changes
+   what it says. Coloured by outcome, engraved either way. */
+.vote-legend {
+  text-align: center;
+  min-height: 0.85rem;
+}
+
+.vote-legend[data-state='carried'] {
+  color: var(--rc-lit);
+}
+
+.vote-legend[data-state='lost'],
+.vote-legend[data-state='refused'] {
+  color: #e9928a;
+}
+
+.vote-keys {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.vote-keys .rc-key {
+  flex: 1 1 0;
+}
+
+/*
+ * The two answers, in the only two colours this television has: the fastext
+ * strip's green and red. Same fill, same gloss, same hairline as every other cap
+ * — a coloured key here is a differently moulded key, not a differently designed
+ * one.
+ */
+.vote-key-accept {
+  background:
+    linear-gradient(
+      180deg,
+      rgb(255 255 255 / 20%) 0%,
+      rgb(255 255 255 / 0%) 25%,
+      rgb(0 0 0 / 30%) 100%
+    ),
+    #1f7a34;
+  color: #e8ffe9;
+}
+
+.vote-key-reject {
+  background:
+    linear-gradient(
+      180deg,
+      rgb(255 255 255 / 22%) 0%,
+      rgb(255 255 255 / 0%) 25%,
+      rgb(0 0 0 / 30%) 100%
+    ),
+    var(--rc-red);
+  color: #ffe9e6;
+}
+
+.vote-dial {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.1rem;
+  padding-top: 0.55rem;
+  /* The groove where the panel changes subject: answering above, asking below. */
+  border-top: 1px solid rgb(0 0 0 / 55%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 6%);
+}
+
+.vote-dial-row {
+  display: flex;
+  gap: 0.4rem;
+}
+
+/* Three digits and no more, so the field is the width of what it holds. */
+.vote-dial-field {
+  flex: 0 0 4.5rem;
+  text-align: center;
+  font-family: var(--rc-panel-font);
+  letter-spacing: 0.18em;
+}
+
+.vote-dial-row .rc-key {
+  flex: 1 1 auto;
+}
+
+/* ── the chat console ─────────────────────────────────────────────────────── */
+
+.chat-console {
+  /* The one console that grows: the rail's spare height belongs to the
+     conversation, since the vote is a fixed instrument. */
+  flex: 1 1 auto;
+}
+
+.room-console .chat-messages {
+  flex: 1 1 auto;
+  min-height: 6rem;
+  margin: 0;
+  padding: 0.5rem 0.55rem;
+  border-radius: 4px;
+  background: rgb(0 0 0 / 34%);
+  box-shadow: inset 0 1px 4px rgb(0 0 0 / 60%);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+
+.room-console .chat-empty {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 1rem 0.5rem;
+  border-radius: 4px;
+  background: rgb(0 0 0 / 34%);
+  box-shadow: inset 0 1px 4px rgb(0 0 0 / 60%);
+  color: #6f6f69;
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.room-console .chat-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.room-console .chat-input {
+  flex: 1 1 6rem;
+}
+
+.room-console .chat-send {
+  flex: 0 0 auto;
+}
+
+.room-console .chat-error {
+  flex: 1 1 100%;
+}
+
+/* ── the roster, folded into the chat's head ──────────────────────────────── */
+
+.room-console .presence-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.presence-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.room-console .presence-heading {
+  flex: 1;
+}
+
+.room-console .presence-count {
+  color: var(--rc-legend-ink);
+}
+
+/*
+ * The members as a wrapping row of chips rather than a column of rows: it is a
+ * roster, not a list you read down, and the head of a console is a place for a
+ * line of names — as many as fit, wrapping when the room fills.
+ */
+.room-console .presence-members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.room-console .presence-member {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.12rem 0.4rem 0.12rem 0.3rem;
+  border: 1px solid rgb(0 0 0 / 60%);
+  border-radius: 999px;
+  background: rgb(0 0 0 / 30%);
+  font-size: 0.68rem;
+  color: #c9c9c4;
+}
+
+.room-console .presence-member-me {
+  border-color: rgb(154 154 148 / 45%);
+}
+
+.room-console .presence-swatch {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 70%);
+}
+
+.room-console .presence-empty {
+  margin: 0;
+  font-size: 0.72rem;
+  color: #6f6f69;
+}
+
+/* The rename control: a tool at the end of the roster's line, not a form
+   standing open under it. */
+.room-console .presence-rename-toggle {
+  flex: 0 0 auto;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid #0a0a0a;
+  border-radius: 4px;
+  background: var(--rc-key);
+  box-shadow: var(--rc-cast), inset 0 1px 0 var(--rc-mould-hi);
+  color: var(--rc-cap-ink);
+  font-family: var(--rc-panel-font);
+  font-size: 0.48rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.room-console .presence-rename-toggle:hover {
+  filter: brightness(1.2);
+}
+
+.room-console .presence-rename {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.room-console .presence-name-input {
+  flex: 1 1 6rem;
+  min-width: 0;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid #0a0a0a;
+  border-radius: 4px;
+  background: #14140f;
+  box-shadow: inset 0 2px 5px rgb(0 0 0 / 85%);
+  color: var(--rc-legend-ink);
+  font-size: 0.8rem;
+}
+
+.room-console .presence-name-error {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 0.7rem;
+  color: #e9928a;
+}
+
+/* ── the rail itself ──────────────────────────────────────────────────────── */
+
+@media (min-width: 721px) {
+  /*
+   * A column beside the picture, scrolling inside itself rather than growing the
+   * page: the television is pinned in the middle of the window and a rail that
+   * pushed the document taller would take it off the top.
+   */
+  .room-layout-sidebar {
+    flex: 0 0 21rem;
+    min-height: 0;
+    align-self: stretch;
+    gap: 0.6rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+/*
+ * On a phone the rail stops being a rail: the set and its handset take the
+ * window, and the consoles go under them in the order they are wanted — what the
+ * room is deciding first, what it is saying second.
+ */
+@media (max-width: 720px) {
+  .room-layout-sidebar {
+    flex: 1 1 100%;
+    gap: 0.6rem;
+  }
+
+  .room-console .chat-messages {
+    max-height: 12rem;
+  }
 }

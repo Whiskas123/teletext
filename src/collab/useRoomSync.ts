@@ -115,6 +115,16 @@ export interface RoomSyncApi {
    * Non_Empty_Page exists (Req 3.7, 3.8).
    */
   gotoPrevNonEmpty(): NavigationResult;
+  /**
+   * The page {@link gotoNextNonEmpty} would move to, without moving to it, or
+   * `null` when there is no other Non_Empty_Page.
+   *
+   * For a caller that has to *propose* the step rather than take it — the room's
+   * front panel, where the page is the vote's to decide.
+   */
+  peekNextNonEmpty(): number | null;
+  /** The page {@link gotoPrevNonEmpty} would move to. See {@link peekNextNonEmpty}. */
+  peekPrevNonEmpty(): number | null;
   /** Step the whole room through the page's carousel, wrapping at both ends. */
   stepSubpageBy(delta: number): void;
 }
@@ -204,6 +214,27 @@ export function useRoomSync(): RoomSyncApi {
     return 'ok';
   }, [displayedPageNumber, pages, setDisplayedPageDirect]);
 
+  /*
+   * Where the step keys *would* go, without going there.
+   *
+   * The two above are for a viewer allowed to change the page. In a room nobody
+   * is: pressing ▶ proposes the next page to everyone else and the room decides.
+   * That needs the number the step would land on before anything moves, which
+   * `gotoNextNonEmpty` cannot give — by the time it returns, it has already gone.
+   *
+   * Same skipping rules, same wrap, so the two keys offer the room exactly the
+   * page they would have jumped to on a set nobody had to agree with.
+   */
+  const peekNextNonEmpty = useCallback(
+    () => nextNonEmptyPage(displayedPageNumber, pages ?? {}),
+    [displayedPageNumber, pages],
+  );
+
+  const peekPrevNonEmpty = useCallback(
+    () => prevNonEmptyPage(displayedPageNumber, pages ?? {}),
+    [displayedPageNumber, pages],
+  );
+
   return {
     displayedPageNumber,
     displayedSubpage,
@@ -213,6 +244,8 @@ export function useRoomSync(): RoomSyncApi {
     setDisplayedPageDirect,
     gotoNextNonEmpty,
     gotoPrevNonEmpty,
+    peekNextNonEmpty,
+    peekPrevNonEmpty,
     stepSubpageBy,
   };
 }

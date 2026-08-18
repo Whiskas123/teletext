@@ -1,24 +1,30 @@
 /**
- * ChatSidebar — the room's live chat sidebar (Requirement 5).
+ * ChatSidebar — the room's chat, as the second console in the rail (Req 5).
  *
- * Design notes (see design.md "Presentation components" and Req 5):
- * - Reads the room's chat messages and a validating `send` from
- *   {@link useChat} (playhtml-backed shared state). Messages arrive already
- *   ordered chronologically ascending by timestamp, so they render oldest to
- *   newest (Req 5.1).
- * - Each message shows its author's display name drawn in the author's Identity
- *   color, a readable timestamp, and the message text (Req 5.1).
- * - When the room has no messages, an empty-chat indication is shown instead of
- *   an empty area (Req 5.2).
- * - A text input plus send button submit through `send`; a rejection of
- *   `'empty'` or `'too-long'` surfaces an inline error and leaves the input
- *   intact, while an `'ok'` result clears the input (Req 5.4, 5.5, 5.6). The
- *   input advertises the 500-character limit via `maxLength`.
- * - The message list is a `role="log"` region with `aria-live="polite"` so
- *   assistive technology announces newly arriving messages (Req 5.4).
+ * It stands under the vote console and is built out of the same parts: a
+ * nameplate across the top, the panel's plastic behind it, moulded keys. What is
+ * different is that a conversation is the one thing on this screen that is not an
+ * instrument reading, so the log itself is left alone — plain text on a dark
+ * ground, the author's name in the colour their Identity was assigned, and no
+ * attempt to letter it in the panel's condensed face. A chat engraved on a
+ * control panel would be unreadable and slightly absurd.
  *
- * Auto-scrolling the list to the newest message is a nice-to-have and is
- * implemented as a best-effort effect.
+ * The presence roster is folded into its head rather than standing as a third
+ * panel above it (see {@link PresenceList}): the names in the log are the same
+ * names, and a standing column of them pushed the conversation off the bottom of
+ * the rail for no gain.
+ *
+ * Behaviour, all through {@link useChat}:
+ * - Messages arrive ordered oldest to newest and render that way (Req 5.1), each
+ *   with its author's display name in their Identity colour and a readable time.
+ * - An empty room says so rather than showing an empty box (Req 5.2).
+ * - `send` validates: `'empty'` and `'too-long'` surface inline and keep the
+ *   draft, `'ok'` clears it (Req 5.4, 5.5, 5.6). The field advertises the
+ *   500-character limit through `maxLength`.
+ * - The log is a `role="log"` with `aria-live="polite"`, so a new message is
+ *   announced rather than silently appearing (Req 5.4).
+ *
+ * Scrolling to the newest message is best-effort, in an effect.
  *
  * _Requirements: 5.1, 5.2, 5.4, 5.5, 5.6_
  */
@@ -27,6 +33,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 
 import { useChat } from '../../collab/useChat';
 import type { ChatMessage } from '../../collab/types';
+import PresenceList from './PresenceList';
 
 /** Empty-chat indication shown when the room has no messages (Req 5.2). */
 export const EMPTY_CHAT_LABEL = 'No messages yet. Say hello!';
@@ -39,6 +46,9 @@ export const TOO_LONG_MESSAGE_ERROR = 'Message exceeds 500 characters';
 
 /** Maximum trimmed message length enforced by the chat service (Req 5.6). */
 export const MAX_MESSAGE_LENGTH = 500;
+
+/** The console's nameplate. */
+export const CHAT_HEADING = 'Chat';
 
 /** Format a chat message timestamp into a readable, locale-aware time (Req 5.1). */
 function formatTimestamp(ts: number): string {
@@ -67,8 +77,8 @@ function ChatMessageItem({ message }: { message: ChatMessage }) {
 }
 
 /**
- * Render the room chat sidebar: the ordered message log plus a validating
- * input/send control.
+ * Render the room chat console: the roster in its head, the ordered message log,
+ * and a validating composer.
  */
 export function ChatSidebar() {
   const { messages, send } = useChat();
@@ -104,8 +114,13 @@ export function ChatSidebar() {
   };
 
   return (
-    <section className="chat-sidebar" aria-label="Room chat">
-      <h2 className="sidebar-heading">Chat</h2>
+    <section className="room-console chat-console" aria-label="Room chat">
+      <div className="rc-nameplate">
+        <h2 className="rc-nameplate-name">{CHAT_HEADING}</h2>
+      </div>
+
+      {/* The room is the one place a member sets their display name. */}
+      <PresenceList allowRename />
 
       {messages.length === 0 ? (
         <p className="chat-empty">{EMPTY_CHAT_LABEL}</p>
@@ -124,16 +139,20 @@ export function ChatSidebar() {
       )}
 
       <form className="chat-form" onSubmit={handleSubmit}>
-        <label className="sidebar-field-label" htmlFor="chat-message-input">
-          Message
-        </label>
+        {/*
+          * No visible label. The console has a nameplate reading CHAT and one
+          * field under it — a legend saying "Message" over the only thing you can
+          * type into is a form being polite about itself. The accessible name is
+          * still there for anyone who cannot see the arrangement.
+          */}
         <input
           id="chat-message-input"
-          className="chat-input"
+          className="rc-field chat-input"
           type="text"
           value={draft}
           maxLength={MAX_MESSAGE_LENGTH}
-          placeholder="Type a message…"
+          placeholder="Say something…"
+          aria-label="Message"
           aria-invalid={error !== null}
           aria-describedby={error ? 'chat-message-error' : undefined}
           onChange={(event) => {
@@ -143,11 +162,11 @@ export function ChatSidebar() {
             }
           }}
         />
-        <button type="submit" className="sidebar-action-btn">
+        <button type="submit" className="rc-key chat-send">
           Send
         </button>
         {error && (
-          <p id="chat-message-error" className="chat-error" role="alert">
+          <p id="chat-message-error" className="rc-note chat-error" role="alert">
             {error}
           </p>
         )}

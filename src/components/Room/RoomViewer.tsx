@@ -1,50 +1,64 @@
 /**
- * RoomViewer — the in-room, watch-only co-watching screen.
+ * RoomViewer — watching teletext together, at `/room/:roomId`.
  *
- * A room is purely for watching together: it coordinates which page the group is
- * viewing (synchronized) and the room chat. Page changes go through the vote.
+ * The same television as {@link SoloViewer}, and now the same furniture: the set
+ * centred with the directory folded against the left edge as a leaflet, and the
+ * consoles that only make sense with other people in the room standing in a rail
+ * down the right — the vote on top, the chat under it.
  *
- * The centered teletext screen sits above a bar of realistic objects:
- * - the **remote control** opens a popover with the "request a page" / voting
- *   controls (the {@link VotePanel});
- * - the **yellow pages** opens a directory popup ({@link YellowPages}) to look
- *   up and request a page.
+ * ## What replaced the objects
  *
- * When the room's displayed page changes (e.g. an accepted request) the header
- * page number rolls to the target and the content is revealed only once the
- * roll lands.
+ * There used to be a shelf of photographs under the picture: a remote control, a
+ * copy of the yellow pages, a magnifying glass, each opening a popup. It was a
+ * nice idea that made the screen a collage — a rendered television standing on a
+ * table of cut-out photographs, none of them at the same scale or lit from the
+ * same side — and it meant three of the four things you can do in a room were
+ * hidden behind pictures of objects rather than being on the set.
  *
- * RoomViewer provides {@link RoomContext} around its subtree so the room-scoped
- * hooks resolve the active Room_ID without prop-threading.
+ * So the remote's job went back onto the front panel it was always a copy of,
+ * the book became the leaflet `/watch` already had, and the magnifier went with
+ * it: searching is a field at the top of the directory, because "what is on this
+ * service?" and "which page said that?" are the same question asked twice.
+ *
+ * ## Dialling asks, it does not change
+ *
+ * The one real difference from watching alone. A room's page is the vote's to
+ * decide, so the keypad, the PAGE keys and the fastext colours all *propose*:
+ * three digits raise a Change_Request for that page and the room answers it on
+ * the {@link VotePanel}. A proposal can come back refused — a vote is already
+ * running, or the number is not a page — and the set says so the only way it
+ * can, with the `---` it shows any number it cannot go to. See the `refusals`
+ * prop on {@link CrtTelevision}.
+ *
+ * The subpage keys are not proposals. The room agreed on a page; turning to the
+ * next screen of it is reading what was agreed, so it applies at once and for
+ * everyone, the subpage being part of the room's synchronized state. Power is
+ * the opposite again: switching the set off is nobody's business but the person
+ * sitting in front of it, and changes nothing anyone else can see.
  */
 
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { RoomContext } from '../../collab/RoomContext';
 import { useRoomSync } from '../../collab/useRoomSync';
 import { useVoting } from '../../collab/useVoting';
+import { useMediaQuery } from '../../utils/useMediaQuery';
 import { TeletextGrid } from '../TeletextGrid/TeletextGrid';
 import CrtTelevision from './CrtTelevision';
 import RoomLayout from './RoomLayout';
 import ChatSidebar from './ChatSidebar';
-import PresenceList from './PresenceList';
 import VotePanel from './VotePanel';
-import YellowPages from './YellowPages';
-import PageSearch from './PageSearch';
+import YellowPagesDrawer from './YellowPagesDrawer';
 import { usePageRoll } from './usePageRoll';
-import remoteControlImg from '../../assets/remote_control.png';
-import yellowPagesImg from '../../assets/yellow_pages.png';
-import magnifyingGlassImg from '../../assets/magnifying_glass.png';
 
-/** Which object popup is currently open. */
-type OpenObject = 'remote' | 'guide' | 'search' | null;
+/**
+ * Below this the set is drawn as a tube in a thin bezel and its front panel comes
+ * out as a handset pinned under the picture, with the consoles below that. The
+ * same width `/watch` uses, because it is the same decision about the same
+ * cabinet — see `PHONE_QUERY` there.
+ */
+const PHONE_QUERY = '(max-width: 720px)';
 
 export interface RoomViewerProps {
   /**
@@ -67,98 +81,113 @@ function RoomViewerContent({
   chatSidebar,
 }: Required<Pick<RoomViewerProps, 'roomId'>> &
   Omit<RoomViewerProps, 'roomId'>) {
-  const { displayedPageNumber, displayedSubpage, subpageCount, page, stepSubpageBy } =
-    useRoomSync();
-  const { submit, active } = useVoting();
+  const {
+    displayedPageNumber,
+    displayedSubpage,
+    subpageCount,
+    page,
+    stepSubpageBy,
+    peekNextNonEmpty,
+    peekPrevNonEmpty,
+  } = useRoomSync();
+  const { submit } = useVoting();
 
-  // Which object popup is open (remote control popover / yellow pages modal).
-  const [openObject, setOpenObject] = useState<OpenObject>(null);
-  const remoteSlotRef = useRef<HTMLDivElement>(null);
+  const phone = useMediaQuery(PHONE_QUERY);
+
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const toggleDrawer = useCallback(() => setDrawerOpen((o) => !o), []);
+  const closeDrawer = useCallback(() => setDrawerOpen(false), []);
 
   // The header rolls to the room's displayed page whenever it changes, and the
   // page content is revealed only once the roll lands.
   const { displayNumber, shownPage } = usePageRoll(displayedPageNumber, page);
 
-  // Close the remote popover on outside click / Escape.
-  useEffect(() => {
-    if (openObject !== 'remote') return;
-    const onDown = (e: MouseEvent) => {
-      if (
-        remoteSlotRef.current &&
-        !remoteSlotRef.current.contains(e.target as Node)
-      ) {
-        setOpenObject(null);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpenObject(null);
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [openObject]);
+  /*
+   * How many times the room has said no to this set.
+   *
+   * A count rather than a flag: two refusals in a row are two separate noes and
+   * both should show in the window, which a boolean somebody has to reset cannot
+   * express. {@link CrtTelevision} watches it for changes and never reads it.
+   */
+  const [refusals, setRefusals] = useState(0);
 
-  // Page selection (yellow pages / index links) routes through the room's vote.
-  const handleRequestPage = useCallback(
-    (pageNumber: number) => {
-      submit(pageNumber);
+  /**
+   * Ask the room for a page.
+   *
+   * Every route to a page number ends here — the keypad, the step keys, the
+   * fastext strip, a listing in the leaflet — so there is one place where "in a
+   * room, choosing is asking" is written down, and one place that notices the
+   * answer was no.
+   */
+  const propose = useCallback(
+    (target: number) => {
+      const result = submit(target);
+      if (!result.ok) setRefusals((count) => count + 1);
     },
     [submit],
   );
 
-  const toggleRemote = useCallback(() => {
-    setOpenObject((o) => (o === 'remote' ? null : 'remote'));
-  }, []);
+  /*
+   * The step keys, which have to know where they would land before they ask.
+   *
+   * `peek` rather than `goto`: the room has not agreed to anything yet, so
+   * nothing may move. With no other page to offer — an archive of one page — the
+   * press is a refusal, which is the truthful answer and the same one the solo
+   * set gives by simply not moving.
+   */
+  const proposeStep = useCallback(
+    (delta: 1 | -1) => {
+      const target = delta > 0 ? peekNextNonEmpty() : peekPrevNonEmpty();
+      if (target === null) {
+        setRefusals((count) => count + 1);
+        return;
+      }
+      propose(target);
+    },
+    [peekNextNonEmpty, peekPrevNonEmpty, propose],
+  );
 
-  // A toggle, like the remote. It used to only ever open, which meant the
-  // icon could not close what it had opened — and because the directory's
-  // backdrop covers the whole screen, a second click on the icon landed on
-  // the backdrop instead. So a double-click opened and closed it (looking
-  // like nothing happened) and two deliberate clicks made it flash.
-  const toggleGuide = useCallback(() => {
-    setOpenObject((o) => (o === 'guide' ? null : 'guide'));
-  }, []);
-
-  // A toggle for the same reason as the directory: its backdrop covers the
-  // whole screen, so a second click on the icon would otherwise hit the
-  // backdrop and read as nothing happening.
-  const toggleSearch = useCallback(() => {
-    setOpenObject((o) => (o === 'search' ? null : 'search'));
-  }, []);
-  const closeObject = useCallback(() => setOpenObject(null), []);
+  /*
+   * A listing chosen in the leaflet is a proposal like any other, so the leaflet
+   * stays open: the page you asked for has not arrived and may never, and folding
+   * the book to reveal an unchanged screen would read as the click having missed.
+   * On a phone it folds anyway — there the open leaflet *is* the screen, and the
+   * vote console underneath is where the answer will appear.
+   */
+  const handleSelectPage = useCallback(
+    (target: number) => {
+      propose(target);
+      if (phone) setDrawerOpen(false);
+    },
+    [propose, phone],
+  );
 
   return (
     <RoomLayout
       roomId={roomId}
       sidebar={
         <>
-          {/* The room is the one place a member sets their display name. */}
-          <PresenceList allowRename />
+          <VotePanel />
+          {/* The presence roster folds into the chat's own head; see PresenceList. */}
           {chatSidebar ?? <ChatSidebar />}
         </>
       }
     >
-      <div className="room-viewer">
-        {/*
-          * The set, with most of its front panel moulded in but wired to
-          * nothing: which page a room watches is the vote's to decide, so the
-          * keypad, the page keys and the fastext colours are all dead here.
-          *
-          * The subpage keys are not, and neither is power. The room agreed on a
-          * page; turning to the next screen of it is reading what was agreed, so
-          * it applies at once — for everyone, since the subpage is part of the
-          * room's synchronized state. Switching the set off is the opposite: it
-          * is nobody's business but the person sitting in front of it, and it
-          * changes nothing anyone else can see.
-          */}
+      <div
+        className={`room-viewer${phone ? ' room-viewer-phone' : ''}${
+          drawerOpen ? ' room-viewer-drawer-open' : ''
+        }`}
+      >
         <CrtTelevision
           pageNumber={displayNumber}
           subpage={displayedSubpage}
           subpageCount={subpageCount}
+          onPageEntry={propose}
+          onPageStep={proposeStep}
           onSubpageStep={stepSubpageBy}
+          onFastext={propose}
+          refusals={refusals}
+          compact={phone}
         >
           <TeletextGrid
             page={shownPage}
@@ -166,79 +195,30 @@ function RoomViewerContent({
             subpage={displayedSubpage}
             subpageCount={subpageCount}
             readOnly
-            onIndexPageSelect={handleRequestPage}
+            onIndexPageSelect={propose}
           />
         </CrtTelevision>
 
-        <div className="object-bar" role="toolbar" aria-label="Room objects">
-          <div className="object-slot" ref={remoteSlotRef}>
-            <button
-              type="button"
-              className={`object-item${openObject === 'remote' ? ' object-item-active' : ''}`}
-              onClick={toggleRemote}
-              aria-expanded={openObject === 'remote'}
-              aria-label="Remote control"
-            >
-              <img src={remoteControlImg} alt="" className="object-img" />
-              {active && (
-                <span className="object-badge" aria-label="Vote in progress">
-                  !
-                </span>
-              )}
-              <span className="object-caption">Remote control</span>
-            </button>
-            {openObject === 'remote' && (
-              <div
-                className="remote-popover"
-                role="dialog"
-                aria-label="Remote control"
-              >
-                <VotePanel />
-              </div>
-            )}
-          </div>
-
-          <div className="object-slot">
-            <button
-              type="button"
-              className={`object-item${openObject === 'guide' ? ' object-item-active' : ''}`}
-              onClick={toggleGuide}
-              aria-expanded={openObject === 'guide'}
-              aria-label="Yellow pages"
-            >
-              <img src={yellowPagesImg} alt="" className="object-img" />
-              <span className="object-caption">Yellow pages</span>
-            </button>
-          </div>
-
-          <div className="object-slot">
-            <button
-              type="button"
-              className={`object-item${openObject === 'search' ? ' object-item-active' : ''}`}
-              onClick={toggleSearch}
-              aria-label="Search pages"
-            >
-              <img src={magnifyingGlassImg} alt="" className="object-img" />
-              <span className="object-caption">Search</span>
-            </button>
-          </div>
-        </div>
+        {/*
+          * Inside the column rather than beside it, for the reason given in
+          * {@link SoloViewer}: on a phone this is where the leaflet lies, in the
+          * band of table between the picture and the handset. On anything wider
+          * it is `position: fixed` and takes itself back out of this flow.
+          */}
+        <YellowPagesDrawer
+          open={drawerOpen}
+          onToggle={toggleDrawer}
+          onClose={closeDrawer}
+          onSelect={handleSelectPage}
+        />
       </div>
-
-      {openObject === 'guide' && (
-        <YellowPages onSelect={handleRequestPage} onClose={closeObject} />
-      )}
-
-      {openObject === 'search' && (
-        <PageSearch onSelect={handleRequestPage} onClose={closeObject} />
-      )}
     </RoomLayout>
   );
 }
 
 /**
- * Render the synchronized, read-only room viewer, providing {@link RoomContext}
- * around its subtree so the room-scoped hooks resolve the active Room_ID.
+ * Render the synchronized room viewer, providing {@link RoomContext} around its
+ * subtree so the room-scoped hooks resolve the active Room_ID.
  */
 export function RoomViewer({ roomId: roomIdProp, ...rest }: RoomViewerProps) {
   const params = useParams<{ roomId: string }>();
