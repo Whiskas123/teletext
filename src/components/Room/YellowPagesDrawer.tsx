@@ -11,8 +11,15 @@
  * looking something up in the same book and there is no reason to keep them in
  * separate ones.
  *
- * The rows are {@link DirectoryList} and the results are {@link SearchResults},
- * both shared with the room's full-screen popups — this file is the furniture.
+ * The rows are {@link DirectoryList} and the results are {@link SearchResults};
+ * this file is the furniture around them.
+ *
+ * It used to be one of three ways into the same listings — there were also a
+ * full-screen directory popup and a separate search popup, reached from
+ * photographs of a book and a magnifying glass under the room's television.
+ * Those are gone, along with the photographs: the leaflet is the only directory
+ * now, on both watching screens, and the search field at the top of it is the
+ * only search.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -186,7 +193,7 @@ export function YellowPagesDrawer({
             ) : (
               <>
                 <p className="yellow-pages-tagline">
-                  {hits.length} result{hits.length === 1 ? '' : 's'} found
+                  {copy.directory.resultsFound(hits.length)}
                 </p>
                 <SearchResults
                   hits={hits}
@@ -197,7 +204,7 @@ export function YellowPagesDrawer({
             )
           ) : entries.length === 0 ? (
             <p className="yellow-pages-empty">
-              No listings yet. Create a page in the editor to have it appear here.
+              {copy.directory.noListings}
             </p>
           ) : (
             <DirectoryList
@@ -210,7 +217,6 @@ export function YellowPagesDrawer({
           )}
         </div>
 
-        <p className="yellow-pages-footnote">{copy.directory.footnoteGo}</p>
       </div>
 
       {/*
@@ -229,9 +235,6 @@ export function YellowPagesDrawer({
       >
         <span className="yp-drawer-knob-label" aria-hidden="true">
           {copy.directory.title}
-        </span>
-        <span className="yp-drawer-knob-caret" aria-hidden="true">
-          {open ? '‹' : '›'}
         </span>
       </button>
     </div>

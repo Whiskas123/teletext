@@ -107,18 +107,8 @@ export interface Copy {
     searchPlaceholder: string;
     tooShort(min: number): string;
     noResults: string;
-    /** Differs by screen: alone you go to the page, in a room you ask for it. */
-    footnoteGo: string;
-    footnoteRequest: string;
-    prevSheet: string;
-    nextSheet: string;
-  };
-  /** The full-screen search popup. */
-  search: {
-    title: string;
-    region: string;
-    close: string;
-    footnote: string;
+    resultsFound(n: number): string;
+    noListings: string;
   };
   /** The television, whose every control is spoken but never written. */
   tv: {
@@ -266,16 +256,9 @@ export const COPY: Record<Language, Copy> = {
       searchPlaceholder: 'Procurar uma palavra em qualquer página…',
       tooShort: (min) => `Escreve pelo menos ${min} letras.`,
       noResults: 'Nada encontrado.',
-      footnoteGo: 'Toca numa entrada para ir para essa página.',
-      footnoteRequest: 'Toca numa entrada para pedir essa página.',
-      prevSheet: 'Folha anterior',
-      nextSheet: 'Folha seguinte',
-    },
-    search: {
-      title: 'Procurar',
-      region: 'Procurar páginas',
-      close: 'Fechar a procura',
-      footnote: 'Toca num resultado para pedir essa página.',
+      resultsFound: (n) => (n === 1 ? '1 resultado' : `${n} resultados`),
+      noListings:
+        'Ainda não há páginas. Cria uma no editor para aparecer aqui.',
     },
     tv: {
       set: 'Televisor',
@@ -425,16 +408,9 @@ export const COPY: Record<Language, Copy> = {
       searchPlaceholder: 'Find a word on any page…',
       tooShort: (min) => `Type at least ${min} letters.`,
       noResults: 'Nothing found.',
-      footnoteGo: 'Tap a listing to go to that page.',
-      footnoteRequest: 'Tap a listing to request that page.',
-      prevSheet: 'Previous sheet',
-      nextSheet: 'Next sheet',
-    },
-    search: {
-      title: 'Search',
-      region: 'Search pages',
-      close: 'Close search',
-      footnote: 'Tap a result to request that page.',
+      resultsFound: (n) => (n === 1 ? '1 result' : `${n} results`),
+      noListings:
+        'No listings yet. Create a page in the editor to have it appear here.',
     },
     tv: {
       set: 'Television set',

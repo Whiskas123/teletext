@@ -1995,29 +1995,6 @@
   }
 }
 
-/* --- Yellow Pages directory popup --- */
-/*
- * Above everything, including the object bar.
- *
- * The bar used to sit on top of this so that a click on the yellow book icon
- * could close what it had opened. It still can: the icon is now under the
- * backdrop, and a click there hits the backdrop, which closes the directory —
- * the same outcome by a simpler route. What the old order also did was draw the
- * remote, the book and the magnifier *over* the open directory, which read as a
- * rendering fault.
- */
-.yellow-pages-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 400;
-  display: flex;
-  /* Top-aligned rather than centred: the directory is as tall as it needs to be,
-     and a centred one that overflows is clipped at both ends at once. */
-  align-items: stretch;
-  justify-content: center;
-  background: rgb(0 0 0 / 60%);
-}
-
 .yellow-pages-book {
   /* Condensed Univers-style typeface (falls back to Arial Narrow etc.). */
   font-family: 'Univers Condensed', 'UniversNextW10-Cond', 'Helvetica Neue',
@@ -2051,60 +2028,7 @@
   padding: 1.25rem 1.5rem 1.5rem;
 }
 
-/*
- * The directory takes the whole viewport.
- *
- * It is the main thing on screen while it is open, and its columns need every
- * inch of width they can get — a panel floating in the middle of a dark backdrop
- * was spending most of the screen on the backdrop. The search popover keeps the
- * sizing above, being a short list that answers a question.
- *
- * Column layout so the masthead and the footnote keep their height and the flow
- * takes what is left; nothing here scrolls, because overflow turns the sheet
- * instead.
- */
-.yellow-pages-book-full {
-  width: 100%;
-  max-width: none;
-  height: 100%;
-  max-height: none;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-  padding: 1rem 1.5rem;
-}
-
-/* The window the columns are shifted behind, one screenful at a time. */
-.yellow-pages-viewport {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.yellow-pages-flow {
-  --yp-gap: 2.5rem;
-
-  height: 100%;
-  column-width: 19rem;
-  column-gap: var(--yp-gap);
-  /*
-   * `auto`, not the default `balance`: balancing spreads the listings evenly
-   * across the columns it has, which reads as several short columns. `auto` fills
-   * each one to the bottom before starting the next, which is both how a phone
-   * book reads and what makes the overflow a whole extra sheet.
-   */
-  column-fill: auto;
-  transition: transform 160ms ease-out;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .yellow-pages-flow {
-    transition: none;
-  }
 }
 
 /*
@@ -2116,15 +2040,6 @@
  * works unchanged.
  */
 @media (max-width: 720px) {
-  .yellow-pages-book-full {
-    padding: 0.75rem 0.9rem;
-  }
-
-  .yellow-pages-flow {
-    --yp-gap: 1.25rem;
-
-    column-width: 13rem;
-  }
 
   .yellow-pages-brand {
     font-size: 1.35rem;
@@ -2174,11 +2089,6 @@
   padding: 0;
   list-style: none;
 }
-
-.yellow-pages-footnote {
-    margin-top: 0.4rem;
-    font-size: 0.75rem;
-  }
 
   .page-search-list {
     max-height: 60vh;
@@ -2232,43 +2142,6 @@
   margin: 0.15rem 0 0.5rem;
   font-style: italic;
   font-size: 0.95rem;
-}
-
-/* Turning the sheet, when the columns run past one screenful. */
-.yellow-pages-pager {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-left: auto;
-}
-
-.yellow-pages-sheet-count {
-  font-size: 0.9rem;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.yellow-pages-turn {
-  min-width: 44px;
-  min-height: 44px;
-  background: transparent;
-  border: 2px solid #141007;
-  border-radius: 3px;
-  color: #141007;
-  font: inherit;
-  font-size: 1.2rem;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.yellow-pages-turn:hover:not(:disabled) {
-  background: #141007;
-  color: #ffcf1f;
-}
-
-.yellow-pages-turn:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
 }
 
 .yellow-pages-rule {
@@ -2453,12 +2326,6 @@ button.yellow-pages-number:hover {
   margin: 0;
   padding: 0;
   list-style: none;
-}
-
-.yellow-pages-footnote {
-  margin: 0.75rem 0 0;
-  font-size: 0.85rem;
-  font-style: italic;
 }
 
 /* --- The Yellow Pages leaflet, folded against the left edge --------------- */
@@ -2686,12 +2553,6 @@ button.yellow-pages-number:hover {
   white-space: nowrap;
 }
 
-.yp-drawer-knob-caret {
-  font-size: 1rem;
-  line-height: 1;
-  font-weight: 700;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .yp-drawer,
   .yp-drawer-knob,
@@ -2849,11 +2710,6 @@ button.yellow-pages-number:hover {
     border-radius: 0;
     box-shadow: none;
     transform: none;
-  }
-
-  .room-viewer-phone .yp-drawer-knob-label,
-  .room-viewer-phone .yp-drawer-knob-caret {
-    display: none;
   }
 
   /*
