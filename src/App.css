@@ -2673,6 +2673,17 @@ button.yellow-pages-number:hover {
   font-size: 0.78rem;
   letter-spacing: 0.16em;
   line-height: 1;
+  /*
+   * One line of lettering, however long the word is.
+   *
+   * Turned on its side, the text's *inline* axis is vertical — so a label longer
+   * than the tab is tall wraps into a second column beside the first, which on a
+   * printed tab reads as two words stacked rather than one name running up the
+   * spine. "PÁGINAS AMARELAS" is four characters longer than "YELLOW PAGES" and
+   * broke exactly there. Refusing the wrap makes the tab grow to fit its name
+   * instead, which is the right way round: the tab is furniture for the word.
+   */
+  white-space: nowrap;
 }
 
 .yp-drawer-knob-caret {
