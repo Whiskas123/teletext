@@ -30,10 +30,12 @@
  * ## Which keys do anything
  *
  * Every handler is optional and a key with no handler renders inert and
- * `aria-hidden` — moulded plastic, not a control. That is how the room and the
- * solo set differ: watching alone the keypad dials and the page keys step,
- * while in a room the page is the vote's to decide, so only the subpage keys
- * and the power button are live. See {@link RoomViewer} and {@link SoloViewer}.
+ * `aria-hidden` — moulded plastic, not a control. The set does not know what its
+ * keys are wired to: watching alone the keypad dials and the page keys step,
+ * while in a room the same presses ask the room for a page and a vote decides.
+ * Either way it is the same television with the same panel live, and the one
+ * difference it can see is that a request made in a room can come back refused —
+ * see `refusals`. See {@link RoomViewer} and {@link SoloViewer}.
  *
  * ## The phone build
  *
@@ -107,6 +109,17 @@ export interface CrtTelevisionProps {
   onSubpageStep?: (delta: 1 | -1) => void;
   /** Jump to a fastext colour page. Omit to leave the colour keys inert. */
   onFastext?: (pageNumber: number) => void;
+  /**
+   * How many times what the set asked for has come back refused.
+   *
+   * Only the *changes* mean anything: each time this goes up the LED window
+   * shows the `---` it already shows a page number that cannot exist, because in
+   * a room the set does not change the page — it asks the room for one, and the
+   * answer can be no (a vote is already running, say). The reason is somebody
+   * else's to explain; all the television reports is that it asked and got
+   * nothing. Left alone by the solo set, where nothing can refuse it.
+   */
+  refusals?: number;
   /**
    * Draw the set cropped to its bezel, with the front panel moved out to a
    * remote control rendered after it. For the phone layout; see the note at the
@@ -792,6 +805,7 @@ export function CrtTelevision({
   onPageStep,
   onSubpageStep,
   onFastext,
+  refusals = 0,
   compact = false,
 }: CrtTelevisionProps) {
   const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
@@ -842,6 +856,22 @@ export function CrtTelevision({
     const timer = setTimeout(() => setDialError(false), DIAL_ERROR_MS);
     return () => clearTimeout(timer);
   }, [dialError]);
+
+  /*
+   * A refusal from outside, said in the window's own words.
+   *
+   * The count is watched rather than read: two refusals in a row are two
+   * separate noes and both should show, and a prop that has to be set back to
+   * `false` afterwards would put the set's display in somebody else's hands. The
+   * first render is not a refusal, so the seen-count starts where the prop does.
+   */
+  const refusalsSeen = useRef(refusals);
+  useEffect(() => {
+    if (refusals === refusalsSeen.current) return;
+    refusalsSeen.current = refusals;
+    setDial('');
+    setDialError(true);
+  }, [refusals]);
 
   const pressDigit = useCallback(
     (digit: string) => {

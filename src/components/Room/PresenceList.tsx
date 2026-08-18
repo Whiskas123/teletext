@@ -1,5 +1,5 @@
 /**
- * PresenceList — renders the room's present members and member count.
+ * PresenceList — who else is in the room (Requirement 2).
  *
  * Design notes (see design.md "Presentation components" and Req 2):
  * - Reads member Identity and count from {@link usePresence} (awareness-backed).
@@ -13,6 +13,17 @@
  *   via {@link PresenceApi.setDisplayName}; an inline error is shown when the
  *   submitted name is rejected as invalid (Req 2.5), preserving the previous
  *   name.
+ *
+ * ## Where it lives now
+ *
+ * It used to be a panel of its own, stacked above the chat down the side of the
+ * room. Two panels saying who is here and what they are saying is one panel too
+ * many: the names in the chat are the same names, and a standing column of them
+ * pushed the conversation down the screen to no purpose. So it folds into the
+ * head of the chat instead (see {@link ChatSidebar}) — a row of coloured chips
+ * across the top of the log, wrapping as the room fills — and this component
+ * lays itself out for that: a heading and its count, the roster, and a rename
+ * control that stays folded away until it is wanted.
  *
  * Requirements: 2.2, 2.3, 2.7, 2.8.
  */
@@ -43,7 +54,8 @@ export interface PresenceListProps {
 }
 
 /**
- * Render the room's presence list, member count, and an optional rename control.
+ * Render the room's presence roster, member count, and an optional rename
+ * control.
  */
 export function PresenceList({ allowRename = true }: PresenceListProps) {
   const { members, count, me, setDisplayName } = usePresence();
@@ -69,9 +81,32 @@ export function PresenceList({ allowRename = true }: PresenceListProps) {
 
   return (
     <section className="presence-list" aria-label="Viewers present">
-      <h2 className="sidebar-heading">
-        Viewers <span className="presence-count">({count})</span>
-      </h2>
+      <div className="presence-head">
+        <h2 className="rc-legend presence-heading">
+          Viewers <span className="presence-count">({count})</span>
+        </h2>
+
+        {/*
+          * Renaming is a once-per-visit thing and the roster is what the head is
+          * for, so the control is a tool at the end of the line rather than a
+          * form standing open under it — the same arrangement as the magnifier
+          * on the directory's masthead.
+          */}
+        {allowRename && (
+          <button
+            type="button"
+            className="rc-key-tool presence-rename-toggle"
+            aria-expanded={renameOpen}
+            aria-controls="presence-rename"
+            onClick={() => {
+              setRenameOpen((open) => !open);
+              setNameError(false);
+            }}
+          >
+            Rename
+          </button>
+        )}
+      </div>
 
       {members.length === 0 ? (
         <p className="presence-empty">{NO_MEMBERS_LABEL}</p>
@@ -80,7 +115,10 @@ export function PresenceList({ allowRename = true }: PresenceListProps) {
           {members.map((member) => {
             const isMe = member.memberId === me.memberId;
             return (
-              <li key={member.memberId} className="presence-member">
+              <li
+                key={member.memberId}
+                className={`presence-member${isMe ? ' presence-member-me' : ''}`}
+              >
                 <span
                   className="presence-swatch"
                   aria-hidden="true"
@@ -96,37 +134,15 @@ export function PresenceList({ allowRename = true }: PresenceListProps) {
         </ul>
       )}
 
-      {/*
-        * Collapsed by default. Renaming is a once-per-visit thing, and the
-        * sidebar's job is to show who is here — a permanently open form pushed
-        * the list of viewers up the panel for a control almost nobody was about
-        * to use.
-        */}
-      {allowRename && (
-        <>
-          <button
-            type="button"
-            className="presence-rename-toggle"
-            aria-expanded={renameOpen}
-            aria-controls="presence-rename"
-            onClick={() => {
-              setRenameOpen((open) => !open);
-              setNameError(false);
-            }}
-          >
-            Change your name{renameOpen ? ' ▴' : ' ▾'}
-          </button>
-          {renameOpen && (
+      {allowRename && renameOpen && (
         <form className="presence-rename" id="presence-rename" onSubmit={handleRename}>
-          <label className="sidebar-field-label" htmlFor="presence-name-input">
-            Your name
-          </label>
           <input
             id="presence-name-input"
-            className="presence-name-input"
+            className="rc-field presence-name-input"
             type="text"
             value={draftName}
             placeholder={me.name}
+            aria-label="Your name"
             aria-invalid={nameError}
             aria-describedby={nameError ? 'presence-name-error' : undefined}
             onChange={(event) => {
@@ -136,21 +152,15 @@ export function PresenceList({ allowRename = true }: PresenceListProps) {
               }
             }}
           />
-          <button type="submit" className="sidebar-action-btn">
-            Set name
+          <button type="submit" className="rc-key presence-rename-btn">
+            Set
           </button>
           {nameError && (
-            <p
-              id="presence-name-error"
-              className="presence-name-error"
-              role="alert"
-            >
+            <p id="presence-name-error" className="rc-note presence-name-error" role="alert">
               {INVALID_NAME_LABEL}
             </p>
           )}
         </form>
-          )}
-        </>
       )}
     </section>
   );

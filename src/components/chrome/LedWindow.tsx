@@ -16,28 +16,49 @@
  * window: 18,18 for the bezel, digits from 36,36 on a 34 pitch, the subpage pair
  * at 154,48 three-quarter size. The `viewBox` is that rectangle plus the
  * captions underneath.
+ *
+ * ## The glass, apart from what is behind it
+ *
+ * The room's vote console wanted this window with three readouts in it rather
+ * than two (see {@link SegmentVisor}) — a different arrangement of lit segments
+ * behind an identical piece of glass. So the glass came out as {@link LedPlate}:
+ * the black bezel, the near-black well, the red filter and the gloss swept
+ * across the top, sized to whatever it is covering. Every offset in it was read
+ * back off the numbers above, so this window still renders exactly what it
+ * always did — the gloss's control point included, which is why it sits at 0.56
+ * of the width and not in the middle.
  */
+
+import type { ReactNode } from 'react';
 
 import { SevenSegment } from './SevenSegment';
 
-export interface LedWindowProps {
-  /** Three glyphs for the page window — digits, or `-` for a digit not yet dialled. */
-  pageDigits: string;
-  /** Two glyphs for the subpage window. */
-  subDigits: string;
-  /** Read out to a screen reader, which has no use for fourteen `<rect>`s. */
-  label: string;
+export interface LedPlateProps {
+  /** The bezel's box; the well is inset two units inside it. */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** The lit segments, drawn into the well between it and the filter. */
+  children: ReactNode;
 }
 
-export function LedWindow({ pageDigits, subDigits, label }: LedWindowProps) {
+/**
+ * The glass an LED window is read through: bezel, well, red filter, gloss.
+ *
+ * Carries its own `<defs>`, so a caller only has to place it. Two plates on one
+ * page would declare the same ids twice, which is harmless — they declare the
+ * same gradients — and has not come up: `/edit` has one window and `/room` has
+ * one visor.
+ */
+export function LedPlate({ x, y, width, height, children }: LedPlateProps) {
+  const wellX = x + 2;
+  const wellY = y + 2;
+  const wellW = width - 4;
+  const wellH = height - 4;
+
   return (
-    <svg
-      className="rc-display-svg"
-      viewBox="14 12 208 110"
-      xmlns="http://www.w3.org/2000/svg"
-      role="img"
-      aria-label={label}
-    >
+    <>
       <defs>
         <linearGradient id="led-win" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#050505" />
@@ -64,41 +85,68 @@ export function LedWindow({ pageDigits, subDigits, label }: LedWindowProps) {
           </feMerge>
         </filter>
         <clipPath id="led-clip">
-          <rect x="20" y="20" width="196" height="76" rx="3" />
+          <rect x={wellX} y={wellY} width={wellW} height={wellH} rx="3" />
         </clipPath>
       </defs>
 
-      <rect x="18" y="18" width="200" height="80" rx="4" fill="#000" />
-      <rect x="20" y="20" width="196" height="76" rx="3" fill="url(#led-win)" />
+      <rect x={x} y={y} width={width} height={height} rx="4" fill="#000" />
+      <rect x={wellX} y={wellY} width={wellW} height={wellH} rx="3" fill="url(#led-win)" />
 
-      <g transform="translate(36 36) skewX(-5)">
-        {[...pageDigits].map((glyph, index) => (
-          <SevenSegment key={index} glyph={glyph} index={index} />
-        ))}
-      </g>
-      <rect className="disp-dot" x="140" y="74" width="5" height="5" fill="#ff3b2c" />
-      <g transform="translate(154 48) scale(.72) skewX(-5)">
-        {[...subDigits].map((glyph, index) => (
-          <SevenSegment key={index} glyph={glyph} index={index} />
-        ))}
-      </g>
+      {children}
 
       <rect
-        x="20"
-        y="20"
-        width="196"
-        height="76"
+        x={wellX}
+        y={wellY}
+        width={wellW}
+        height={wellH}
         rx="3"
         fill="url(#led-filter)"
         pointerEvents="none"
         style={{ mixBlendMode: 'multiply' }}
       />
       <path
-        d="M22 22 H214 V50 Q130 66 22 42 Z"
+        d={`M${x + 4} ${y + 4} H${x + width - 4} V${y + 32} Q${x + width * 0.56} ${y + 48} ${
+          x + 4
+        } ${y + 24} Z`}
         fill="url(#led-gloss)"
         pointerEvents="none"
         clipPath="url(#led-clip)"
       />
+    </>
+  );
+}
+
+export interface LedWindowProps {
+  /** Three glyphs for the page window — digits, or `-` for a digit not yet dialled. */
+  pageDigits: string;
+  /** Two glyphs for the subpage window. */
+  subDigits: string;
+  /** Read out to a screen reader, which has no use for fourteen `<rect>`s. */
+  label: string;
+}
+
+export function LedWindow({ pageDigits, subDigits, label }: LedWindowProps) {
+  return (
+    <svg
+      className="rc-display-svg"
+      viewBox="14 12 208 110"
+      xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-label={label}
+    >
+      <LedPlate x={18} y={18} width={200} height={80}>
+        <g transform="translate(36 36) skewX(-5)">
+          {[...pageDigits].map((glyph, index) => (
+            <SevenSegment key={index} glyph={glyph} index={index} />
+          ))}
+        </g>
+        <rect className="disp-dot" x="140" y="74" width="5" height="5" fill="#ff3b2c" />
+        <g transform="translate(154 48) scale(.72) skewX(-5)">
+          {[...subDigits].map((glyph, index) => (
+            <SevenSegment key={index} glyph={glyph} index={index} />
+          ))}
+        </g>
+      </LedPlate>
 
       <text className="cap" x="83" y="114" aria-hidden="true">
         PAGE
