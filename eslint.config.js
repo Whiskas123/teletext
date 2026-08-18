@@ -6,7 +6,10 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // `.claude/worktrees` holds throwaway checkouts of this same repo, so linting
+  // it reports every finding two and three times over, against paths that stop
+  // existing when the worktree is removed.
+  globalIgnores(['dist', '.claude/worktrees']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

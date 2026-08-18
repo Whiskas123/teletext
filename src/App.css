@@ -2286,24 +2286,20 @@
     align-items: center;
   }
 
+  /*
+   * The set does not move for the leaflet.
+   *
+   * It used to: opening the directory padded this column by the leaflet's width
+   * so the two sat side by side. That is the right instinct for a drawer and the
+   * wrong one for a television — the picture is what you came for, and having it
+   * slide 23rem sideways every time you open the book means the thing you are
+   * reading about walks away while you reach for it. The leaflet is a sheet held
+   * up against the corner of the screen instead, and the set stays where it was.
+   */
   .room-viewer-solo {
     align-items: center;
     justify-content: center;
     gap: 0;
-    /*
-     * Room made for the leaflet while it is open, so the set is centred in what
-     * is left of the screen rather than sitting behind the thing you opened.
-     * Padding rather than a transform: the picture stays wholly on screen even
-     * when the window is barely wider than the two of them together.
-     */
-    padding-left: 0;
-    transition: padding-left 260ms cubic-bezier(0.22, 0.61, 0.36, 1);
-  }
-
-  /* The leaflet's own width, and a gap so the set is beside it rather than
-     against it. */
-  .room-viewer-solo.room-viewer-drawer-open {
-    padding-left: calc(var(--yp-drawer-width) + 1.5rem);
   }
 
   /*

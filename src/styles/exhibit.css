@@ -1,0 +1,188 @@
+/*
+ * exhibit.css — the archive on a television in a room.
+ *
+ * Everything here dresses {@link ExhibitScreen}, which is on show when the
+ * watching screen is being sent to a real CRT at an exhibition. The rule that
+ * governs all of it: if something is visible and is not the teletext page, it
+ * is wrong. There is no cabinet, no bezel, no header, no chrome and — after a
+ * few seconds of stillness — no pointer.
+ *
+ * ## Two boxes
+ *
+ * `.exhibit` is the display: black, fixed, over everything. `.exhibit-picture`
+ * is the tube: the largest 4:3 rectangle the display will hold, centred in it,
+ * with the remainder left black. In real fullscreen on a 4:3 CRT there is no
+ * remainder at all; on the laptop it is being driven from, there is a
+ * letterbox, which is the correct answer to a 16:9 window and not a compromise.
+ *
+ * ## The cells
+ *
+ * Sized by the same arithmetic the television's own glass uses — see
+ * `.crt-raster .teletext-screen` in `App.css` for why it has to be arithmetic
+ * and not a `transform`. Restated here rather than shared because the two are
+ * only coincidentally the same numbers: the CRT's glass is 640x480 out of a
+ * 1000x830 cabinet, and this box is the display. What they genuinely share is
+ * the shape, and the shape is where the numbers come from — 40 cells across a
+ * 4:3 box is 2.5% of its width each, and 24 rows down it is 3.125% (25 rows,
+ * with the fastext strip, is 3%). Both come to exactly the height of a 4:3 box,
+ * which is the whole reason a teletext page fits a television.
+ *
+ * Each cell is then rounded *down* to a whole device pixel, so every one of the
+ * 41 column edges and 26 row edges lands on a pixel boundary and there is
+ * nothing for the compositor to antialias. Under a cell's worth of remainder in
+ * each direction is left over and centred away against black.
+ */
+
+/*
+ * No scrolling behind the overlay.
+ *
+ * Only matters on the fallback path, where the page is still there underneath —
+ * but there it matters twice, because a scrollbar down the side is both visible
+ * and a hundred `vw` that no longer describe what can be seen, which would crop
+ * a sliver off the right of the picture.
+ */
+html.exhibit-lock,
+html.exhibit-lock body {
+  overflow: hidden;
+}
+
+.exhibit {
+  position: fixed;
+  inset: 0;
+  /* Over the layout, the drawer, and anything a future panel puts on top of
+     both. Nothing in this app competes at this level. */
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  overflow: hidden;
+}
+
+/* The area a fullscreen element is composited against. Black by default in
+   every current engine, and stated anyway: it is a quarter of the screen on a
+   16:9 laptop and it is not worth finding out the hard way. */
+.exhibit::backdrop {
+  background: #000;
+}
+
+/* Three seconds of stillness and the last piece of browser leaves the glass. */
+.exhibit[data-idle] {
+  cursor: none;
+}
+
+.exhibit-picture {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  /*
+   * The largest 4:3 box the display will hold: bounded by the width on a tall
+   * window and by the height on a wide one, which `min()` states directly in
+   * both axes without needing to know which case it is in.
+   *
+   * The plain `vw`/`vh` pair first is the fallback for engines without the
+   * dynamic units, which would otherwise drop the declaration and leave the
+   * box with no size at all. Same idiom as `.crt-tv` in `App.css`.
+   */
+  width: min(100vw, calc(100vh * 4 / 3));
+  height: min(100vh, calc(100vw * 3 / 4));
+  width: min(100dvw, calc(100dvh * 4 / 3));
+  height: min(100dvh, calc(100dvw * 3 / 4));
+  /* What the cells below measure themselves against. `inline-size` rather than
+     `size`, because the height is already stated above and containing it too
+     would buy nothing. */
+  container-type: inline-size;
+}
+
+/*
+ * The page itself. `.teletext-screen`'s own padding, border and inset shadow go
+ * the same way they do inside the television: they are a frame, and this screen
+ * is deliberately unframed.
+ */
+.exhibit-picture .teletext-screen {
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  /* Fallback where `round()` is missing: fill the box exactly, seams and all.
+     A whole picture with hairlines in it beats no picture. */
+  width: 100%;
+  height: 100%;
+  font-size: 2.31481cqw; /* 75cqw ÷ 32.4em, for the 24-row grid */
+}
+
+.exhibit-picture .teletext-screen-with-index {
+  font-size: 2.22222cqw; /* 75cqw ÷ 33.75em, the 25th row being the fastext strip */
+}
+
+@supports (width: round(down, 1em, 1px)) {
+  .exhibit-picture .teletext-screen {
+    --exhibit-cell-w: round(down, 2.5cqw, 1px); /* the picture ÷ 40 columns */
+    --exhibit-cell-h: round(down, 3.125cqw, 1px); /* its 75cqw ÷ 24 rows */
+    width: calc(var(--exhibit-cell-w) * 40);
+    height: calc(var(--exhibit-cell-h) * 24);
+    /* 1.35 is the grid's line-height, so this is the row's own font size. */
+    font-size: calc(var(--exhibit-cell-h) / 1.35);
+  }
+
+  .exhibit-picture .teletext-screen-with-index {
+    --exhibit-cell-h: round(down, 3cqw, 1px); /* 75cqw ÷ 25 rows */
+    height: calc(var(--exhibit-cell-h) * 25);
+  }
+}
+
+/* Fills the screen, which is now a whole number of cells (above), so the `fr`
+   tracks divide an exact multiple of 40 and 24 and every track comes out an
+   integer. */
+.exhibit-picture .teletext-grid {
+  width: 100%;
+  height: 100%;
+}
+
+/*
+ * `7--`, in the corner, on its way out.
+ *
+ * Bottom right: the header is the page's own and a number placed in it reads as
+ * the page having already changed. White on black in the teletext face, because
+ * anything else would look like a browser drawing on a television.
+ *
+ * The fade runs for exactly as long as a half-dialled number lives (see
+ * `DIAL_TIMEOUT_MS`), holding solid for the first half so it is legible, then
+ * going out just as the entry it describes expires. A completed entry unmounts
+ * it immediately instead — the page arriving is the answer, and a readout still
+ * fading over the page you asked for is a leftover.
+ */
+.exhibit-dial {
+  position: absolute;
+  right: 2.5cqw; /* one cell in from the edge */
+  bottom: 3cqw; /* one row up */
+  padding: 0.1em 0.35em;
+  font-family: 'European Teletext', 'Press Start 2P', 'Courier New', monospace;
+  font-size: 3cqw;
+  line-height: 1.35;
+  letter-spacing: 0.06em;
+  color: #fff;
+  background: #000;
+  pointer-events: none;
+  animation: exhibit-dial-fade 3s linear forwards;
+}
+
+@keyframes exhibit-dial-fade {
+  0%,
+  55% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Nothing here needs to move to be understood: the readout simply stands until
+   its number expires, and then it is gone with it. */
+@media (prefers-reduced-motion: reduce) {
+  .exhibit-dial {
+    animation: none;
+    opacity: 1;
+  }
+}
