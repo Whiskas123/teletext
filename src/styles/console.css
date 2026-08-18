@@ -76,55 +76,318 @@
 }
 
 /* One statement of the plastic, wherever a piece of the panel needs it. */
-.editor-console .rc-console,
+.editor-console .rc-toolbar,
+.editor-console .rc-flyout,
 .editor-console .rc-handset {
   background-image: var(--rc-mould), var(--rc-grain), var(--rc-cab);
   background-blend-mode: overlay, soft-light, normal;
   background-size: 320px 320px, 160px 160px, auto;
 }
 
-/* ── the console, beside the page ─────────────────────────────────────────── */
+/* =====================================================================
+ * The strip, across the top of the desk.
+ *
+ * This was a 23rem panel down the left-hand side, which is the shape a console
+ * takes when it has a keyboard in it. Taking the keyboard out — a desk has one
+ * already; the moulded pad exists because a phone's own slides up over the page
+ * you are drawing on — left a column carrying a readout, ten small keys and one
+ * open panel, holding a quarter of a monitor to do it. So the panel is laid on
+ * its side, and everything that needed depth hangs off a key as a drawer.
+ *
+ * What the strip gains is that nothing on it is behind a tab. The old console
+ * could show one of its six panels at a time, so the readout — the one thing you
+ * always want to know — was behind a key like everything else. Here the window
+ * and both rockers are simply out, and dialling stops being somewhere you go.
+ *
+ * The materials are unchanged: same cabinet, same caps, same aluminium between
+ * one group and the next, only upright now.
+ * ===================================================================== */
 
-.editor-console .rc-console {
-  position: relative;
-  flex: 0 0 auto;
-  width: 23rem;
-  display: flex;
+/* The desk turns through ninety degrees: strip, then page. */
+.editor-console.editor-layout-bar {
   flex-direction: column;
-  padding: 0.9rem 1rem 1.5rem;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  overscroll-behavior: contain;
-  /* No 300ms tap delay on a control panel: these are keys, not links. */
-  touch-action: manipulation;
-  /* The moulded edges: light caught along the top and the left, occlusion down
-     the right where the panel turns away — the cabinet's four chamfer strips,
-     as one inset shadow each. */
-  box-shadow:
-    inset 0 1px 0 rgb(125 124 120 / 55%),
-    inset 1px 0 0 rgb(110 109 105 / 30%),
-    inset -2px 0 6px rgb(0 0 0 / 45%),
-    4px 0 22px rgb(0 0 0 / 55%);
-  z-index: 1;
 }
 
-/* Corner darkening, so the panel reads as a moulding and not a flat card. It is
-   the cabinet's `#cabVig`, at its offset centre, and inert to the pointer. */
-.editor-console .rc-console::before {
+.editor-console .rc-toolbar {
+  position: relative;
+  z-index: 5;
+  flex: 0 0 auto;
+  display: flex;
+  /*
+   * Stretch, so every group is as tall as the tallest and the metal between them
+   * comes out the same length. Each group then puts its own caps on its floor —
+   * with `flex-end` here instead, a group of two square keys was shorter than the
+   * one holding the readout, and its separator was correspondingly stumpy.
+   */
+  align-items: stretch;
+  gap: 0.85rem;
+  padding: 0.6rem 1rem 0.65rem;
+  /* The drawers hang out of the strip into the desk, so it must not clip. */
+  overflow: visible;
+  /* No 300ms tap delay on a control panel: these are keys, not links. */
+  touch-action: manipulation;
+  /* The moulded edges, rotated with the panel: light along the top, occlusion
+     along the bottom where it turns away, and the cast onto the desk below. */
+  box-shadow:
+    inset 0 1px 0 rgb(125 124 120 / 55%),
+    inset 0 -2px 6px rgb(0 0 0 / 45%),
+    0 4px 22px rgb(0 0 0 / 55%);
+}
+
+/* Corner darkening, so the strip reads as a moulding and not a flat bar. The
+   cabinet's `#cabVig`, flattened to the shape it is on now. */
+.editor-console .rc-toolbar::before {
   content: '';
   position: absolute;
   inset: 0;
   pointer-events: none;
   background: radial-gradient(
-    ellipse 120% 90% at 38% 22%,
+    ellipse 90% 220% at 30% 30%,
     transparent 45%,
-    rgb(0 0 0 / 38%) 100%
+    rgb(0 0 0 / 34%) 100%
   );
 }
 
-.editor-console .rc-console > * {
+.editor-console .rc-toolbar > * {
   position: relative;
+}
+
+/*
+ * One group of controls. They sit on the strip's floor rather than centred on
+ * it: every cap on this panel has its caption underneath, and a row of caps
+ * centred against a row of caps-with-captions lines up on neither.
+ */
+.editor-console .rc-toolbar-group {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+/*
+ * The aluminium, upright.
+ *
+ * The column had one strip of metal in it, under the tab row, where the panel
+ * stopped being navigation and started being whatever was open. On a strip the
+ * same job falls between groups — page, tools, whole-page — so it is the same
+ * five bright pixels stood on end.
+ */
+.editor-console .rc-toolbar-group + .rc-toolbar-group {
+  position: relative;
+  margin-left: 0.5rem;
+  padding-left: 0.95rem;
+}
+
+.editor-console .rc-toolbar-group + .rc-toolbar-group::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: -0.6rem;
+  bottom: -0.65rem;
+  width: 5px;
+  background: var(--rc-alu);
+  box-shadow:
+    inset 1px 0 0 rgb(255 255 255 / 35%),
+    inset -1px 0 0 rgb(0 0 0 / 45%);
+}
+
+/* ── the nameplate, at the near end ───────────────────────────────────────── */
+
+.editor-console .rc-toolbar .rc-brand {
+  /* The column's nameplate sat above everything with air under it; here it is
+     one more thing on the row. */
+  padding-bottom: 0;
+  gap: 0.5rem;
+}
+
+.editor-console .rc-toolbar .rc-brand-name {
+  flex: 0 0 auto;
+  font-size: 0.6rem;
+  letter-spacing: 0.18em;
+}
+
+.editor-console .rc-toolbar .rc-brand-back {
+  width: 1.7rem;
+  height: 1.7rem;
+  font-size: 1rem;
+}
+
+/* ── the readout, and the rockers beside it ───────────────────────────────── */
+
+.editor-console .rc-toolbar .rc-display-row {
+  align-items: flex-end;
+  gap: 0.55rem;
+}
+
+/* Sized, not flexible: on a strip there is nothing to share the row with, and a
+   window that grows with the browser is a window that never looks the same. */
+.editor-console .rc-toolbar .rc-display {
+  flex: 0 0 auto;
+  width: 8.5rem;
+  max-width: none;
+}
+
+/* Side by side rather than stacked: stacked they make the strip twice as tall
+   as every key on it, and the strip's height is the page's to have. */
+.editor-console .rc-toolbar .rc-rockers {
+  flex-direction: row;
+  gap: 0.5rem;
+}
+
+.editor-console .rc-toolbar .rc-key-rocker {
+  width: 2.1rem;
+  min-height: 1.85rem;
+}
+
+/* ── the tools ────────────────────────────────────────────────────────────── */
+
+.editor-console .rc-toolbar-tools {
+  flex: 1 1 auto;
+}
+
+/* The tab strip's caps stretch to fill a column six keys wide. On the strip they
+   are a fixed size, because what is beside them is not another tool. */
+.editor-console .rc-toolbar .rc-key-tool {
+  flex: 0 0 auto;
+  width: 3.4rem;
+}
+
+/*
+ * The rack, standing open beside the tools that draw from it.
+ *
+ * Bounded and scrolling rather than growing: it is a rack, and a rack that
+ * lengthens until it pushes the whole-page keys off the end of the strip is a
+ * rack that has forgotten it is furniture.
+ */
+.editor-console .rc-toolbar-rack {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* Its shelf and caption sit on the strip's floor with the caps beside it. */
+  justify-content: flex-end;
+  margin-left: 0.35rem;
+}
+
+.editor-console .rc-toolbar-rack .brush-history-strip {
+  display: flex;
+  gap: 0.3rem;
+  max-width: 11rem;
+  min-height: 1.9rem;
+  padding: 0.2rem 0.25rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  border-radius: 4px;
+  /* Sunk, like the window: it is a shelf cut into the panel, not a row of caps
+     sitting on it. */
+  box-shadow:
+    inset 0 2px 5px rgb(0 0 0 / 75%),
+    0 1px 0 rgb(154 154 148 / 25%);
+}
+
+/* ── whatever acts on the whole page, at the far end ──────────────────────── */
+
+.editor-console .rc-toolbar-actions {
+  margin-left: auto;
+}
+
+/* An icon on its own needs a cap it can sit in the middle of, not one shaped
+   for an icon and a word. */
+.editor-console .rc-key-square {
+  width: 2.5rem;
+  min-height: 2.5rem;
+  padding: 0.4rem;
+}
+
+/* ── the drawers ──────────────────────────────────────────────────────────── */
+
+.editor-console .rc-anchor {
+  position: relative;
+  display: flex;
+}
+
+/*
+ * A drawer, hanging off its own key.
+ *
+ * The plastic of the strip continued downwards, with the shadow it casts onto
+ * the page proving which is in front. It is `max-content` up to a cap, so a
+ * palette sets its own width and a keypad sets its own, and it scrolls rather
+ * than growing past the window: a drawer is allowed to be tall, but never
+ * taller than the desk it is standing on.
+ */
+.editor-console .rc-flyout {
+  position: absolute;
+  top: calc(100% + 0.55rem);
+  left: 0;
+  z-index: 20;
+  width: max-content;
+  min-width: 15rem;
+  max-width: min(26rem, calc(100vw - 2rem));
+  max-height: min(62vh, 34rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.35rem 0.9rem 0.85rem;
+  border: 1px solid #0a0a0a;
+  border-radius: 0 0 7px 7px;
+  box-shadow:
+    inset 0 1px 0 rgb(125 124 120 / 45%),
+    0 16px 34px rgb(0 0 0 / 62%);
+}
+
+/* The keys at the far end open theirs against the right edge, which is the whole
+   of the edge handling a one-row strip needs. */
+.editor-console .rc-flyout-end {
+  left: auto;
+  right: 0;
+}
+
+/*
+ * A drawer holds clusters, and the first and last of them lose the padding they
+ * carry in a column: there the padding was the gap between clusters, here the
+ * drawer's own edge already is.
+ */
+.editor-console .rc-flyout .rc-cluster:first-child {
+  padding-top: 0.4rem;
+}
+
+.editor-console .rc-flyout .rc-cluster:last-child {
+  padding-bottom: 0;
+}
+
+/*
+ * Inside a drawer the readout is not the head of anything — the strip already
+ * has it — so the page drawer's own copy stacks its rockers back up under the
+ * window, where there is depth to spare and no strip height to protect.
+ */
+.editor-console .rc-flyout .rc-rockers {
+  flex-direction: column;
+}
+
+/* ── the strip on a smaller monitor ───────────────────────────────────────── */
+
+/*
+ * Above 900px there is no handset, so everything has to keep fitting on one row
+ * down to that width. The wordmark goes first — it is the one thing on the strip
+ * that is decoration — then the rack's caption, then the rack narrows. The keys
+ * themselves are never touched: they are what the strip is for.
+ */
+@media (min-width: 901px) and (max-width: 1180px) {
+  .editor-console .rc-toolbar {
+    gap: 0.6rem;
+  }
+
+  .editor-console .rc-toolbar .rc-brand-name {
+    display: none;
+  }
+
+  .editor-console .rc-toolbar-rack .rc-cap {
+    display: none;
+  }
+
+  .editor-console .rc-toolbar-rack .brush-history-strip {
+    max-width: 6.5rem;
+  }
 }
 
 /* ── nameplate ───────────────────────────────────────────────────────────── */
@@ -226,23 +489,6 @@
   height: 1px;
   background: rgb(0 0 0 / 55%);
   box-shadow: 0 1px 0 rgb(255 255 255 / 6%);
-}
-
-/*
- * The one piece of metal left: under the tab strip, where the panel stops being
- * navigation and starts being whatever the strip has open. The handset draws the
- * same strip in the same place — see `.rc-handset-head`.
- */
-.editor-console .rc-cluster-tabs + .rc-cluster::before {
-  left: -0.35rem;
-  right: -0.35rem;
-  height: 5px;
-  background: var(--rc-alu);
-  border-radius: 1px;
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 55%),
-    0 1px 0 rgb(0 0 0 / 85%),
-    0 3px 5px rgb(0 0 0 / 45%);
 }
 
 .editor-console .rc-cluster-actions {
@@ -458,12 +704,6 @@
   border-radius: 50%;
   background: var(--rc-lit);
   box-shadow: 0 0 4px rgb(126 224 140 / 80%);
-}
-
-/* The strip sits close under the display: it is the panel's own navigation, not
-   a cluster of controls, and the room belongs to whatever it has open. */
-.editor-console .rc-cluster-tabs {
-  padding-bottom: 0.55rem;
 }
 
 .editor-console .rc-key-label {
