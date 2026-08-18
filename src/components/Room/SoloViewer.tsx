@@ -14,6 +14,16 @@
  *
  * Page content comes from the same global `pages` channel the rooms and the
  * editor use, so pages edited elsewhere update live while being watched.
+ *
+ * ## The exhibition screen
+ *
+ * There is a hidden second face to this screen, for the case where the archive
+ * is being shown on a real CRT in a room rather than in a browser: the page
+ * alone, filling the display, with the cabinet, the header and every other
+ * thing that says *website* taken away. `?exhibit=1` on the URL or Shift+F puts
+ * it up and Escape takes it down, landing back on the page that was being
+ * watched. All of it is {@link useExhibitMode} and {@link ExhibitScreen}; what
+ * this file contributes is the three navigation callbacks it already had.
  */
 
 import { useCallback, useState } from 'react';
@@ -23,8 +33,10 @@ import { useSoloView } from '../../collab/useSoloView';
 import { useMediaQuery } from '../../utils/useMediaQuery';
 import { TeletextGrid } from '../TeletextGrid/TeletextGrid';
 import CrtTelevision from './CrtTelevision';
+import ExhibitScreen from './ExhibitScreen';
 import RoomLayout from './RoomLayout';
 import YellowPagesDrawer from './YellowPagesDrawer';
+import { useExhibitMode } from './useExhibitMode';
 import { usePageRoll } from './usePageRoll';
 
 /**
@@ -116,6 +128,39 @@ export function SoloViewer({ pageNumber: pageNumberProp }: SoloViewerProps) {
     },
     [setDisplayedPage, phone],
   );
+
+  // The same three controls the front panel is given, handed to a screen that
+  // has no front panel: on the exhibition screen the keyboard is all there is.
+  const exhibit = useExhibitMode({
+    onPageEntry: handleDialPage,
+    onPageStep: stepPage,
+    onSubpageStep: stepSubpageBy,
+  });
+
+  /*
+   * Instead of the room, not over it.
+   *
+   * Rendering the exhibition screen as an overlay on top of the ordinary one
+   * would leave a television, a leaflet and a header alive underneath it —
+   * animating, ticking their clocks, and one stacking-context mistake away from
+   * appearing on a CRT in a gallery. Returning early takes them out of the
+   * document entirely, and costs nothing on the way back: everything that says
+   * *which page is being watched* lives in `useSoloView` above this line, so
+   * Escape returns to the set on exactly the page that was on the screen.
+   */
+  if (exhibit.active) {
+    return (
+      <ExhibitScreen {...exhibit}>
+        <TeletextGrid
+          page={shownPage}
+          pageNumber={displayNumber}
+          subpage={subpage}
+          subpageCount={subpageCount}
+          readOnly
+        />
+      </ExhibitScreen>
+    );
+  }
 
   return (
     <RoomLayout title="">
