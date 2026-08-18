@@ -22,6 +22,7 @@ import DirectoryList from './DirectoryList';
 import { useDirectory, useOpenSections } from './directoryRows';
 import { SearchResults } from './searchResults';
 import { usePageSearchHits } from './usePageSearchHits';
+import { useCopy } from './useCopy';
 
 /** The panel's id, so the tab can say what it opens. */
 const PANEL_ID = 'yellow-pages-drawer-panel';
@@ -47,6 +48,7 @@ export function YellowPagesDrawer({
   onClose,
   onSelect,
 }: YellowPagesDrawerProps) {
+  const copy = useCopy();
   const { entries, blocks, counts } = useDirectory();
   const { openSections, toggleSection } = useOpenSections();
 
@@ -106,11 +108,11 @@ export function YellowPagesDrawer({
         className="yellow-pages-book yp-drawer-leaflet"
         id={PANEL_ID}
         role="region"
-        aria-label="Yellow Pages"
+        aria-label={copy.directory.title}
         inert={!open}
       >
         <div className="yellow-pages-masthead yp-drawer-masthead">
-          <span className="yellow-pages-brand">Yellow Pages</span>
+          <span className="yellow-pages-brand">{copy.directory.title}</span>
           <div className="yp-drawer-tools">
             <button
               type="button"
@@ -118,7 +120,7 @@ export function YellowPagesDrawer({
               onClick={toggleSearch}
               aria-expanded={searchOpen}
               aria-controls="yp-drawer-search"
-              aria-label={searchOpen ? 'Close search' : 'Search pages by text'}
+              aria-label={searchOpen ? copy.directory.searchClose : copy.directory.searchOpen}
             >
               <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
                 <circle
@@ -144,7 +146,7 @@ export function YellowPagesDrawer({
               type="button"
               className="yellow-pages-close"
               onClick={onClose}
-              aria-label="Close Yellow Pages"
+              aria-label={copy.directory.close}
             >
               ×
             </button>
@@ -158,8 +160,8 @@ export function YellowPagesDrawer({
             className="page-search-input"
             type="search"
             value={query}
-            placeholder="Find a word on any page…"
-            aria-label="Search pages by text"
+            placeholder={copy.directory.searchPlaceholder}
+            aria-label={copy.directory.searchOpen}
             onChange={(e) => setQuery(e.target.value)}
           />
         )}
@@ -175,11 +177,11 @@ export function YellowPagesDrawer({
           {searching ? (
             tooShort ? (
               <p className="yellow-pages-empty">
-                Keep going — at least {MIN_QUERY_LENGTH} characters.
+                {copy.directory.tooShort(MIN_QUERY_LENGTH)}
               </p>
             ) : hits.length === 0 ? (
               <p className="yellow-pages-empty">
-                Nothing found for &ldquo;{trimmed}&rdquo;.
+                {copy.directory.noResults}
               </p>
             ) : (
               <>
@@ -208,7 +210,7 @@ export function YellowPagesDrawer({
           )}
         </div>
 
-        <p className="yellow-pages-footnote">Tap a listing to go to that page.</p>
+        <p className="yellow-pages-footnote">{copy.directory.footnoteGo}</p>
       </div>
 
       {/*
@@ -223,7 +225,7 @@ export function YellowPagesDrawer({
         onClick={onToggle}
         aria-expanded={open}
         aria-controls={PANEL_ID}
-        aria-label={open ? 'Close Yellow Pages' : 'Open Yellow Pages'}
+        aria-label={open ? copy.directory.close : copy.directory.open}
       >
         <span className="yp-drawer-knob-label" aria-hidden="true">
           Yellow Pages

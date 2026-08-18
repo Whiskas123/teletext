@@ -82,6 +82,7 @@ import {
 import { INDEX_LINE } from '../../domain/indexLine';
 import { SevenSegment } from '../chrome/SevenSegment';
 import { useMediaQuery } from '../../utils/useMediaQuery';
+import { useCopy } from './useCopy';
 import { useDialPad } from './useDialPad';
 
 /** How long the switch-off animation runs, in step with `@keyframes crt-off-*`. */
@@ -468,6 +469,8 @@ function RemoteHandset({
   onFastext,
   onPower,
 }: RemoteHandsetProps) {
+  const copy = useCopy();
+
   return (
     <div className="crt-remote">
       <svg
@@ -475,7 +478,7 @@ function RemoteHandset({
         viewBox={`0 0 ${REMOTE_W} ${REMOTE_H}`}
         xmlns="http://www.w3.org/2000/svg"
         role="group"
-        aria-label="Remote control"
+        aria-label={copy.tv.remote}
       >
         {/* ===== BODY ===== */}
         <g id="remote-body">
@@ -575,7 +578,7 @@ function RemoteHandset({
         <g id="remote-page-nav">
           <PanelKey
             id="rc-page-down"
-            label="Previous page"
+            label={copy.tv.prevPage}
             onPress={onPageStep == null ? undefined : () => onPageStep(-1)}
             hit={{ x: REMOTE_PAGE_X[0], y: REMOTE_ROCKER_Y, width: REMOTE_ROCKER_W, height: REMOTE_ROCKER_H }}
             pad={REMOTE_HIT_PADDING}
@@ -590,7 +593,7 @@ function RemoteHandset({
           </PanelKey>
           <PanelKey
             id="rc-page-up"
-            label="Next page"
+            label={copy.tv.nextPage}
             onPress={onPageStep == null ? undefined : () => onPageStep(1)}
             hit={{ x: REMOTE_PAGE_X[1], y: REMOTE_ROCKER_Y, width: REMOTE_ROCKER_W, height: REMOTE_ROCKER_H }}
             pad={REMOTE_HIT_PADDING}
@@ -611,7 +614,7 @@ function RemoteHandset({
         <g id="remote-sub-nav">
           <PanelKey
             id="rc-sub-prev"
-            label={`Previous subpage (showing ${subpage} of ${subpageCount})`}
+            label={copy.tv.prevSubpage(subpage, subpageCount)}
             onPress={onSubpageStep == null ? undefined : () => onSubpageStep(-1)}
             hit={{ x: REMOTE_SUB_X[0], y: REMOTE_ROCKER_Y, width: REMOTE_ROCKER_W, height: REMOTE_ROCKER_H }}
             pad={REMOTE_HIT_PADDING}
@@ -626,7 +629,7 @@ function RemoteHandset({
           </PanelKey>
           <PanelKey
             id="rc-sub-next"
-            label={`Next subpage (showing ${subpage} of ${subpageCount})`}
+            label={copy.tv.nextSubpage(subpage, subpageCount)}
             onPress={onSubpageStep == null ? undefined : () => onSubpageStep(1)}
             hit={{ x: REMOTE_SUB_X[1], y: REMOTE_ROCKER_Y, width: REMOTE_ROCKER_W, height: REMOTE_ROCKER_H }}
             pad={REMOTE_HIT_PADDING}
@@ -654,7 +657,7 @@ function RemoteHandset({
         <g id="remote-power">
           <PanelKey
             id="rc-power"
-            label={lit ? 'Switch the television off' : 'Switch the television on'}
+            label={lit ? copy.tv.switchOff : copy.tv.switchOn}
             onPress={onPower}
             hit={REMOTE_POWER_HIT}
             pad={REMOTE_HIT_PADDING}
@@ -714,7 +717,7 @@ function RemoteHandset({
               <PanelKey
                 key={digit}
                 id={`rc-key-${digit}`}
-                label={`Dial ${digit}`}
+                label={copy.tv.dial(digit)}
                 onPress={onDigit == null ? undefined : () => onDigit(digit)}
                 hit={{ x, y, width: REMOTE_KEY_W, height: REMOTE_KEY_H }}
                 pad={REMOTE_HIT_PADDING}
@@ -736,7 +739,7 @@ function RemoteHandset({
               <PanelKey
                 key={item.fg}
                 id={`rc-ft-${item.fg}`}
-                label={`${item.label} (page ${item.page})`}
+                label={copy.tv.fastext(item.label, item.page)}
                 onPress={onFastext == null ? undefined : () => onFastext(item.page)}
                 hit={{ x, y: REMOTE_FT_HIT_Y, width: REMOTE_FT_W, height: REMOTE_FT_HIT_H }}
                 pad={REMOTE_FT_HIT_PADDING}
@@ -808,6 +811,7 @@ export function CrtTelevision({
   refusals = 0,
   compact = false,
 }: CrtTelevisionProps) {
+  const copy = useCopy();
   const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
   const [power, setPower] = useState<Power>('on');
   const powerTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -897,7 +901,7 @@ export function CrtTelevision({
           viewBox={viewBox}
           xmlns="http://www.w3.org/2000/svg"
           role="group"
-          aria-label="Television set"
+          aria-label={copy.tv.set}
         >
           <defs>
             <linearGradient id="cab" x1="0" y1="0" x2="0" y2="1">
@@ -1485,7 +1489,7 @@ export function CrtTelevision({
                     <PanelKey
                       key={digit}
                       id={`key-${digit}`}
-                      label={`Dial ${digit}`}
+                      label={copy.tv.dial(digit)}
                       onPress={digitPress == null ? undefined : () => digitPress(digit)}
                       hit={{ x, y: hitY, width: 40, height: hitH }}
                     >
@@ -1505,7 +1509,7 @@ export function CrtTelevision({
                       <PanelKey
                         key={item.fg}
                         id={`ft-${item.fg}`}
-                        label={`${item.label} (page ${item.page})`}
+                        label={copy.tv.fastext(item.label, item.page)}
                         onPress={fastext == null ? undefined : () => fastext(item.page)}
                         hit={{ x, y: 727, width: FASTEXT_KEY_WIDTH, height: 23 }}
                       >
@@ -1536,7 +1540,7 @@ export function CrtTelevision({
                 <g id="page-nav">
                   <PanelKey
                     id="btn-page-down"
-                    label="Previous page"
+                    label={copy.tv.prevPage}
                     onPress={pageStep == null ? undefined : () => pageStep(-1)}
                     hit={{ x: 642, y: 634, width: 52, height: 34 }}
                   >
@@ -1545,7 +1549,7 @@ export function CrtTelevision({
                   </PanelKey>
                   <PanelKey
                     id="btn-page-up"
-                    label="Next page"
+                    label={copy.tv.nextPage}
                     onPress={pageStep == null ? undefined : () => pageStep(1)}
                     hit={{ x: 700, y: 634, width: 52, height: 34 }}
                   >
@@ -1559,7 +1563,7 @@ export function CrtTelevision({
                 <g id="sub-nav">
                   <PanelKey
                     id="btn-sub-prev"
-                    label={`Previous subpage (showing ${subpage} of ${subpageCount})`}
+                    label={copy.tv.prevSubpage(subpage, subpageCount)}
                     onPress={subpageStep == null ? undefined : () => subpageStep(-1)}
                     hit={{ x: 654, y: 690, width: 40, height: 34 }}
                   >
@@ -1568,7 +1572,7 @@ export function CrtTelevision({
                   </PanelKey>
                   <PanelKey
                     id="btn-sub-next"
-                    label={`Next subpage (showing ${subpage} of ${subpageCount})`}
+                    label={copy.tv.nextSubpage(subpage, subpageCount)}
                     onPress={subpageStep == null ? undefined : () => subpageStep(1)}
                     hit={{ x: 700, y: 690, width: 40, height: 34 }}
                   >
@@ -1584,7 +1588,7 @@ export function CrtTelevision({
                 <g id="power">
                   <PanelKey
                     id="btn-power"
-                    label={lit ? 'Switch the television off' : 'Switch the television on'}
+                    label={lit ? copy.tv.switchOff : copy.tv.switchOn}
                     onPress={togglePower}
                     hit={{ x: 766, y: 638, width: 66, height: 48 }}
                   >

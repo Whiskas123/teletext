@@ -53,6 +53,7 @@ import {
 } from '../../domain/subpages';
 import { Editor } from '../Editor/Editor';
 import { LedWindow } from '../chrome/LedWindow';
+import { useCopy } from './useCopy';
 
 /** Default Page_Number for a moderator when none is provided or invalid. */
 const DEFAULT_PAGE_NUMBER = 100;
@@ -90,6 +91,7 @@ function resolveInitialPageNumber(
  */
 export function SoloEditor() {
   const params = useParams<{ pageNumber: string; subpage: string }>();
+  const copy = useCopy();
   const isModerator = useIsModerator();
   const [pageNumber, setPageNumber] = useState<number>(() =>
     resolveInitialPageNumber(params.pageNumber, isModerator),
@@ -190,11 +192,11 @@ export function SoloEditor() {
       setDialError(true);
       setPageError(
         target >= MIN_PAGE && target <= MAX_PAGE && !isModerator
-          ? `Pages ${MIN_PAGE}–${PLAYGROUND_MIN_PAGE - 1} are reserved.`
-          : `Pages are numbered ${MIN_PAGE}–${MAX_PAGE}.`,
+          ? copy.editor.reservedPages(MIN_PAGE, PLAYGROUND_MIN_PAGE - 1)
+          : copy.editor.pagesNumbered(MIN_PAGE, MAX_PAGE),
       );
     },
-    [isModerator, writeDial],
+    [isModerator, writeDial, copy],
   );
 
   // Stepping is not dialling: ▲ goes to the next page this member may edit,
@@ -267,12 +269,10 @@ export function SoloEditor() {
       // Show a validation message inline when the title is too long; the current
       // title is retained by setTitle (Req 9.6).
       setTitleError(
-        result === 'too-long'
-          ? `Title must be ${TITLE_MAX_LENGTH} characters or fewer.`
-          : null,
+        result === 'too-long' ? copy.editor.titleTooLong(TITLE_MAX_LENGTH) : null,
       );
     },
-    [setTitle, pageNumber],
+    [setTitle, pageNumber, copy],
   );
 
   const handleEditCell = useCallback(
@@ -318,7 +318,7 @@ export function SoloEditor() {
         className="rc-display"
         tabIndex={0}
         role="group"
-        aria-label={`Editing page ${pageNumber}, subpage ${subpage} of ${subpageCount}. Type three digits to open another page.`}
+        aria-label={copy.editor.editingPage(pageNumber, subpage, subpageCount)}
       >
         <LedWindow
           pageDigits={pageDigits}
@@ -333,7 +333,7 @@ export function SoloEditor() {
             <button
               type="button"
               className="rc-key rc-key-rocker"
-              aria-label="Previous page"
+              aria-label={copy.editor.prevPage}
               onClick={() => stepPage(-1)}
               disabled={pageNumber <= lowestEditable}
             >
@@ -344,7 +344,7 @@ export function SoloEditor() {
             <button
               type="button"
               className="rc-key rc-key-rocker"
-              aria-label="Next page"
+              aria-label={copy.editor.nextPage}
               onClick={() => stepPage(1)}
               disabled={pageNumber >= MAX_PAGE}
             >
@@ -353,7 +353,7 @@ export function SoloEditor() {
               </span>
             </button>
           </div>
-          <span className="rc-cap">Page</span>
+          <span className="rc-cap">{copy.editor.page}</span>
         </div>
 
         <div className="rc-rocker">
@@ -361,7 +361,7 @@ export function SoloEditor() {
             <button
               type="button"
               className="rc-key rc-key-rocker"
-              aria-label={`Previous subpage (editing ${subpage} of ${subpageCount})`}
+              aria-label={copy.editor.prevSubpage(subpage, subpageCount)}
               disabled={subpageCount <= 1}
               onClick={() =>
                 setRequestedSubpage(stepSubpage(subpage, subpageCount, -1))
@@ -374,7 +374,7 @@ export function SoloEditor() {
             <button
               type="button"
               className="rc-key rc-key-rocker"
-              aria-label={`Next subpage (editing ${subpage} of ${subpageCount})`}
+              aria-label={copy.editor.nextSubpage(subpage, subpageCount)}
               disabled={subpageCount <= 1}
               onClick={() =>
                 setRequestedSubpage(stepSubpage(subpage, subpageCount, 1))
@@ -385,7 +385,7 @@ export function SoloEditor() {
               </span>
             </button>
           </div>
-          <span className="rc-cap">Subpage</span>
+          <span className="rc-cap">{copy.editor.subpage}</span>
         </div>
       </div>
     </div>
@@ -397,14 +397,14 @@ export function SoloEditor() {
    */
   const pageControls = (
     <>
-      <section className="rc-cluster" aria-label="Page number">
-        <div className="rc-keypad" role="group" aria-label="Dial a page number">
+      <section className="rc-cluster" aria-label={copy.editor.page}>
+        <div className="rc-keypad" role="group" aria-label={copy.editor.dialAPage}>
           {KEYPAD_DIGITS.map((digit) => (
             <button
               key={digit}
               type="button"
               className="rc-key rc-key-digit"
-              aria-label={`Dial ${digit}`}
+              aria-label={copy.tv.dial(digit)}
               onClick={() => {
                 pressDigit(digit);
                 displayRef.current
@@ -425,7 +425,7 @@ export function SoloEditor() {
 
       <section className="rc-cluster">
         <h2 className="rc-legend" id="solo-editor-title-legend">
-          Title
+          {copy.editor.title}
         </h2>
         <input
           id="page-title-input"
@@ -433,7 +433,7 @@ export function SoloEditor() {
           className="rc-field"
           value={titleDraft}
           onChange={(e) => handleTitleChange(e.target.value)}
-          placeholder="Untitled page"
+          placeholder={copy.editor.untitled}
           maxLength={TITLE_MAX_LENGTH * 2}
           autoComplete="off"
           spellCheck={false}
@@ -458,7 +458,7 @@ export function SoloEditor() {
         * would renumber everything after it under the operator's cursor.
         */}
       <section className="rc-cluster">
-        <h2 className="rc-legend">Subpages</h2>
+        <h2 className="rc-legend">{copy.editor.subpages}</h2>
         <div className="rc-keyrow">
           <button
             type="button"
@@ -466,12 +466,12 @@ export function SoloEditor() {
             disabled={subpageCount >= MAX_SUBPAGE}
             title={
               subpageCount >= MAX_SUBPAGE
-                ? `A page holds at most ${MAX_SUBPAGE} subpages.`
-                : 'Add an empty subpage at the end and go to it'
+                ? copy.editor.maxSubpages(MAX_SUBPAGE)
+                : copy.editor.addSubpageHint
             }
             onClick={handleAddSubpage}
           >
-            <span>+ Add</span>
+            <span>{copy.editor.addSubpage}</span>
           </button>
           <button
             type="button"
@@ -479,19 +479,19 @@ export function SoloEditor() {
             disabled={subpageCount <= 1}
             title={
               subpageCount <= 1
-                ? 'Subpage 1 is the page itself.'
-                : `Delete subpage ${subpageCount} and its content`
+                ? copy.editor.subpageOneIsThePage
+                : copy.editor.removeSubpageHint(subpageCount)
             }
             onClick={handleRemoveSubpage}
           >
-            <span>− Remove last</span>
+            <span>{copy.editor.removeSubpage}</span>
           </button>
         </div>
       </section>
 
       {saveError != null && (
         <p className="rc-error" role="alert">
-          Change not saved: {saveError}
+          {copy.editor.notSaved(saveError)}
         </p>
       )}
     </>
@@ -499,14 +499,14 @@ export function SoloEditor() {
 
   const brand = (
     <div className="rc-brand">
-      <Link to="/" className="rc-brand-back" aria-label="Back to home">
+      <Link to="/" className="rc-brand-back" aria-label={copy.layout.backHome}>
         <span aria-hidden>‹</span>
       </Link>
       <span className="rc-brand-name">Teletextron</span>
       <span
         className={`rc-lamp${saveError != null ? ' rc-lamp-fault' : ''}`}
         role="status"
-        aria-label={saveError != null ? 'Not saving' : 'Saving'}
+        aria-label={saveError != null ? copy.editor.notSaving : copy.editor.saving}
       />
     </div>
   );

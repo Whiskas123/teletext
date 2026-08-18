@@ -17,6 +17,7 @@
 import { useEffect, useState } from 'react';
 
 import { MIN_QUERY_LENGTH } from '../../domain/pageSearch';
+import { useCopy } from './useCopy';
 import { SearchResults } from './searchResults';
 import { usePageSearchHits } from './usePageSearchHits';
 
@@ -33,6 +34,7 @@ export interface PageSearchProps {
 }
 
 export function PageSearch({ onSelect, onClose }: PageSearchProps) {
+  const copy = useCopy();
   const [query, setQuery] = useState('');
   const hits = usePageSearchHits(query);
 
@@ -50,17 +52,17 @@ export function PageSearch({ onSelect, onClose }: PageSearchProps) {
     <div
       className="yellow-pages-overlay"
       role="dialog"
-      aria-label="Search pages"
+      aria-label={copy.search.region}
       onClick={onClose}
     >
       <div className="yellow-pages-book" onClick={(e) => e.stopPropagation()}>
         <div className="yellow-pages-masthead">
-          <span className="yellow-pages-brand">Search</span>
+          <span className="yellow-pages-brand">{copy.search.title}</span>
           <button
             type="button"
             className="yellow-pages-close"
             onClick={onClose}
-            aria-label="Close search"
+            aria-label={copy.search.close}
           >
             ×
           </button>
@@ -71,8 +73,8 @@ export function PageSearch({ onSelect, onClose }: PageSearchProps) {
           type="search"
           value={query}
           autoFocus
-          placeholder="Find a word on any page…"
-          aria-label="Search pages by text"
+          placeholder={copy.directory.searchPlaceholder}
+          aria-label={copy.directory.searchOpen}
           onChange={(e) => setQuery(e.target.value)}
         />
 
@@ -85,11 +87,11 @@ export function PageSearch({ onSelect, onClose }: PageSearchProps) {
           </p>
         ) : tooShort ? (
           <p className="yellow-pages-empty">
-            Keep going — at least {MIN_QUERY_LENGTH} characters.
+            {copy.directory.tooShort(MIN_QUERY_LENGTH)}
           </p>
         ) : hits.length === 0 ? (
           <p className="yellow-pages-empty">
-            Nothing found for &ldquo;{query.trim()}&rdquo;.
+            {copy.directory.noResults}
           </p>
         ) : (
           <>
@@ -106,7 +108,7 @@ export function PageSearch({ onSelect, onClose }: PageSearchProps) {
           </>
         )}
 
-        <p className="yellow-pages-footnote">Tap a result to request that page.</p>
+        <p className="yellow-pages-footnote">{copy.search.footnote}</p>
       </div>
     </div>
   );

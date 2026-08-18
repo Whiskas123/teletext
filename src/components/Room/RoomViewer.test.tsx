@@ -12,6 +12,18 @@ import { MemoryRouter } from 'react-router-dom';
 import { RoomViewer } from './RoomViewer';
 import type { RoomSyncApi } from '../../collab/useRoomSync';
 import { createEmptyPage } from '../../types/teletext';
+import { COPY } from '../../domain/copy';
+import { DEFAULT_LANGUAGE } from '../../domain/landing';
+
+/*
+ * The controls are named through the copy table, not spelled out.
+ *
+ * Every label on this screen is translated, so a test that asked for the button
+ * called "Next page" would be testing which language the app happens to open in
+ * rather than what the button does — and would break the day the default
+ * changed, which is the change least worth failing over.
+ */
+const copy = COPY[DEFAULT_LANGUAGE];
 
 // Mock the room-sync hook so we can drive the displayed page and assert that the
 // page-setter spies are never invoked by anything the viewer offers.
@@ -128,12 +140,12 @@ describe('RoomViewer', () => {
     setRoomSync(100);
     renderViewer();
 
-    await user.click(screen.getByRole('button', { name: 'Dial 2' }));
-    await user.click(screen.getByRole('button', { name: 'Dial 4' }));
+    await user.click(screen.getByRole('button', { name: copy.tv.dial('2') }));
+    await user.click(screen.getByRole('button', { name: copy.tv.dial('4') }));
     // Nothing may have happened yet: two digits is a half-dialled number.
     expect(submitMock).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole('button', { name: 'Dial 3' }));
+    await user.click(screen.getByRole('button', { name: copy.tv.dial('3') }));
 
     expect(submitMock).toHaveBeenCalledWith(243);
     expectNoDirectNavigation();
@@ -144,10 +156,10 @@ describe('RoomViewer', () => {
     setRoomSync(100);
     renderViewer();
 
-    await user.click(screen.getByRole('button', { name: /next page/i }));
+    await user.click(screen.getByRole('button', { name: copy.tv.nextPage }));
     expect(submitMock).toHaveBeenCalledWith(220);
 
-    await user.click(screen.getByRole('button', { name: /previous page/i }));
+    await user.click(screen.getByRole('button', { name: copy.tv.prevPage }));
     expect(submitMock).toHaveBeenCalledWith(150);
 
     // Peeked, never taken: `goto*` applies the move, which is the vote's job.
@@ -161,7 +173,9 @@ describe('RoomViewer', () => {
     setRoomSync(220, { subpage: 1, count: 3 });
     renderViewer();
 
-    await user.click(screen.getByRole('button', { name: /next subpage/i }));
+    await user.click(
+      screen.getByRole('button', { name: copy.tv.nextSubpage(1, 3) }),
+    );
 
     expect(stepSubpageBy).toHaveBeenCalledWith(1);
     expect(submitMock).not.toHaveBeenCalled();
@@ -175,7 +189,7 @@ describe('RoomViewer', () => {
 
     // Held by reference rather than re-queried: once open, the leaflet's own
     // close button answers to the same name as the knob.
-    const knob = screen.getByRole('button', { name: 'Open Yellow Pages' });
+    const knob = screen.getByRole('button', { name: copy.directory.open });
     expect(knob).toHaveAttribute('aria-expanded', 'false');
 
     await user.click(knob);
@@ -191,7 +205,9 @@ describe('RoomViewer', () => {
     setRoomSync(100);
     renderViewer();
 
-    expect(screen.getByRole('region', { name: /room vote/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('region', { name: copy.vote.region }),
+    ).toBeInTheDocument();
     expect(screen.getByTestId('chat-sidebar')).toBeInTheDocument();
   });
 });

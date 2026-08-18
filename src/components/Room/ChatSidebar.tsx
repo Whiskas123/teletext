@@ -31,24 +31,37 @@
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 
+import { COPY } from '../../domain/copy';
+import { DEFAULT_LANGUAGE } from '../../domain/landing';
 import { useChat } from '../../collab/useChat';
 import type { ChatMessage } from '../../collab/types';
 import PresenceList from './PresenceList';
+import { useCopy } from './useCopy';
+
+/*
+ * The strings below are the copy table's entries for the default language, not
+ * second copies of them.
+ *
+ * They exist because the tests name them, and because a test that spells the
+ * words out again is a test that fails the day somebody rewords the interface —
+ * which is exactly the change least worth failing over. Pointing them at
+ * {@link COPY} means there is still one place the words live.
+ */
 
 /** Empty-chat indication shown when the room has no messages (Req 5.2). */
-export const EMPTY_CHAT_LABEL = 'No messages yet. Say hello!';
+export const EMPTY_CHAT_LABEL = COPY[DEFAULT_LANGUAGE].chat.empty;
 
 /** Inline error shown when an empty/whitespace-only message is submitted (Req 5.5). */
-export const EMPTY_MESSAGE_ERROR = 'Message cannot be empty';
+export const EMPTY_MESSAGE_ERROR = COPY[DEFAULT_LANGUAGE].chat.errorEmpty;
 
 /** Inline error shown when a message exceeds the length limit (Req 5.6). */
-export const TOO_LONG_MESSAGE_ERROR = 'Message exceeds 500 characters';
+export const TOO_LONG_MESSAGE_ERROR = COPY[DEFAULT_LANGUAGE].chat.errorTooLong;
 
 /** Maximum trimmed message length enforced by the chat service (Req 5.6). */
 export const MAX_MESSAGE_LENGTH = 500;
 
 /** The console's nameplate. */
-export const CHAT_HEADING = 'Chat';
+export const CHAT_HEADING = COPY[DEFAULT_LANGUAGE].chat.name;
 
 /** Format a chat message timestamp into a readable, locale-aware time (Req 5.1). */
 function formatTimestamp(ts: number): string {
@@ -82,6 +95,7 @@ function ChatMessageItem({ message }: { message: ChatMessage }) {
  */
 export function ChatSidebar() {
   const { messages, send } = useChat();
+  const copy = useCopy();
 
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -100,12 +114,12 @@ export function ChatSidebar() {
     const result = send(draft);
     if (result === 'empty') {
       // Reject empty/whitespace-only input; keep the draft (Req 5.5).
-      setError(EMPTY_MESSAGE_ERROR);
+      setError(copy.chat.errorEmpty);
       return;
     }
     if (result === 'too-long') {
       // Reject over-length input; keep the draft (Req 5.6).
-      setError(TOO_LONG_MESSAGE_ERROR);
+      setError(copy.chat.errorTooLong);
       return;
     }
     // 'ok' — message appended; clear the input and any prior error (Req 5.4).
@@ -114,23 +128,23 @@ export function ChatSidebar() {
   };
 
   return (
-    <section className="room-console chat-console" aria-label="Room chat">
+    <section className="room-console chat-console" aria-label={copy.chat.region}>
       <div className="rc-nameplate">
-        <h2 className="rc-nameplate-name">{CHAT_HEADING}</h2>
+        <h2 className="rc-nameplate-name">{copy.chat.name}</h2>
       </div>
 
       {/* The room is the one place a member sets their display name. */}
       <PresenceList allowRename />
 
       {messages.length === 0 ? (
-        <p className="chat-empty">{EMPTY_CHAT_LABEL}</p>
+        <p className="chat-empty">{copy.chat.empty}</p>
       ) : (
         <ul
           ref={listRef}
           className="chat-messages"
           role="log"
           aria-live="polite"
-          aria-label="Chat messages"
+          aria-label={copy.chat.log}
         >
           {messages.map((message) => (
             <ChatMessageItem key={message.id} message={message} />
@@ -151,8 +165,8 @@ export function ChatSidebar() {
           type="text"
           value={draft}
           maxLength={MAX_MESSAGE_LENGTH}
-          placeholder="Say something…"
-          aria-label="Message"
+          placeholder={copy.chat.placeholder}
+          aria-label={copy.chat.messageLabel}
           aria-invalid={error !== null}
           aria-describedby={error ? 'chat-message-error' : undefined}
           onChange={(event) => {
@@ -163,7 +177,7 @@ export function ChatSidebar() {
           }}
         />
         <button type="submit" className="rc-key chat-send">
-          Send
+          {copy.chat.send}
         </button>
         {error && (
           <p id="chat-message-error" className="rc-note chat-error" role="alert">

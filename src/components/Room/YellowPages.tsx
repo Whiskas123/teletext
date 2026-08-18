@@ -17,6 +17,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import DirectoryList from './DirectoryList';
+import { useCopy } from './useCopy';
 import { useDirectory, useOpenSections } from './directoryRows';
 
 export interface YellowPagesProps {
@@ -71,6 +72,7 @@ function useSheets(flow: React.RefObject<HTMLDivElement | null>, deps: unknown) 
 }
 
 export function YellowPages({ onSelect, onClose }: YellowPagesProps) {
+  const copy = useCopy();
   const { entries, blocks, counts } = useDirectory();
   const { openSections, toggleSection } = useOpenSections();
 
@@ -111,7 +113,7 @@ export function YellowPages({ onSelect, onClose }: YellowPagesProps) {
        * it is deliberate. The yellow book icon is what opens the directory, so
        * it has to remain clickable to close it again.
        */
-      aria-label="Yellow Pages"
+      aria-label={copy.directory.title}
       onClick={onClose}
     >
       <div
@@ -125,7 +127,7 @@ export function YellowPages({ onSelect, onClose }: YellowPagesProps) {
               <button
                 type="button"
                 className="yellow-pages-turn"
-                aria-label="Previous sheet"
+                aria-label={copy.directory.prevSheet}
                 disabled={sheet === 0}
                 onClick={() => setSheet((s) => Math.max(s - 1, 0))}
               >
@@ -137,7 +139,7 @@ export function YellowPages({ onSelect, onClose }: YellowPagesProps) {
               <button
                 type="button"
                 className="yellow-pages-turn"
-                aria-label="Next sheet"
+                aria-label={copy.directory.nextSheet}
                 disabled={sheet === sheets - 1}
                 onClick={() => setSheet((s) => Math.min(s + 1, sheets - 1))}
               >
@@ -149,7 +151,7 @@ export function YellowPages({ onSelect, onClose }: YellowPagesProps) {
             type="button"
             className="yellow-pages-close"
             onClick={onClose}
-            aria-label="Close Yellow Pages"
+            aria-label={copy.directory.close}
           >
             ×
           </button>
@@ -184,7 +186,7 @@ export function YellowPages({ onSelect, onClose }: YellowPagesProps) {
           </div>
         )}
 
-        <p className="yellow-pages-footnote">Tap a listing to request that page.</p>
+        <p className="yellow-pages-footnote">{copy.directory.footnoteRequest}</p>
       </div>
     </div>
   );

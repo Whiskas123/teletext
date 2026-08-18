@@ -54,6 +54,8 @@ import {
 import { cellsBetween } from "../../domain/strokeLine";
 import { exportPageAsPng } from "../../utils/exportPng";
 import { useMediaQuery } from "../../utils/useMediaQuery";
+import { useCopy } from "../Room/useCopy";
+import type { Copy } from "../../domain/copy";
 import { TeletextGrid } from "../TeletextGrid/TeletextGrid";
 
 const SIXEL_TOOLTIP_MARGIN = 8;
@@ -158,44 +160,58 @@ type ConsoleTab = "page" | BrushMode;
  * tool to one and not the other. Written once here, both shells get the same
  * row in the same order, and a sixth tool is a line in this table.
  */
+/*
+ * The five tool keys.
+ *
+ * The cap's word and its tooltip are looked up rather than written here: this
+ * table is the *order the keys are moulded in*, which is not language, and a
+ * module-level constant is evaluated once at import — long before anyone has
+ * said which language they read in. So it carries the key into {@link Copy} and
+ * the strip resolves it at render.
+ */
 const BRUSH_KEYS: readonly {
   mode: BrushMode;
-  label: string;
-  title: string;
+  label: keyof Copy["editor"];
+  title: keyof Copy["editor"];
   Icon: (props: { className?: string }) => React.ReactElement;
 }[] = [
   {
     mode: "off",
-    label: "Text",
-    title: "Type text",
+    label: "toolText",
+    title: "toolTextHint",
     Icon: IconTextCursor,
   },
   {
     mode: "block",
-    label: "Block",
-    title: "Paint whole mosaic cells with a motif",
+    label: "toolBlock",
+    title: "toolBlockHint",
     Icon: IconBlock,
   },
   {
     mode: "pixel",
-    label: "Pixel",
-    title: "Paint a single sixth of a cell. Alt+click to erase it.",
+    label: "toolPixel",
+    title: "toolPixelHint",
     Icon: IconPixel,
   },
   {
     mode: "blink",
-    label: "Blink",
-    title: "Paint blink on cells. Alt+click to remove blink.",
+    label: "toolBlink",
+    title: "toolBlinkHint",
     Icon: IconBlink,
   },
   {
     mode: "picker",
-    label: "Pick",
-    title:
-      "Click a cell to copy what made it: its colours if it holds a character, its shape and colours if it is a mosaic.",
+    label: "toolPick",
+    title: "toolPickHint",
     Icon: IconPipette,
   },
 ];
+
+/** Resolve one of {@link BRUSH_KEYS}' copy keys to the words themselves. */
+function toolWord(copy: Copy, key: keyof Copy["editor"]): string {
+  const value = copy.editor[key];
+  return typeof value === "string" ? value : "";
+}
 
 /**
  * Which toolbar keys have something to open, and what the panel is called in
@@ -1283,6 +1299,7 @@ export function Editor({
    * more than a cap hangs off its key as a drawer. See `toolbar`.
    */
   const isNarrow = useMediaQuery("(max-width: 900px)");
+  const copy = useCopy();
 
   /**
    * Which drawer the strip has out, if any.
@@ -1374,18 +1391,18 @@ export function Editor({
    * read from and the reason a sixth tool is still one line of data.
    */
   const tabs = (
-    <div className="rc-tabs" role="tablist" aria-label="Console">
+    <div className="rc-tabs" role="tablist" aria-label={copy.editor.console}>
       {(display != null || pageControls != null) && (
         <button
           type="button"
           role="tab"
           className={`rc-key rc-key-tool${tab === "page" ? " rc-key-lit" : ""}`}
           onClick={() => setTab("page")}
-          title="Which page is being edited, and what it is called"
+          title={copy.editor.pageSetupHint}
           aria-selected={tab === "page"}
         >
           <IconPage className="rc-key-icon" />
-          <span className="rc-key-label">Page</span>
+          <span className="rc-key-label">{copy.editor.page}</span>
         </button>
       )}
       <div className="rc-tabs-tools">
@@ -1397,11 +1414,11 @@ export function Editor({
             className={`rc-key rc-key-tool${tab === mode ? " rc-key-lit" : ""}`}
             data-held={brushMode === mode && tab !== mode ? "" : undefined}
             onClick={() => holdTool(mode)}
-            title={title}
+            title={toolWord(copy, title)}
             aria-selected={tab === mode}
           >
             <Icon className="rc-key-icon" />
-            <span className="rc-key-label">{label}</span>
+            <span className="rc-key-label">{toolWord(copy, label)}</span>
           </button>
         ))}
       </div>
@@ -1447,7 +1464,7 @@ export function Editor({
   );
 
   const textPad = (
-    <div className="rc-keyboard" role="group" aria-label="Keyboard">
+    <div className="rc-keyboard" role="group" aria-label={copy.editor.keyboard}>
       {(padLayer === "symbols" ? PAD_SYMBOLS : PAD_LETTERS).map((row, rowIndex) => (
         <div className="rc-keyboard-row" key={rowIndex}>
           {rowIndex === 3 &&
@@ -1512,7 +1529,7 @@ export function Editor({
     <>
       <div className="text-preview-three-col">
         <div className="text-preview-col">
-          <span className="text-preview-label">Color</span>
+          <span className="text-preview-label">{copy.editor.color}</span>
           <div className="text-preview-swatches text-preview-swatches-4x4">
             {TELETEXT_COLORS.map((color) => (
               <button
@@ -1527,7 +1544,7 @@ export function Editor({
           </div>
         </div>
         <div className="text-preview-col">
-          <span className="text-preview-label">Background</span>
+          <span className="text-preview-label">{copy.editor.background}</span>
           <div className="text-preview-swatches text-preview-swatches-4x4">
             {TELETEXT_COLORS.map((color) => (
               <button
@@ -1551,10 +1568,10 @@ export function Editor({
         className={`rc-key rc-key-wide ${doubleHeightOn ? "rc-key-lit" : ""}`}
         onClick={() => setDoubleHeightOn((v) => !v)}
         aria-pressed={doubleHeightOn}
-        title="Typed characters render at twice the row height. Not available on the last row."
+        title={copy.editor.doubleHeightHint}
       >
         <IconDoubleHeight className="rc-key-icon" />
-        <span>Double height</span>
+        <span>{copy.editor.doubleHeight}</span>
       </button>
     </>
   );
@@ -1600,14 +1617,14 @@ export function Editor({
   ));
 
   const textStyleSection = (
-    <section className="rc-cluster" aria-label="Text style">
+    <section className="rc-cluster" aria-label={copy.editor.toolText}>
       {textStyleControls}
 
       {textPad}
 
       {textStyleChips.length > 0 && (
         <div className="color-block brush-history">
-          <span className="sidebar-field-label">Recent text styles</span>
+          <span className="sidebar-field-label">{copy.editor.recentTextStyles}</span>
           <div className="brush-history-strip">{textStyleChips}</div>
         </div>
       )}
@@ -1662,13 +1679,13 @@ export function Editor({
             ))}
           </div>
           <div className="brush-picked-text">
-            <span className="sidebar-field-label">Picked shape</span>
+            <span className="sidebar-field-label">{copy.editor.pickedShape}</span>
             <button
               type="button"
               className="rc-key rc-key-wide"
               onClick={() => setBlockPattern(SIXEL_MAX)}
             >
-              <span>Fill the whole cell</span>
+              <span>{copy.editor.fillWholeCell}</span>
             </button>
           </div>
         </div>
@@ -1824,7 +1841,7 @@ export function Editor({
   const pixelOptions = (
     <div className="brush-options">
       <div className="color-block">
-        <span className="sidebar-field-label">Pixel color</span>
+        <span className="sidebar-field-label">{copy.editor.pixelColor}</span>
         <div className="text-preview-swatches text-preview-swatches-4x4">
           {TELETEXT_COLORS.map((color) => (
             <button
@@ -1845,7 +1862,7 @@ export function Editor({
   const recentBrushes =
     brushChips.length > 0 ? (
       <div className="color-block brush-history">
-        <span className="sidebar-field-label">Recent brushes</span>
+        <span className="sidebar-field-label">{copy.editor.recentBrushes}</span>
         <div className="brush-history-strip">{brushChips}</div>
       </div>
     ) : null;
@@ -1896,7 +1913,7 @@ export function Editor({
    */
   const clearConfirm = (
     <div className="clear-confirm">
-      <span className="clear-confirm-label">Clear the whole page?</span>
+      <span className="clear-confirm-label">{copy.editor.clearConfirm}</span>
       <div className="rc-keyrow">
         <button
           type="button"
@@ -1906,21 +1923,21 @@ export function Editor({
             setClearConfirmShown(false);
           }}
         >
-          <span>Yes, clear</span>
+          <span>{copy.editor.clearYes}</span>
         </button>
         <button
           type="button"
           className="rc-key rc-key-wide"
           onClick={() => setClearConfirmShown(false)}
         >
-          <span>Cancel</span>
+          <span>{copy.editor.clearNo}</span>
         </button>
       </div>
     </div>
   );
 
   const actionsSection = (
-    <section className="rc-cluster rc-cluster-actions" aria-label="Whole page">
+    <section className="rc-cluster rc-cluster-actions" aria-label={copy.editor.wholePage}>
       {onBackToGrid != null && (
         <button
           type="button"
@@ -1930,7 +1947,7 @@ export function Editor({
           }}
         >
           <IconBack className="rc-key-icon" />
-          <span>Back to grid</span>
+          <span>{copy.editor.backToGrid}</span>
         </button>
       )}
       <button
@@ -1950,7 +1967,7 @@ export function Editor({
           onClick={() => setClearConfirmShown(true)}
         >
           <IconTrash className="rc-key-icon" />
-          <span>Clear page</span>
+          <span>{copy.editor.clearPage}</span>
         </button>
       )}
     </section>
@@ -2021,7 +2038,7 @@ export function Editor({
       )}
 
       {(display != null || pageControls != null) && (
-        <div className="rc-toolbar-group" role="group" aria-label="Page">
+        <div className="rc-toolbar-group" role="group" aria-label={copy.editor.page}>
           {display}
           {pageControls != null && (
             <div className="rc-anchor">
@@ -2042,8 +2059,8 @@ export function Editor({
                   openFlyout === "page" ? " rc-key-lit" : ""
                 }`}
                 onClick={pressPageKey}
-                title="Dial a page number, name the page, add or remove screens"
-                aria-label="Page setup"
+                title={copy.editor.pageSetupHint}
+                aria-label={copy.editor.pageSetup}
                 aria-expanded={openFlyout === "page"}
                 aria-controls={FLYOUT_IDS.page}
               >
@@ -2052,7 +2069,7 @@ export function Editor({
               <Flyout
                 open={openFlyout === "page"}
                 panelId={FLYOUT_IDS.page}
-                label="Page setup"
+                label={copy.editor.pageSetup}
               >
                 {pageControls}
               </Flyout>
@@ -2061,7 +2078,7 @@ export function Editor({
         </div>
       )}
 
-      <div className="rc-toolbar-group rc-toolbar-tools" role="group" aria-label="Tools">
+      <div className="rc-toolbar-group rc-toolbar-tools" role="group" aria-label={copy.editor.tools}>
         {BRUSH_KEYS.map(({ mode, label, title, Icon }) => {
           const panel = toolPanel(mode);
           const shown = openFlyout === mode;
@@ -2073,19 +2090,19 @@ export function Editor({
                   brushMode === mode ? " rc-key-lit" : ""
                 }`}
                 onClick={() => pressToolKey(mode)}
-                title={title}
+                title={toolWord(copy, title)}
                 aria-pressed={brushMode === mode}
                 aria-expanded={panel != null ? shown : undefined}
                 aria-controls={panel != null ? FLYOUT_IDS[mode] : undefined}
               >
                 <Icon className="rc-key-icon" />
-                <span className="rc-key-label">{label}</span>
+                <span className="rc-key-label">{toolWord(copy, label)}</span>
               </button>
               {panel != null && (
                 <Flyout
                   open={shown}
                   panelId={FLYOUT_IDS[mode]}
-                  label={`${label} options`}
+                  label={toolWord(copy, label)}
                 >
                   {panel}
                 </Flyout>
@@ -2106,19 +2123,19 @@ export function Editor({
         <div
           className="rc-toolbar-rack"
           role="group"
-          aria-label={isBrushActive ? "Recent brushes" : "Recent text styles"}
+          aria-label={isBrushActive ? copy.editor.recentBrushes : copy.editor.recentTextStyles}
         >
           <div className="brush-history-strip">
             {isBrushActive ? brushChips : textStyleChips}
           </div>
-          <span className="rc-cap">Recent</span>
+          <span className="rc-cap">{copy.editor.recent}</span>
         </div>
       </div>
 
       <div
         className="rc-toolbar-group rc-toolbar-actions"
         role="group"
-        aria-label="Whole page"
+        aria-label={copy.editor.wholePage}
       >
         {onBackToGrid != null && (
           <button
@@ -2127,8 +2144,8 @@ export function Editor({
             onClick={() => {
               void onBackToGrid();
             }}
-            title="Back to grid"
-            aria-label="Back to grid"
+            title={copy.editor.backToGrid}
+            aria-label={copy.editor.backToGrid}
           >
             <IconBack className="rc-key-icon" />
           </button>
@@ -2137,8 +2154,8 @@ export function Editor({
           type="button"
           className="rc-key rc-key-square"
           onClick={() => exportPageAsPng(page, "teletext.png", pageNumber ?? 100)}
-          title="Export this page as a PNG"
-          aria-label="Export PNG"
+          title={copy.editor.exportPng}
+          aria-label={copy.editor.exportKey}
         >
           <IconExport className="rc-key-icon" />
         </button>
@@ -2148,8 +2165,8 @@ export function Editor({
             type="button"
             className="rc-key rc-key-square rc-key-danger"
             onClick={pressClearKey}
-            title="Clear the whole page"
-            aria-label="Clear page"
+            title={copy.editor.clearPage}
+            aria-label={copy.editor.clearPage}
             aria-expanded={clearConfirmShown}
             aria-controls={CLEAR_FLYOUT_ID}
           >
@@ -2158,7 +2175,7 @@ export function Editor({
           <Flyout
             open={clearConfirmShown}
             panelId={CLEAR_FLYOUT_ID}
-            label="Clear the whole page"
+            label={copy.editor.clearPage}
             align="end"
           >
             {clearConfirm}
@@ -2184,7 +2201,7 @@ export function Editor({
         onBlur={handleGridBlur}
         onMouseLeave={handleGridMouseLeave}
         role="application"
-        aria-label="Teletext editor grid"
+        aria-label={copy.editor.grid}
       >
         <input
           ref={hiddenInputRef}

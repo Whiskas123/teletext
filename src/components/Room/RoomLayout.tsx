@@ -17,6 +17,7 @@ import { type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
 import ConnectionStatus from './ConnectionStatus';
+import { useCopy } from './useCopy';
 
 export interface RoomLayoutProps {
   /**
@@ -46,17 +47,19 @@ export interface RoomLayoutProps {
  * an optional sidebar.
  */
 export function RoomLayout({ roomId, title, children, sidebar }: RoomLayoutProps) {
+  const copy = useCopy();
+
   return (
     <div className="room-layout">
       <header className="room-layout-header">
-        <Link to="/" className="room-back-link" aria-label="Back to home">
+        <Link to="/" className="room-back-link" aria-label={copy.layout.backHome}>
           <span className="room-back-arrow">&lt;</span>
           <img src="/logo.png" alt="" className="room-back-logo" />
         </Link>
         <div className="room-id-display">
           {roomId != null ? (
             <>
-              <span className="room-id-label">Room</span>
+              <span className="room-id-label">{copy.layout.room}</span>
               <code className="room-id-value">{roomId}</code>
             </>
           ) : (
@@ -70,7 +73,7 @@ export function RoomLayout({ roomId, title, children, sidebar }: RoomLayoutProps
         <main className="room-layout-main">{children}</main>
 
         {sidebar != null && (
-          <aside className="room-layout-sidebar" aria-label="Room panels">
+          <aside className="room-layout-sidebar" aria-label={copy.layout.panels}>
             {sidebar}
           </aside>
         )}

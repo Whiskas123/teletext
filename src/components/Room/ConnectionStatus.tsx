@@ -15,12 +15,23 @@
  * Requirements: 8.1, 8.2.
  */
 
+import { COPY } from '../../domain/copy';
+import { DEFAULT_LANGUAGE } from '../../domain/landing';
 import { useConnection } from '../../collab/useConnection';
+import { useCopy } from './useCopy';
 
-/**
- * The disconnected indicator text (Req 8.1).
+/*
+ * The strings below are the copy table's entries for the default language, not
+ * second copies of them.
+ *
+ * They exist because the tests name them, and because a test that spells the
+ * words out again is a test that fails the day somebody rewords the interface —
+ * which is exactly the change least worth failing over. Pointing them at
+ * {@link COPY} means there is still one place the words live.
  */
-export const DISCONNECTED_LABEL = 'Disconnected — reconnecting…';
+
+/** The disconnected indicator text (Req 8.1). */
+export const DISCONNECTED_LABEL = COPY[DEFAULT_LANGUAGE].connection.disconnected;
 
 /**
  * Render the disconnected indicator while offline; render nothing when
@@ -28,6 +39,7 @@ export const DISCONNECTED_LABEL = 'Disconnected — reconnecting…';
  */
 export function ConnectionStatus() {
   const { status } = useConnection();
+  const copy = useCopy();
 
   if (status === 'connected') {
     // Hidden when connected (Req 8.2).
@@ -41,7 +53,7 @@ export function ConnectionStatus() {
       aria-live="assertive"
     >
       <span className="connection-status-dot" aria-hidden="true" />
-      {DISCONNECTED_LABEL}
+      {copy.connection.disconnected}
     </div>
   );
 }

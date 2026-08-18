@@ -54,12 +54,15 @@
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 
+import { COPY, type Copy } from '../../domain/copy';
+import { DEFAULT_LANGUAGE } from '../../domain/landing';
 import { useVoting } from '../../collab/useVoting';
 import type { SubmitResult, VoteResult } from '../../collab/useVoting';
 import SegmentVisor from '../chrome/SegmentVisor';
+import { useCopy } from './useCopy';
 
 /** The console's nameplate. */
-export const VOTE_PANEL_HEADING = 'Vote';
+export const VOTE_PANEL_HEADING = COPY[DEFAULT_LANGUAGE].vote.name;
 
 /** How long the visor holds the closing reading after a vote resolves. */
 const SETTLE_MS = 4500;
@@ -70,18 +73,28 @@ const SETTLE_MS = 4500;
  */
 const REFUSAL_MS = 700;
 
-/** Human-readable messages for each submit rejection reason. */
-const SUBMIT_MESSAGES: Record<string, string> = {
-  'out-of-range': 'Enter a page number between 100 and 999',
-  'active-exists': 'A vote is already in progress',
-};
+/**
+ * Why a request or a vote was refused, in words.
+ *
+ * Built from the copy rather than declared as constants: the reasons are a
+ * closed set the domain returns, but what they *say* is language, and a table
+ * of English strings beside a translated panel would be the one part of the
+ * console that never learned Portuguese.
+ */
+function submitMessages(copy: Copy): Record<string, string> {
+  return {
+    'out-of-range': copy.vote.outOfRange,
+    'active-exists': copy.vote.activeExists,
+  };
+}
 
-/** Human-readable messages for each vote rejection reason. */
-const VOTE_MESSAGES: Record<string, string> = {
-  'already-voted': 'You have already voted',
-  ineligible: 'You joined after this vote started and cannot vote',
-  'not-active': 'This vote is no longer active',
-};
+function voteMessages(copy: Copy): Record<string, string> {
+  return {
+    'already-voted': copy.vote.alreadyVoted,
+    ineligible: copy.vote.ineligible,
+    'not-active': copy.vote.notActive,
+  };
+}
 
 /** Format a Page_Number as three digits (e.g. 7 -> "007"). */
 function formatPageNumber(n: number): string {
@@ -110,6 +123,7 @@ interface SettledVote {
  */
 export function VotePanel() {
   const { active, submit, vote, tally } = useVoting();
+  const copy = useCopy();
 
   const [draftTarget, setDraftTarget] = useState('');
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -196,7 +210,7 @@ export function VotePanel() {
     const target = parseInt(draftTarget, 10);
     const result: SubmitResult = submit(target);
     if (!result.ok) {
-      setSubmitError(SUBMIT_MESSAGES[result.reason] ?? 'Unable to submit');
+      setSubmitError(submitMessages(copy)[result.reason] ?? copy.vote.unableToSubmit);
       setRefused(true);
       return;
     }
@@ -209,7 +223,7 @@ export function VotePanel() {
     if (!result.ok) {
       setVoteNote({
         requestId: active?.id ?? null,
-        text: VOTE_MESSAGES[result.reason] ?? 'Vote not recorded',
+        text: voteMessages(copy)[result.reason] ?? copy.vote.notRecorded,
       });
       return;
     }
@@ -253,43 +267,51 @@ export function VotePanel() {
 
   const spoken =
     state === 'live' && active
-      ? `Page ${formatPageNumber(active.target)}: ${tally.accept} in favour, ${
-          tally.reject
-        } against, ${tally.threshold} of ${tally.base} needed`
+      ? copy.vote.spokenLive(
+          formatPageNumber(active.target),
+          tally.accept,
+          tally.reject,
+          tally.threshold,
+          tally.base,
+        )
       : state === 'carried' && settled
-        ? `Page ${formatPageNumber(settled.target)} carried, ${settled.accept} to ${
-            settled.reject
-          }`
+        ? copy.vote.spokenCarried(
+            formatPageNumber(settled.target),
+            settled.accept,
+            settled.reject,
+          )
         : state === 'lost' && settled
-          ? `Page ${formatPageNumber(settled.target)} not carried, ${settled.accept} to ${
-              settled.reject
-            }`
+          ? copy.vote.spokenLost(
+              formatPageNumber(settled.target),
+              settled.accept,
+              settled.reject,
+            )
           : state === 'refused'
-            ? 'Request refused'
-            : 'No vote in progress';
+            ? copy.vote.refused
+            : copy.vote.noVote;
 
   const legend =
     state === 'live'
-      ? `Needed ${tally.threshold} of ${tally.base}`
+      ? copy.vote.needed(tally.threshold, tally.base)
       : state === 'carried'
-        ? 'Carried'
+        ? copy.vote.carried
         : state === 'lost'
-          ? 'Not carried'
-          : 'No vote in progress';
+          ? copy.vote.notCarried
+          : copy.vote.noVote;
 
   return (
-    <section className="room-console vote-console" aria-label="Room vote">
+    <section className="room-console vote-console" aria-label={copy.vote.region}>
       <div className="rc-nameplate">
-        <h2 className="rc-nameplate-name">{VOTE_PANEL_HEADING}</h2>
+        <h2 className="rc-nameplate-name">{copy.vote.name}</h2>
         <span className="rc-lamp" data-state={state} aria-hidden="true" />
       </div>
 
       <SegmentVisor
         className="vote-visor"
         readouts={[
-          { digits: reading.page, caption: 'PAGE' },
-          { digits: reading.favour, caption: 'FOR', small: true },
-          { digits: reading.against, caption: 'AGAINST', small: true },
+          { digits: reading.page, caption: copy.vote.capPage },
+          { digits: reading.favour, caption: copy.vote.capFor, small: true },
+          { digits: reading.against, caption: copy.vote.capAgainst, small: true },
         ]}
         label={spoken}
       />
@@ -312,7 +334,7 @@ export function VotePanel() {
           onClick={() => handleVote('accept')}
           disabled={!isActive}
         >
-          Accept
+          {copy.vote.accept}
         </button>
         <button
           type="button"
@@ -320,7 +342,7 @@ export function VotePanel() {
           onClick={() => handleVote('reject')}
           disabled={!isActive}
         >
-          Reject
+          {copy.vote.reject}
         </button>
       </div>
 
@@ -332,7 +354,7 @@ export function VotePanel() {
 
       <form className="vote-dial" onSubmit={handleSubmit} noValidate>
         <label className="rc-legend" htmlFor="vote-target-input">
-          Ask for a page
+          {copy.vote.askForPage}
         </label>
         <div className="vote-dial-row">
           <input
@@ -360,7 +382,7 @@ export function VotePanel() {
             className="rc-key vote-key vote-key-request"
             disabled={isActive}
           >
-            Request
+            {copy.vote.request}
           </button>
         </div>
         {submitError && (

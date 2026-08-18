@@ -30,19 +30,21 @@
 
 import { useState, type FormEvent } from 'react';
 
+import { COPY } from '../../domain/copy';
+import { DEFAULT_LANGUAGE } from '../../domain/landing';
 import { usePresence } from '../../collab/usePresence';
+import { useCopy } from './useCopy';
 
 /**
  * The "No members online" indication text shown when the presence list is empty
  * (Req 2.8).
  */
-export const NO_MEMBERS_LABEL = 'No members online';
+export const NO_MEMBERS_LABEL = COPY[DEFAULT_LANGUAGE].presence.none;
 
 /**
  * The inline error shown when a submitted display name is rejected (Req 2.5).
  */
-export const INVALID_NAME_LABEL =
-  'Display name must be between 1 and 32 characters';
+export const INVALID_NAME_LABEL = COPY[DEFAULT_LANGUAGE].presence.invalidName;
 
 export interface PresenceListProps {
   /**
@@ -59,6 +61,7 @@ export interface PresenceListProps {
  */
 export function PresenceList({ allowRename = true }: PresenceListProps) {
   const { members, count, me, setDisplayName } = usePresence();
+  const copy = useCopy();
 
   const [draftName, setDraftName] = useState('');
   const [nameError, setNameError] = useState(false);
@@ -80,10 +83,11 @@ export function PresenceList({ allowRename = true }: PresenceListProps) {
   };
 
   return (
-    <section className="presence-list" aria-label="Viewers present">
+    <section className="presence-list" aria-label={copy.presence.region}>
       <div className="presence-head">
         <h2 className="rc-legend presence-heading">
-          Viewers <span className="presence-count">({count})</span>
+          {copy.presence.heading}{' '}
+          <span className="presence-count">{copy.presence.count(count)}</span>
         </h2>
 
         {/*
@@ -103,13 +107,13 @@ export function PresenceList({ allowRename = true }: PresenceListProps) {
               setNameError(false);
             }}
           >
-            Rename
+            {copy.presence.rename}
           </button>
         )}
       </div>
 
       {members.length === 0 ? (
-        <p className="presence-empty">{NO_MEMBERS_LABEL}</p>
+        <p className="presence-empty">{copy.presence.none}</p>
       ) : (
         <ul className="presence-members">
           {members.map((member) => {
@@ -126,7 +130,7 @@ export function PresenceList({ allowRename = true }: PresenceListProps) {
                 />
                 <span className="presence-name">
                   {member.name}
-                  {isMe ? ' (you)' : ''}
+                  {isMe ? ` ${copy.presence.you}` : ''}
                 </span>
               </li>
             );
@@ -142,7 +146,7 @@ export function PresenceList({ allowRename = true }: PresenceListProps) {
             type="text"
             value={draftName}
             placeholder={me.name}
-            aria-label="Your name"
+            aria-label={copy.presence.yourName}
             aria-invalid={nameError}
             aria-describedby={nameError ? 'presence-name-error' : undefined}
             onChange={(event) => {
@@ -153,11 +157,11 @@ export function PresenceList({ allowRename = true }: PresenceListProps) {
             }}
           />
           <button type="submit" className="rc-key presence-rename-btn">
-            Set
+            {copy.presence.save}
           </button>
           {nameError && (
             <p id="presence-name-error" className="rc-note presence-name-error" role="alert">
-              {INVALID_NAME_LABEL}
+              {copy.presence.invalidName}
             </p>
           )}
         </form>
