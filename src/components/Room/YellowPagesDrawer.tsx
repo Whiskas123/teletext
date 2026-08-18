@@ -228,7 +228,7 @@ export function YellowPagesDrawer({
         aria-label={open ? copy.directory.close : copy.directory.open}
       >
         <span className="yp-drawer-knob-label" aria-hidden="true">
-          Yellow Pages
+          {copy.directory.title}
         </span>
         <span className="yp-drawer-knob-caret" aria-hidden="true">
           {open ? '‹' : '›'}
