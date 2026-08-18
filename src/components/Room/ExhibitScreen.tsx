@@ -43,9 +43,19 @@ import { type ReactNode } from 'react';
 
 import type { ExhibitMode } from './useExhibitMode';
 
-export interface ExhibitScreenProps {
-  /** The screen's state, from {@link useExhibitMode}. */
-  mode: ExhibitMode;
+/*
+ * Spread, not handed over whole.
+ *
+ * This took the `ExhibitMode` object as one prop and read the four fields it
+ * needs off it in the markup, which is tidier to call and which the React
+ * Compiler lint refuses: reaching a callback ref out of an object during render
+ * is indistinguishable, to it, from reading `.current` off a ref object, so
+ * every `mode.x` in the JSX came back as "cannot access refs during render".
+ * Naming the fields as props costs one `{...mode}` at the call site and makes
+ * the component's actual inputs legible, so it is not really a concession.
+ */
+export interface ExhibitScreenProps
+  extends Pick<ExhibitMode, 'attachScreen' | 'fullscreen' | 'idle' | 'readout'> {
   /** The picture: a `<TeletextGrid>`. */
   children: ReactNode;
 }
@@ -58,24 +68,30 @@ export interface ExhibitScreenProps {
  * is what makes the fallback path — a browser that refuses fullscreen — look
  * the same as the granted one bar the browser's own chrome.
  */
-export function ExhibitScreen({ mode, children }: ExhibitScreenProps) {
+export function ExhibitScreen({
+  attachScreen,
+  fullscreen,
+  idle,
+  readout,
+  children,
+}: ExhibitScreenProps) {
   return (
     <div
       className="exhibit"
-      ref={mode.screenRef}
-      data-idle={mode.idle || undefined}
-      data-fullscreen={mode.fullscreen || undefined}
+      ref={attachScreen}
+      data-idle={idle || undefined}
+      data-fullscreen={fullscreen || undefined}
     >
       <div className="exhibit-picture">
         {children}
-        {mode.readout != null && (
+        {readout != null && (
           /*
            * Keyed by what it says, so each digit remounts the element and
            * restarts the fade from the top — the same restart the three-second
            * abandon timer gets, and for the same reason.
            */
-          <div className="exhibit-dial" key={mode.readout} aria-hidden="true">
-            {mode.readout}
+          <div className="exhibit-dial" key={readout} aria-hidden="true">
+            {readout}
           </div>
         )}
       </div>

@@ -195,7 +195,7 @@ export interface ExhibitMode {
    * Attach to the element that becomes the fullscreen surface. A callback ref,
    * not a ref object — see the note where it is built.
    */
-  screenRef: (node: HTMLDivElement | null) => void;
+  attachScreen: (node: HTMLDivElement | null) => void;
   /** True in real fullscreen; false while we are only an overlay. */
   fullscreen: boolean;
   /** True once the pointer has sat still long enough to be taken off screen. */
@@ -237,7 +237,7 @@ export function useExhibitMode(controls: ExhibitControls = {}): ExhibitMode {
   const active = requested || entered;
 
   const [fullscreen, setFullscreen] = useState(false);
-  const [idle, setIdle] = useState(false);
+  const [cursorIdle, setCursorIdle] = useState(false);
   const [screen, setScreen] = useState<HTMLDivElement | null>(null);
 
   const { readout, press, reset } = useDialPad(onPageEntry);
@@ -250,7 +250,7 @@ export function useExhibitMode(controls: ExhibitControls = {}): ExhibitMode {
    * when that happened. As state it is a dependency like any other: the screen
    * mounts, this fires, the effect runs with something to hand the API.
    */
-  const screenRef = useCallback((node: HTMLDivElement | null) => {
+  const attachScreen = useCallback((node: HTMLDivElement | null) => {
     setScreen(node);
   }, []);
 
@@ -404,7 +404,12 @@ export function useExhibitMode(controls: ExhibitControls = {}): ExhibitMode {
         // second. One press is one toggle.
         if (event.repeat) return;
         event.preventDefault();
-        setActive((on) => !on);
+        // Not one setter flipped: `active` is two sources OR'd together (the URL
+        // parameter and this flag), so leaving has to go through `exit`, which
+        // clears the parameter too. Toggling `entered` alone would let a chord
+        // pressed on `/watch?exhibit=1` clear the flag and change nothing.
+        if (active) exit();
+        else enter();
         return;
       }
 
@@ -449,7 +454,7 @@ export function useExhibitMode(controls: ExhibitControls = {}): ExhibitMode {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [active, exit, press, onPageStep, onSubpageStep]);
+  }, [active, enter, exit, press, onPageStep, onSubpageStep]);
 
   // Nothing half dialled survives the screen going away, in either direction:
   // the digits belong to the session in front of the television.
@@ -466,16 +471,17 @@ export function useExhibitMode(controls: ExhibitControls = {}): ExhibitMode {
    * mouse does, so whoever is looking after the room can still find it.
    */
   useEffect(() => {
-    if (!active) {
-      setIdle(false);
-      return;
-    }
+    // No `setCursorIdle(false)` on the way out: `idle` below is only ever true
+    // while the screen is up, so a stale flag cannot be seen from outside and
+    // clearing it here would be a synchronous write from an effect body for no
+    // observable gain. Re-entering calls `wake` on setup, which clears it.
+    if (!active) return;
 
     let timer: ReturnType<typeof setTimeout> | undefined;
     const wake = () => {
-      setIdle(false);
+      setCursorIdle(false);
       clearTimeout(timer);
-      timer = setTimeout(() => setIdle(true), CURSOR_IDLE_MS);
+      timer = setTimeout(() => setCursorIdle(true), CURSOR_IDLE_MS);
     };
 
     wake();
@@ -499,5 +505,12 @@ export function useExhibitMode(controls: ExhibitControls = {}): ExhibitMode {
     return () => root.classList.remove(LOCK_CLASS);
   }, [active]);
 
-  return { active, screenRef, fullscreen, idle, readout, enter, exit };
+  /*
+   * The cursor is only ever hidden while the screen is up. Derived rather than
+   * reset on exit, so leaving cannot strand a hidden pointer on the ordinary
+   * watching screen if the teardown is ever reordered.
+   */
+  const idle = active && cursorIdle;
+
+  return { active, attachScreen, fullscreen, idle, readout, enter, exit };
 }

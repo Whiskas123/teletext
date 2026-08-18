@@ -150,7 +150,7 @@ export function SoloViewer({ pageNumber: pageNumberProp }: SoloViewerProps) {
    */
   if (exhibit.active) {
     return (
-      <ExhibitScreen mode={exhibit}>
+      <ExhibitScreen {...exhibit}>
         <TeletextGrid
           page={shownPage}
           pageNumber={displayNumber}
