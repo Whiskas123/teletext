@@ -17,6 +17,9 @@ import { SoloViewer } from './components/Room/SoloViewer';
 import { validateRoomId } from './domain/roomId';
 import './App.css';
 import './styles/teletext.css';
+// Last, so the editor console's own surface wins over the shared editor
+// layout it borrows from `teletext.css`. See the note at the top of the file.
+import './styles/console.css';
 
 // Lazy: carries the glyph atlas, which only this rarely-visited admin page
 // needs — no reason to put it in the bundle every visitor downloads.

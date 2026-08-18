@@ -1237,23 +1237,7 @@
   margin-bottom: 0.75rem;
 }
 
-/* The editor's subpage controls: a ‹ X/Y › stepper, then add / remove. */
-.editor-subpage-row {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  flex-wrap: wrap;
-}
 
-/* Fixed width so the arrows do not shuffle sideways when the count reaches
-   two digits — the buttons are aimed at by position, not read. */
-.editor-subpage-count {
-  min-width: 3.5ch;
-  text-align: center;
-  font-family: monospace;
-  font-size: 0.95rem;
-  color: #0ff;
-}
 
 .sidebar-input {
   background: #000;

@@ -71,6 +71,7 @@ import {
 } from 'react';
 
 import { INDEX_LINE } from '../../domain/indexLine';
+import { SevenSegment } from '../chrome/SevenSegment';
 import { useMediaQuery } from '../../utils/useMediaQuery';
 
 /** How long the switch-off animation runs, in step with `@keyframes crt-off-*`. */
@@ -112,62 +113,6 @@ export interface CrtTelevisionProps {
    * top of this file.
    */
   compact?: boolean;
-}
-
-/* ── seven-segment LED window ──────────────────────────────────────────────── */
-
-/** Which of the seven segments each glyph lights. */
-const SEGMENTS: Record<string, string> = {
-  '0': 'abcdef',
-  '1': 'bc',
-  '2': 'abdeg',
-  '3': 'abcdg',
-  '4': 'bcfg',
-  '5': 'acdfg',
-  '6': 'acdefg',
-  '7': 'abc',
-  '8': 'abcdefg',
-  '9': 'abcdfg',
-  '-': 'g',
-  ' ': '',
-};
-
-/** One digit's seven bars, in the artwork's own 26×44 cell. */
-const SEGMENT_RECTS = [
-  { seg: 'a', x: 3, y: 0, width: 20, height: 5 },
-  { seg: 'b', x: 21, y: 3, width: 5, height: 18 },
-  { seg: 'c', x: 21, y: 23, width: 5, height: 18 },
-  { seg: 'd', x: 3, y: 39, width: 20, height: 5 },
-  { seg: 'e', x: 0, y: 23, width: 5, height: 18 },
-  { seg: 'f', x: 0, y: 3, width: 5, height: 18 },
-  { seg: 'g', x: 3, y: 19.5, width: 20, height: 5 },
-] as const;
-
-/** Digits are 26 wide on a 34 pitch, so the gap between them is 8. */
-const DIGIT_PITCH = 34;
-
-function SevenSegment({ glyph, index }: { glyph: string; index: number }) {
-  const lit = SEGMENTS[glyph] ?? '';
-  return (
-    <g
-      data-digit={index + 1}
-      data-value={glyph}
-      transform={index === 0 ? undefined : `translate(${index * DIGIT_PITCH} 0)`}
-    >
-      {SEGMENT_RECTS.map(({ seg, x, y, width, height }) => (
-        <rect
-          key={seg}
-          data-seg={seg}
-          className={`seg ${lit.includes(seg) ? 'on' : 'off'}`}
-          x={x}
-          y={y}
-          width={width}
-          height={height}
-          rx={1}
-        />
-      ))}
-    </g>
-  );
 }
 
 /* ── keys ──────────────────────────────────────────────────────────────────── */

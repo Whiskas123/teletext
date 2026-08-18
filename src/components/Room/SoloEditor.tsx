@@ -7,14 +7,23 @@
  * page is watched. This screen is deliberately standalone — no room chrome, no
  * chat, vote or presence.
  *
- * The editing chrome is integrated INTO the {@link Editor} sidebar (via its
- * `sidebarHeader` slot) so the screen reads as one cohesive editor rather than a
- * separate bar stacked above the tool sidebar. That header provides:
- * - a "Back to home" link;
- * - a page-number chooser (1..999, default 100 or the `:pageNumber` route param)
- *   so the member picks which page to create / edit;
- * - an editable page-title field wired to {@link useGuide} (`title` / `setTitle`),
- *   with an inline "too long" error and a persist-failure indication.
+ * ## Choosing a page
+ *
+ * The same way you choose one on the television: an LED window reports it and a
+ * keypad dials it. There is no set on this screen — the picture is a page being
+ * drawn, not a page being watched — but the *controls* are the set's, because
+ * they are controls for the same thing, and a number typed into a form field
+ * next to a teletext page was the one part of this app that looked like a form.
+ *
+ * Dialling follows the panel's rules exactly (see {@link CrtTelevision}): three
+ * digits and it goes, a half-dialled number shows `7--` and is abandoned after
+ * {@link DIAL_TIMEOUT_MS}, and a number nobody may edit reads `---` and stays
+ * where it was. The window is focusable so the digits can also just be typed.
+ *
+ * Everything else the page needs — its title, its carousel of subpages — sits
+ * under the keypad on the same moulded panel, and is handed to {@link Editor} as
+ * the two console slots it renders: `display`, which is on screen at all times,
+ * and `pageControls`, which travels with the rest of the tools.
  *
  * The {@link Editor} itself is driven by {@link useEditPage} (injected `page` +
  * an `onEditCell` cell-level writer). Editing is solo — no cursor / presence.
@@ -22,7 +31,7 @@
  * Requirements: 6.1, 6.7, 7.9, 9.3, 9.6.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import { useEditPage } from '../../collab/useEditPage';
@@ -30,7 +39,7 @@ import { usePageTitles } from '../../collab/useGuide';
 import { useIsModerator } from '../../collab/useIsModerator';
 import { useSubpages } from '../../collab/useSubpages';
 import { canEditPage, PLAYGROUND_MIN_PAGE } from '../../domain/access';
-import { inPageRange } from '../../domain/pageOps';
+import { MAX_PAGE, MIN_PAGE } from '../../domain/pageOps';
 import {
   MAX_SUBPAGE,
   MIN_SUBPAGE,
@@ -39,12 +48,22 @@ import {
   stepSubpage,
 } from '../../domain/subpages';
 import { Editor } from '../Editor/Editor';
+import { LedWindow } from '../chrome/LedWindow';
 
 /** Default Page_Number for a moderator when none is provided or invalid. */
 const DEFAULT_PAGE_NUMBER = 100;
 
 /** Maximum trimmed length of a Page_Title (Req 9.4, 9.6). */
 const TITLE_MAX_LENGTH = 60;
+
+/** A half-dialled page number is abandoned after this long, as on the set. */
+const DIAL_TIMEOUT_MS = 3000;
+
+/** How long `---` shows after a page number this member cannot edit. */
+const DIAL_ERROR_MS = 900;
+
+/** The keypad, 5×2, in the order the television's own is moulded. */
+const KEYPAD_DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'] as const;
 
 /**
  * Resolve the initial Page_Number from the `:pageNumber` route param,
@@ -90,19 +109,13 @@ export function SoloEditor() {
   const { title, setTitle } = usePageTitles();
   const [titleError, setTitleError] = useState<string | null>(null);
 
-  // Free-text draft for the page-number field so it can be typed (cleared and
-  // retyped) rather than only stepped with the number spinner. It commits to the
-  // edited Page_Number whenever it is a valid 1..999 value.
-  const [pageDraft, setPageDraft] = useState<string>(() => String(pageNumber));
-
   // Local draft for the title so typing is smooth and does not depend on the
   // shared store echoing the value back synchronously. Reseeded when the edited
   // page changes.
   const [titleDraft, setTitleDraft] = useState<string>(() => title(pageNumber));
 
-  // When the edited page changes, resync both drafts to that page.
+  // When the edited page changes, resync the title draft to that page.
   useEffect(() => {
-    setPageDraft(String(pageNumber));
     setTitleDraft(title(pageNumber));
     setTitleError(null);
     setPageError(null);
@@ -115,42 +128,133 @@ export function SoloEditor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageNumber]);
 
-  const handlePageDraftChange = useCallback(
-    (value: string) => {
-      // Allow only digits, up to 3, and permit an empty field while typing.
-      const cleaned = value.replace(/\D/g, '').slice(0, 3);
-      setPageDraft(cleaned);
-      const parsed = parseInt(cleaned, 10);
-      if (canEditPage(parsed, isModerator)) {
-        setPageNumber(parsed);
+  /* ── dialling ──────────────────────────────────────────────────────────── */
+
+  /**
+   * Digits pressed so far towards a three-digit page number.
+   *
+   * Held in a ref as well as in state, and read from the ref.
+   *
+   * A keypad is pressed fast — three digits is one gesture, not three decisions
+   * — and three presses that land in one React batch would each read the same
+   * pre-batch `dial` from the closure they were rendered with, so `825` dialled
+   * quickly arrived as `5`. The ref is what the next press adds to; the state is
+   * only what the window is drawn from.
+   */
+  const dialRef = useRef('');
+  const [dial, setDial] = useState('');
+  const writeDial = useCallback((next: string) => {
+    dialRef.current = next;
+    setDial(next);
+  }, []);
+  /** Set briefly when a completed entry names a page this member may not edit. */
+  const [dialError, setDialError] = useState(false);
+
+  // A page half dialled and then abandoned should not sit on the display
+  // waiting forever — nor should it still be there to be completed by a digit
+  // pressed minutes later, which would open a page nobody asked for.
+  useEffect(() => {
+    if (dial === '') return;
+    const timer = setTimeout(() => writeDial(''), DIAL_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [dial, writeDial]);
+
+  useEffect(() => {
+    if (!dialError) return;
+    const timer = setTimeout(() => setDialError(false), DIAL_ERROR_MS);
+    return () => clearTimeout(timer);
+  }, [dialError]);
+
+  const pressDigit = useCallback(
+    (digit: string) => {
+      const next = dialRef.current + digit;
+      if (next.length < 3) {
+        writeDial(next);
+        setDialError(false);
+        return;
+      }
+      writeDial('');
+      const target = Number(next);
+      if (canEditPage(target, isModerator)) {
+        setPageNumber(target);
         setPageError(null);
         return;
       }
-      // Only surface the archive message for an otherwise-valid page number a
-      // non-moderator can't edit; stay quiet while a page number is still
-      // mid-typed (e.g. "7" on its way to "700").
+      // Refused, and said so: the window blinks `---` and the reason is spelled
+      // out underneath, because "you may not edit the archive" is not something
+      // three digits can convey on their own.
+      setDialError(true);
       setPageError(
-        inPageRange(parsed) && !isModerator
-          ? `Pages 100–${PLAYGROUND_MIN_PAGE - 1} are the archive — only the moderator can edit them.`
-          : null,
+        target >= MIN_PAGE && target <= MAX_PAGE && !isModerator
+          ? `Pages ${MIN_PAGE}–${PLAYGROUND_MIN_PAGE - 1} are archive pages. You may not edit them.`
+          : `Pages are numbered ${MIN_PAGE}–${MAX_PAGE}.`,
       );
     },
-    [isModerator],
+    [isModerator, writeDial],
   );
 
-  const commitPageDraft = useCallback(() => {
-    // On blur / Enter, snap the field back to the current valid page if the
-    // draft is empty, out of range, or (for a non-moderator) an archive page.
-    const parsed = parseInt(pageDraft, 10);
-    if (canEditPage(parsed, isModerator)) {
-      setPageNumber(parsed);
-      setPageDraft(String(parsed));
+  // Stepping is not dialling: ▲ goes to the next page this member may edit,
+  // which for everyone but the moderator means stopping at the archive rather
+  // than counting down into it.
+  const lowestEditable = isModerator ? MIN_PAGE : PLAYGROUND_MIN_PAGE;
+  const stepPage = useCallback(
+    (delta: 1 | -1) => {
+      writeDial('');
       setPageError(null);
-    } else {
-      setPageDraft(String(pageNumber));
-      setPageError(null);
-    }
-  }, [pageDraft, pageNumber, isModerator]);
+      setPageNumber((current) => {
+        const next = current + delta;
+        if (next < lowestEditable || next > MAX_PAGE) return current;
+        return next;
+      });
+    },
+    [lowestEditable, writeDial],
+  );
+
+  /**
+   * The window takes digits from the keyboard too.
+   *
+   * A keypad is the right control for a thumb and the wrong one for somebody
+   * who already has their hands on a keyboard, and the fix costs a handler: the
+   * display is focusable, and while it holds focus the number keys dial and the
+   * arrows step, exactly as the caps beside it do. Digits typed at the *grid*
+   * are page content and never reach here — that input has its own focus.
+   */
+  const handleDisplayKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLElement>) => {
+      if (event.key >= '0' && event.key <= '9') {
+        event.preventDefault();
+        pressDigit(event.key);
+        return;
+      }
+      if (event.key === 'Backspace') {
+        event.preventDefault();
+        writeDial(dialRef.current.slice(0, -1));
+        return;
+      }
+      if (event.key === 'ArrowUp' || event.key === 'ArrowRight') {
+        event.preventDefault();
+        stepPage(1);
+        return;
+      }
+      if (event.key === 'ArrowDown' || event.key === 'ArrowLeft') {
+        event.preventDefault();
+        stepPage(-1);
+      }
+    },
+    [pressDigit, stepPage, writeDial],
+  );
+
+  // What the window reads. A dial in progress shows the digits so far and a dash
+  // for each still to come (`7--`), which is what told you the panel had heard
+  // the first press and was waiting for the rest.
+  const pageDigits = dialError
+    ? '---'
+    : dial !== ''
+      ? dial.padEnd(3, '-')
+      : String(pageNumber).padStart(3, '0').slice(-3);
+  const subDigits = String(subpage).padStart(2, '0').slice(-2);
+
+  /* ── the rest of the panel ─────────────────────────────────────────────── */
 
   const handleTitleChange = useCallback(
     (text: string) => {
@@ -186,148 +290,221 @@ export function SoloEditor() {
     if (remaining != null) setRequestedSubpage(Math.min(subpage, remaining));
   }, [removeLastSubpage, pageNumber, subpage]);
 
-  // The "Page" section rendered at the top of the editor sidebar so the whole
-  // screen is one cohesive editor.
-  const sidebarHeader = (
+  // Focused when a keypad key is pressed, so the digits that follow can simply
+  // be typed — pressing one key by hand is usually the start of dialling, not
+  // the whole of it.
+  const displayRef = useRef<HTMLDivElement>(null);
+
+  /*
+   * The display block: what page is open, and the two rockers that change it.
+   *
+   * The head of the page panel, where the rest of choosing a page is. It reads
+   * out what the keypad under it is about to change, which is the arrangement
+   * the set's own front panel is in — window first, then the keys that drive it.
+   */
+  const display = (
+    <div
+      className="rc-display-row"
+      ref={displayRef}
+      onKeyDown={handleDisplayKeyDown}
+    >
+      <div
+        className="rc-display"
+        tabIndex={0}
+        role="group"
+        aria-label={`Editing page ${pageNumber}, subpage ${subpage} of ${subpageCount}. Type three digits to open another page.`}
+      >
+        <LedWindow
+          pageDigits={pageDigits}
+          subDigits={subDigits}
+          label={`Page ${pageDigits}, subpage ${subDigits}`}
+        />
+      </div>
+
+      <div className="rc-rockers">
+        <div className="rc-rocker">
+          <div className="rc-rocker-keys">
+            <button
+              type="button"
+              className="rc-key rc-key-rocker"
+              aria-label="Previous page"
+              onClick={() => stepPage(-1)}
+              disabled={pageNumber <= lowestEditable}
+            >
+              <span className="rc-glyph" aria-hidden>
+                ◀
+              </span>
+            </button>
+            <button
+              type="button"
+              className="rc-key rc-key-rocker"
+              aria-label="Next page"
+              onClick={() => stepPage(1)}
+              disabled={pageNumber >= MAX_PAGE}
+            >
+              <span className="rc-glyph" aria-hidden>
+                ▶
+              </span>
+            </button>
+          </div>
+          <span className="rc-cap">Page</span>
+        </div>
+
+        <div className="rc-rocker">
+          <div className="rc-rocker-keys">
+            <button
+              type="button"
+              className="rc-key rc-key-rocker"
+              aria-label={`Previous subpage (editing ${subpage} of ${subpageCount})`}
+              disabled={subpageCount <= 1}
+              onClick={() =>
+                setRequestedSubpage(stepSubpage(subpage, subpageCount, -1))
+              }
+            >
+              <span className="rc-glyph" aria-hidden>
+                ◀
+              </span>
+            </button>
+            <button
+              type="button"
+              className="rc-key rc-key-rocker"
+              aria-label={`Next subpage (editing ${subpage} of ${subpageCount})`}
+              disabled={subpageCount <= 1}
+              onClick={() =>
+                setRequestedSubpage(stepSubpage(subpage, subpageCount, 1))
+              }
+            >
+              <span className="rc-glyph" aria-hidden>
+                ▶
+              </span>
+            </button>
+          </div>
+          <span className="rc-cap">Subpage</span>
+        </div>
+      </div>
+    </div>
+  );
+
+  /*
+   * Everything else about the page: the keypad that dials it, what it is
+   * called, and how many screens it holds.
+   */
+  const pageControls = (
     <>
-      <Link to="/" className="sidebar-back-link">
-        &lt; Back to home
-      </Link>
+      <section className="rc-cluster">{display}</section>
 
-
-      <section className="sidebar-section">
-        <h2 className="sidebar-heading">Page</h2>
-
-        <div className="sidebar-field">
-          <label className="sidebar-field-label" htmlFor="solo-editor-page-input">
-            Number (100–999)
-          </label>
-          <input
-            id="solo-editor-page-input"
-            type="text"
-            inputMode="numeric"
-            className="sidebar-input"
-            value={pageDraft}
-            placeholder="100"
-            autoComplete="off"
-            spellCheck={false}
-            aria-invalid={pageError != null}
-            aria-describedby={pageError != null ? 'solo-editor-page-error' : undefined}
-            onChange={(e) => handlePageDraftChange(e.target.value)}
-            onBlur={commitPageDraft}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                commitPageDraft();
-              }
-            }}
-          />
-          {pageError != null && (
-            <p id="solo-editor-page-error" className="sidebar-error" role="alert">
-              {pageError}
-            </p>
-          )}
+      <section className="rc-cluster" aria-label="Page number">
+        <div className="rc-keypad" role="group" aria-label="Dial a page number">
+          {KEYPAD_DIGITS.map((digit) => (
+            <button
+              key={digit}
+              type="button"
+              className="rc-key rc-key-digit"
+              aria-label={`Dial ${digit}`}
+              onClick={() => {
+                pressDigit(digit);
+                displayRef.current
+                  ?.querySelector<HTMLElement>('.rc-display')
+                  ?.focus();
+              }}
+            >
+              <span className="rc-glyph">{digit}</span>
+            </button>
+          ))}
         </div>
-
-        {/*
-          * The carousel. A page number can hold several screens (see
-          * `domain/subpages.ts`); this is which of them the grid is editing.
-          *
-          * The arrows wrap and are always live, matching the TV's own subpage
-          * knobs — the same control in the same order, so what is learned on
-          * one screen works on the other. "Remove last" takes the *last*
-          * screen rather than the one being edited: subpages are numbered by
-          * position, so removing from the middle would renumber everything
-          * after it under the operator's cursor.
-          */}
-        <div className="sidebar-field">
-          <span className="sidebar-field-label" id="solo-editor-subpage-label">
-            Subpage
-          </span>
-          <div className="editor-subpage-row" role="group" aria-labelledby="solo-editor-subpage-label">
-            <button
-              type="button"
-              className="manage-mini-btn"
-              aria-label="Previous subpage"
-              disabled={subpageCount <= 1}
-              onClick={() => setRequestedSubpage(stepSubpage(subpage, subpageCount, -1))}
-            >
-              ‹
-            </button>
-            <output className="editor-subpage-count" aria-live="polite">
-              {subpage}/{subpageCount}
-            </output>
-            <button
-              type="button"
-              className="manage-mini-btn"
-              aria-label="Next subpage"
-              disabled={subpageCount <= 1}
-              onClick={() => setRequestedSubpage(stepSubpage(subpage, subpageCount, 1))}
-            >
-              ›
-            </button>
-          </div>
-          <div className="editor-subpage-row">
-            <button
-              type="button"
-              className="manage-mini-btn"
-              disabled={subpageCount >= MAX_SUBPAGE}
-              title={
-                subpageCount >= MAX_SUBPAGE
-                  ? `A page holds at most ${MAX_SUBPAGE} subpages.`
-                  : 'Add an empty subpage at the end and go to it'
-              }
-              onClick={handleAddSubpage}
-            >
-              + Add subpage
-            </button>
-            <button
-              type="button"
-              className="manage-mini-btn manage-mini-btn-danger"
-              disabled={subpageCount <= 1}
-              title={
-                subpageCount <= 1
-                  ? 'Subpage 1 is the page itself.'
-                  : `Delete subpage ${subpageCount} and its content`
-              }
-              onClick={handleRemoveSubpage}
-            >
-              − Remove last
-            </button>
-          </div>
-        </div>
-
-        <div className="sidebar-field">
-          <label className="sidebar-field-label" htmlFor="page-title-input">
-            Title
-          </label>
-          <input
-            id="page-title-input"
-            type="text"
-            className="sidebar-input"
-            value={titleDraft}
-            onChange={(e) => handleTitleChange(e.target.value)}
-            placeholder="Untitled page"
-            maxLength={TITLE_MAX_LENGTH * 2}
-            autoComplete="off"
-            spellCheck={false}
-            aria-invalid={titleError != null}
-            aria-describedby={titleError != null ? 'page-title-error' : undefined}
-          />
-          {titleError != null && (
-            <p id="page-title-error" className="sidebar-error" role="alert">
-              {titleError}
-            </p>
-          )}
-        </div>
-
-        {saveError != null && (
-          <p className="sidebar-error" role="alert">
-            Change not saved: {saveError}
+        {pageError != null && (
+          <p className="rc-error" role="alert">
+            {pageError}
           </p>
         )}
       </section>
+
+      <section className="rc-cluster">
+        <h2 className="rc-legend" id="solo-editor-title-legend">
+          Title
+        </h2>
+        <input
+          id="page-title-input"
+          type="text"
+          className="rc-field"
+          value={titleDraft}
+          onChange={(e) => handleTitleChange(e.target.value)}
+          placeholder="Untitled page"
+          maxLength={TITLE_MAX_LENGTH * 2}
+          autoComplete="off"
+          spellCheck={false}
+          aria-labelledby="solo-editor-title-legend"
+          aria-invalid={titleError != null}
+          aria-describedby={titleError != null ? 'page-title-error' : undefined}
+        />
+        {titleError != null && (
+          <p id="page-title-error" className="rc-error" role="alert">
+            {titleError}
+          </p>
+        )}
+      </section>
+
+      {/*
+        * The carousel. A page number can hold several screens (see
+        * `domain/subpages.ts`); the rocker above chooses which one is being
+        * drawn on, and these two change how many there are.
+        *
+        * "Remove last" takes the *last* screen rather than the one being
+        * edited: subpages are numbered by position, so removing from the middle
+        * would renumber everything after it under the operator's cursor.
+        */}
+      <section className="rc-cluster">
+        <h2 className="rc-legend">Subpages</h2>
+        <div className="rc-keyrow">
+          <button
+            type="button"
+            className="rc-key rc-key-wide"
+            disabled={subpageCount >= MAX_SUBPAGE}
+            title={
+              subpageCount >= MAX_SUBPAGE
+                ? `A page holds at most ${MAX_SUBPAGE} subpages.`
+                : 'Add an empty subpage at the end and go to it'
+            }
+            onClick={handleAddSubpage}
+          >
+            <span>+ Add</span>
+          </button>
+          <button
+            type="button"
+            className="rc-key rc-key-wide rc-key-danger"
+            disabled={subpageCount <= 1}
+            title={
+              subpageCount <= 1
+                ? 'Subpage 1 is the page itself.'
+                : `Delete subpage ${subpageCount} and its content`
+            }
+            onClick={handleRemoveSubpage}
+          >
+            <span>− Remove last</span>
+          </button>
+        </div>
+      </section>
+
+      {saveError != null && (
+        <p className="rc-error" role="alert">
+          Change not saved: {saveError}
+        </p>
+      )}
     </>
+  );
+
+  const brand = (
+    <div className="rc-brand">
+      <Link to="/" className="rc-brand-back" aria-label="Back to home">
+        <span aria-hidden>‹</span>
+      </Link>
+      <span className="rc-brand-name">Teletextron</span>
+      <span
+        className={`rc-lamp${saveError != null ? ' rc-lamp-fault' : ''}`}
+        role="status"
+        aria-label={saveError != null ? 'Not saving' : 'Saving'}
+      />
+    </div>
   );
 
   return (
@@ -337,7 +514,8 @@ export function SoloEditor() {
       subpageCount={subpageCount}
       page={page}
       onEditCell={handleEditCell}
-      sidebarHeader={sidebarHeader}
+      brand={brand}
+      pageControls={pageControls}
     />
   );
 }

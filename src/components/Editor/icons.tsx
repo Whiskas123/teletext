@@ -132,6 +132,32 @@ export function IconDoubleHeight({ className }: IconProps) {
   );
 }
 
+/**
+ * The page tab: a teletext page number, as the panel's own LED window shows it.
+ *
+ * Three bars in a frame rather than a sheet of paper with a folded corner — what
+ * this tab holds is a *page number*, and nothing on this screen has ever been a
+ * document.
+ */
+export function IconPage({ className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      width={ICON_SIZE}
+      height={ICON_SIZE}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <rect x="1.7" y="3" width="12.6" height="10" rx="1.5" />
+      <path d="M4.6 6.4v3.2M8 6.4v3.2M11.4 6.4v3.2" />
+    </svg>
+  );
+}
+
 export function IconExport({ className }: IconProps) {
   return (
     <svg
