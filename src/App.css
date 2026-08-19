@@ -4283,11 +4283,58 @@ button.yellow-pages-number:hover {
 
 @media (max-width: 720px) {
   /* The strip is the dock's head and stays put; the panel under it scrolls. */
+  /*
+   * The slab itself: the shelf the lower half stands on.
+   *
+   * Drawn as the cabinet's own plastic rather than left transparent, because a
+   * strip of keys floating on the page has nothing for the leaflet to disappear
+   * behind — the sheet coming up would slide past the tabs instead of under
+   * them, and the one gesture this layout depends on stops reading. The shadow
+   * along the top is what sells it: something solid, with the book beneath.
+   */
+  .crt-dock {
+    position: sticky;
+    bottom: 0;
+    z-index: 320;
+    border-top: 1px solid #0a0a0a;
+    border-radius: 10px 10px 0 0;
+    background-image: var(--rc-dock-mould), var(--rc-dock-cab);
+    background-blend-mode: overlay, normal;
+    background-size: 320px 320px, auto;
+    background-color: #26251f;
+    box-shadow:
+      inset 0 1px 0 rgb(125 124 120 / 55%),
+      0 -0.35rem 0.9rem rgb(0 0 0 / 55%);
+  }
+
+  /* The cabinet's gradient and its coarse mould flow, stated here because the
+     console's copies live on `.room-console` and this is not one. */
+  .crt-dock {
+    --rc-dock-cab: linear-gradient(
+      180deg,
+      #3a3937 0%,
+      #2f2e2c 12%,
+      #242321 85%,
+      #1a1918 100%
+    );
+    --rc-dock-mould: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='320'%3E%3Cfilter id='dm'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.012' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='320' height='320' filter='url(%23dm)' opacity='.5'/%3E%3C/svg%3E");
+  }
+
   .crt-dock-tabs {
     flex: 0 0 auto;
     display: flex;
     gap: 0.3rem;
-    padding: 0.4rem 0.5rem 0.5rem;
+    padding: 0.45rem 0.5rem 0.5rem;
+  }
+
+  /*
+   * The handset no longer sticks or casts: the slab under it does both now, and
+   * two shadows on one edge read as two objects.
+   */
+  .crt-dock .crt-remote {
+    position: static;
+    filter: none;
+    padding-bottom: 0;
   }
 
   .crt-dock-tab {
@@ -4371,12 +4418,22 @@ button.yellow-pages-number:hover {
    * picture's to give, and a chat that pushed the television off the top of the
    * window would be the conversation eating the thing being discussed.
    */
+  /*
+   * Edge to edge, with nothing under it but the slab.
+   *
+   * The console kept the rail's inset and its rounded box, so on a phone it sat
+   * as a card floating on the page with the leaflet showing down both sides —
+   * and the whole point of the dock is that it is a solid thing the sheet slides
+   * *under*. A gap either side gives that away instantly. So the panel spans the
+   * slab and the console gives up the edges it does not need: no side borders, no
+   * side radius, and the top left to the slab's own moulded highlight.
+   */
   .crt-dock-panel {
     flex: 1 1 auto;
     min-height: 0;
     display: flex;
     flex-direction: column;
-    padding: 0 0.5rem 0.6rem;
+    padding: 0 0 env(safe-area-inset-bottom, 0px);
     overflow-y: auto;
     overscroll-behavior: contain;
   }
@@ -4384,6 +4441,14 @@ button.yellow-pages-number:hover {
   .crt-dock-panel .room-console {
     flex: 1 1 auto;
     min-height: 0;
+    border-inline: 0;
+    border-bottom: 0;
+    border-radius: 0;
+    /* The slab is already plastic; a second sheet of it over the first reads as
+       a card. What is kept is the groove along the top, where the strip ends. */
+    background-image: none;
+    background-color: transparent;
+    box-shadow: inset 0 1px 0 rgb(125 124 120 / 30%);
   }
 }
 
