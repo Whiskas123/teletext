@@ -2539,6 +2539,18 @@ button.yellow-pages-number:hover {
   }
 
   /*
+   * No lettering on the phone's tab.
+   *
+   * Here the knob is not a tab at all — it is an invisible target laid over the
+   * sheet's showing edge, and the sheet already has its own masthead. The
+   * vertical wordmark belongs to the desktop leaflet, where the tab is the only
+   * thing on show while the book is shut.
+   */
+  .room-viewer-phone .yp-drawer-knob-label {
+    display: none;
+  }
+
+  /*
    * Open, the sheet is the screen: a target across the whole of it would eat
    * every tap meant for a listing, and the × in the masthead is how a book that
    * is open gets closed.
