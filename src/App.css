@@ -4627,3 +4627,141 @@ button.yellow-pages-number:hover {
     animation: none;
   }
 }
+
+/* --- About (/about): the one screen on the site that is prose --- */
+/*
+ * Built to look like the page it is reached from — black, the same gutters, the
+ * same lettering, headings in the palette — because arriving here should feel
+ * like turning to another page of the same service rather than leaving for a
+ * website about it.
+ *
+ * Everything is scoped under `.about`. The two things it does *not* restyle are
+ * the back link and the language switch: it borrows `.room-back-link` and
+ * `.frontpage-lang` as they are, so there is one definition of each control and
+ * no second copy to keep in agreement.
+ */
+.about {
+  min-height: 100vh;
+  min-height: 100dvh;
+  box-sizing: border-box;
+  /* The front page's own margins, to the same clamps: the two screens are one
+     click apart, and a wordmark that jumped left or right on the way between
+     them would read as two different sites. */
+  --about-gutter: clamp(2.5rem, 5vw, 4.25rem);
+  --about-gutter-y: clamp(1.5rem, 4vw, 3.75rem);
+  padding: var(--about-gutter-y) var(--about-gutter);
+  background: #111;
+  color: #fff;
+}
+
+.about-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  /* As on the front page: below ~360px these wrap rather than pushing the
+     switch off the right edge, which a phone reads as a horizontal scrollbar. */
+  flex-wrap: wrap;
+}
+
+/*
+ * A column of text, not a page of it, starting at the page's left gutter — the
+ * same edge the wordmark and the front page's menu start at.
+ *
+ * Capped in `ch` rather than `rem` because the cap is about the line, not the
+ * layout. 80 is the width this measure wants to be: it is two teletext rows
+ * laid end to end, and the width a monospaced column has been set to since
+ * terminals had a choice about it.
+ */
+.about-body {
+  max-width: 80ch;
+  margin: clamp(2rem, 6vh, 4rem) 0 0;
+  /* Room under the last line, so the prose ends rather than being cut off by
+     the bottom of the window. */
+  padding-bottom: clamp(3rem, 10vh, 6rem);
+}
+
+.about-title {
+  margin: 0 0 clamp(1.5rem, 4vh, 2.5rem);
+  font-family: "European Teletext", "Press Start 2P", monospace;
+  font-size: clamp(1.75rem, 4vw, 3.15rem);
+  font-weight: normal;
+  line-height: 1.12;
+}
+
+.about-section {
+  margin-top: clamp(2rem, 5vh, 3.25rem);
+}
+
+/*
+ * Colour-coded headings, which is most of what teletext used its eight colours
+ * for. Set in the display face at a size well under the title's, so the page
+ * reads as one document with parts rather than four competing titles.
+ */
+.about-heading {
+  margin: 0 0 0.9rem;
+  font-family: "European Teletext", "Press Start 2P", monospace;
+  font-size: clamp(1.05rem, 2vw, 1.5rem);
+  font-weight: normal;
+  line-height: 1.2;
+}
+
+/*
+ * The prose itself: monospace and grey, the same voice the front page's tagline
+ * speaks in. Not the teletext face — that face is a display face, and four
+ * hundred words set in it would be a wall nobody reads. Not pure white either:
+ * `#fff` on `#111` at this length glares.
+ */
+.about-para {
+  margin: 0 0 1.15rem;
+  font-family: monospace;
+  font-size: clamp(0.82rem, 1.15vw, 0.95rem);
+  line-height: 1.75;
+  color: #c8c8c8;
+  /* A paragraph ending on one stranded word leaves a notch in the rag; this
+     pulls a word down to avoid it. Ignored where it is not supported, which
+     costs nothing: the text simply wraps as it did. */
+  text-wrap: pretty;
+}
+
+/* The opening paragraph is the wall label — a little brighter than the rest,
+   since it is what a reader who reads nothing else will read. */
+.about-intro {
+  color: #e8e8e8;
+}
+
+/*
+ * Links leave the site, and there are only two of them.
+ *
+ * White with an underline rather than a palette colour: the headings already
+ * carry three of the four colours, and a fourth on an inline link would read as
+ * another heading rather than as a link. Yellow on hover is the same answer the
+ * language switch gives.
+ */
+.about-link {
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.about-link:hover,
+.about-link:focus-visible {
+  color: #ff0;
+}
+
+.about-link:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+@media (max-width: 720px) {
+  .about {
+    --about-gutter: 1rem;
+  }
+
+  /* The back link's logo is sized for a header with room to spare; here it
+     shares a narrow row with the switch. */
+  .about-head .room-back-link {
+    margin-right: 0;
+  }
+}

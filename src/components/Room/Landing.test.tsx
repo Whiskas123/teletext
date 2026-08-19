@@ -204,18 +204,24 @@ describe('the front page', () => {
     expect(navigateMock).toHaveBeenCalledWith('/room/kitchen');
   });
 
+  it('sobre opens the about page', async () => {
+    const user = userEvent.setup();
+    renderLanding();
+
+    await user.click(screen.getByRole('button', { name: /sobre o projeto/i }));
+    expect(navigateMock).toHaveBeenCalledWith('/about');
+  });
+
   it('says so when an entry has nowhere to go yet, and goes nowhere', async () => {
     const user = userEvent.setup();
     renderLanding();
 
-    for (const name of [/sugerir/i, /sobre/i]) {
-      const entry = screen.getByRole('button', { name });
-      // A word that takes a click and silently does nothing is worse than one
-      // that is not there, so it is marked rather than left to be discovered.
-      expect(entry).toHaveAttribute('aria-disabled', 'true');
-      expect(entry).toHaveAccessibleName(/em breve/i);
-      await user.click(entry);
-    }
+    const entry = screen.getByRole('button', { name: /sugerir/i });
+    // A word that takes a click and silently does nothing is worse than one
+    // that is not there, so it is marked rather than left to be discovered.
+    expect(entry).toHaveAttribute('aria-disabled', 'true');
+    expect(entry).toHaveAccessibleName(/em breve/i);
+    await user.click(entry);
 
     expect(navigateMock).not.toHaveBeenCalled();
   });

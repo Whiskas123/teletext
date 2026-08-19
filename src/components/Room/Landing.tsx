@@ -34,8 +34,9 @@ import { useLanguage } from './useLanguage';
  *  - **criar** — the solo editor, opened on the first *free* playground page
  *    rather than the editor's default. Landing everyone on the same number
  *    meant two people creating a page at once overwrote each other's work.
- *  - **sugerir** / **sobre** — rendered, with nowhere to go yet. They say so
- *    rather than pretending: see {@link MenuEntry.action}.
+ *  - **sobre** — the about page (`/about`), which is the only prose on the site.
+ *  - **sugerir** — rendered, with nowhere to go yet. It says so rather than
+ *    pretending: see {@link MenuEntry.action}.
  *
  * Nothing here asks for a name. Members start as `Guest-XXXX` and rename
  * themselves from the room sidebar if they care to.
@@ -78,6 +79,9 @@ export function Landing() {
         return;
       case 'create':
         handleCreatePage();
+        return;
+      case 'about':
+        navigate('/about');
         return;
       case 'pending':
         // Deliberately nothing. The entry is marked `aria-disabled` below, so

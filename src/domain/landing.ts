@@ -53,6 +53,8 @@ export type MenuAction =
   | 'watch'
   /** Create: opens the editor on the first free playground page. */
   | 'create'
+  /** About: the one screen on the site that is prose. */
+  | 'about'
   /** Nothing yet — rendered, but with nowhere to go. */
   | 'pending';
 
@@ -102,7 +104,7 @@ export const MENU: readonly MenuEntry[] = [
   },
   {
     id: 'about',
-    action: 'pending',
+    action: 'about',
     color: 'cyan',
     label: { pt: 'sobre', en: 'about' },
     hint: { pt: 'Sobre o projeto', en: 'About the project' },

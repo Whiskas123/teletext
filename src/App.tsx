@@ -9,6 +9,7 @@ import {
 import { Analytics } from '@vercel/analytics/react';
 import { GlobalProvider } from './collab/GlobalProvider';
 import { RoomContext } from './collab/RoomContext';
+import { AboutPage } from './components/Room/AboutPage';
 import { Landing } from './components/Room/Landing';
 import { ModeratorLogin } from './components/Room/ModeratorLogin';
 import { RoomViewer } from './components/Room/RoomViewer';
@@ -79,6 +80,9 @@ function App() {
           <Route path="/edit" element={<SoloEditor />} />
           <Route path="/edit/:pageNumber" element={<SoloEditor />} />
           <Route path="/edit/:pageNumber/:subpage" element={<SoloEditor />} />
+
+          {/* The prose: what this is, and why. Reached from "sobre". */}
+          <Route path="/about" element={<AboutPage />} />
 
           {/* Moderator sign-in (device-local; see collab/moderator.ts). */}
           <Route path="/moderator" element={<ModeratorLogin />} />
