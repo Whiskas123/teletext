@@ -87,9 +87,9 @@ export const ABOUT: Record<Language, AboutDoc> = {
       [
         'O Tele-textual é uma instalação participativa de ',
         { text: 'João Bernardo Narciso', href: AUTHOR },
-        ', construída sobre o arquivo do teletexto português. Reúne alguns milhares de páginas recuperadas do arquivo da web ',
+        ', construída sobre um arquivo do teletexto português. Reúne páginas recuperadas do arquivo da web ',
         { text: 'Arquivo.pt', href: ARQUIVO },
-        ' — notícias, meteorologia, futebol, lotarias, classificados, horóscopos e serviços de SMS — e volta a pô-las num ecrã. Podem ser vistas sozinho, ou numa sala com outras pessoas, onde o grupo decide em conjunto que página carregar a seguir e espera que ela chegue. Ao lado do arquivo há um editor, e qualquer pessoa pode fazer uma página nova na mesma grelha que os canais tinham. O trabalho vive no espaço entre essas duas metades: uma maneira lenta e colectiva de olhar para uma coisa que está quase toda perdida, e um conjunto de limitações antigas devolvido a quem quiser ser criativo e fazer algo novo lá dentro.',
+        ' — notícias, meteorologia, futebol, lotarias, classificados, horóscopos e serviços de SMS — e volta a pô-las num ecrã. Podem ser vistas sozinho, ou numa sala com outras pessoas, onde o grupo decide em conjunto que página carregar a seguir, esperando que ela chegue. Através do editor, qualquer pessoa pode fazer uma página nova na mesma grelha que o teletexto usa. Este projeto vive no espaço entre essas duas partes: por um lado, é uma forma lenta e colectiva de olhar para páginas que foram esquecidas, e por outro lado uma forma de criar através de um conjunto de limitações impostas por uma tecnologia desatualizada.',
       ],
     ],
     sections: {
@@ -97,10 +97,10 @@ export const ABOUT: Record<Language, AboutDoc> = {
         heading: 'teletexto',
         paragraphs: [
           [
-            'Durante algumas décadas o sinal de televisão transportou um serviço de texto nas suas linhas não usadas. Carregavas em TXT no comando, marcavas três dígitos, e esperavas — às vezes um segundo, às vezes o tempo suficiente para duvidares se tinhas marcado o número errado. Depois, a página montava-se: quarenta caracteres de largura, vinte e quatro linhas de altura, em oito cores e mais nada. A página 100 era o índice. A 888 eram as legendas. A meteorologia andava algures nas 400 e a lotaria estava onde o canal a tivesse posto, e aprendias os números como se aprende um número de telefone.',
+            'Durante algumas décadas o sinal de televisão transportou um serviço de texto, aproveitando uma banda de sinal que não era utilizada. Carregar em "TXT" no comando, marcar três dígitos, e esperar — às vezes um segundo, às vezes o tempo suficiente para duvidares se tinhas marcado o número errado - eram uma prática comum. Depois, a página montava-se: quarenta caracteres de largura, vinte e quatro linhas de altura, em oito cores e mais nada. A página 100 era o índice. A 888 eram as legendas. A meteorologia andava algures nas 400 e a lotaria estava onde o canal a tivesse posto. Os números eram decorados como se decoravam os números de telefone.',
           ],
           [
-            'Era uma pequena «proto-internet» pública e lenta a viver dentro da televisão, gratuita, e presente em todas as casas. Interessa-me porque guarda uma certa ideia de esfera pública: informação como infraestrutura, leve por desenho, disponível a toda a gente ao mesmo tempo, devida às pessoas em vez de vendida. Foi também uma das tecnologias de acessibilidade mais importantes que a televisão teve, tornando o meio utilizável para pessoas surdas e com perda auditiva através de legendas e serviços de texto. E teve uma vida social que ninguém planeou: alguns serviços tinham páginas de conversa onde mensagens SMS apareciam no ecrã para toda a gente. Para algumas pessoas (sobretudo pessoas queer) essas páginas foram espaços raros e semi-anónimos.',
+            'Era uma pequena «proto-internet» pública e lenta a viver dentro da televisão, gratuita, e presente em todas as casas. Interessa-me porque guarda uma certa ideia de esfera pública: informação como infraestrutura, leve por design e por necessidade, disponível a toda a gente ao mesmo tempo, gratuita. Foi também uma das tecnologias de acessibilidade mais importantes da televisão, tornando o meio utilizável para pessoas surdas ou com perda auditiva. Teve uma vida social não planeada: alguns serviços tinham páginas de conversa onde mensagens SMS apareciam no ecrã para toda a gente. Para algumas pessoas (sobretudo pessoas queer) essas páginas foram espaços raros de liberdade.',
           ],
         ],
       },
@@ -108,7 +108,7 @@ export const ABOUT: Record<Language, AboutDoc> = {
         heading: 'o arquivo',
         paragraphs: [
           [
-            'Isto não é um arquivo completo, e não podia ser. O teletexto foi feito para ser escrito por cima e quase nada foi guardado. O que está aqui reunido é o que um robô da web apanhou nos dias em que calhou passar, quando os canais portugueses espelhavam os seus serviços de teletexto online. Os canais iam reaproveitando os números das páginas, por isso um mesmo número pode guardar páginas sem relação nenhuma, de épocas diferentes.',
+            'O Tele-textual não é um arquivo completo, nem pretende ser. O teletexto foi feito para ir sendo escrito por cima e quase nada foi guardado. O que está aqui reunido é o que os webcrawlers do Arquivo.pt apanhar nos dias em que calharam de passar, quando os canais portugueses espelhavam os seus serviços de teletexto online. Os canais iam reaproveitando os números das páginas, e por isso um mesmo número podia guardar páginas sem relação nenhuma e  de épocas diferentes.',
           ],
         ],
       },
@@ -116,10 +116,10 @@ export const ABOUT: Record<Language, AboutDoc> = {
         heading: 'participar',
         paragraphs: [
           [
-            'Podes ver sozinho: marcas uma página, segues os atalhos coloridos, procuras em todas as páginas pelo que está escrito nelas. Ou podes abrir uma sala. Toda a gente na sala vê a mesma página ao mesmo tempo e conversa à margem, e ninguém fica com o comando. Mudar de página é um pedido que fica de pé sessenta segundos e precisa da maioria das pessoas presentes. Esperas, em conjunto, que a página chegue, como no tempo do teletexto. Ler teletexto era uma coisa que se fazia numa sala, em voz alta, com quem lá estivesse. Quase tudo o que construímos para a web é feito para ser usado sozinho e depressa. Isto é uma tentativa do contrário.',
+            'Podes ver sozinho: consultando o índice das páginas amarelas, marcando um número, seguindo os atalhos coloridos. Ou podes entrar numa sala coletiva. Toda a gente na sala vê a mesma página ao mesmo tempo e conversa à margem, e ninguém fica com o comando. Mudar de página é um pedido que fica de pé sessenta segundos e precisa da anuência da maioria das pessoas presentes. Depois da decisão tomada, espera-se em conjunto que a página chegue, como no tempo do teletexto. Ler teletexto era uma coisa que se fazia numa sala, em voz alta, com quem lá estivesse. Pelo contrário, quase tudo o que construímos para a web é feito para ser usado sozinho e depressa.',
           ],
           [
-            'As páginas antigas não são o site todo. Qualquer pessoa pode abrir o editor e fazer uma página sob as limitações do teletexto: quarenta por vinte e quatro, oito cores, altura dupla e texto intermitente, gráficos de mosaico desenhados dividindo cada célula de caractere em seis blocos. As páginas a partir da 700 estão abertas a toda a gente, e uma página a ser editada muda ao vivo no ecrã de quem a estiver a ver. A limitação é o que interessa.',
+            'As páginas de arquivo não são o site todo. Qualquer pessoa pode abrir o editor e fazer uma página sob as limitações do teletexto: quarenta por vinte e quatro, oito cores, altura simples ou dupla e texto intermitente, gráficos de mosaico desenhados dividindo cada célula de caractere em seis blocos. As páginas a partir da 700 estão abertas a toda a gente, e uma página a ser editada muda ao vivo no ecrã de quem a estiver a ver.',
           ],
         ],
       },
