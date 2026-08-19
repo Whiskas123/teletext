@@ -14,7 +14,7 @@
 import { useEffect, useRef } from 'react';
 
 import type { TeletextPage } from '../../types/teletext';
-import { PAGE_W, drawPage, pageHeight } from '../../utils/pageCanvas';
+import { PAGE_W, ROWS, drawPage, pageHeight } from '../../utils/pageCanvas';
 
 export interface TeletextThumbnailProps {
   page: TeletextPage;
@@ -25,6 +25,12 @@ export interface TeletextThumbnailProps {
   showIndexLine?: boolean;
   /** Leave off the page number, counter and clock, and lose the row with them. */
   skipHeaderRow?: boolean;
+  /**
+   * How tall the thing is, and whether its row 0 is a header. Defaults are a
+   * full 24-row page with one; a guestbook snippet is eight rows with none.
+   */
+  rows?: number;
+  headerRow?: boolean;
   /** Alternative text. Empty (the default) marks it decorative. */
   alt?: string;
   /**
@@ -44,6 +50,8 @@ export function TeletextThumbnail({
   subpageCount = 1,
   showIndexLine = false,
   skipHeaderRow = false,
+  rows = ROWS,
+  headerRow = true,
   alt = '',
   scale = 1,
 }: TeletextThumbnailProps) {
@@ -68,6 +76,8 @@ export function TeletextThumbnail({
         subpageCount,
         showIndexLine,
         skipHeaderRow,
+        rows,
+        headerRow,
         scale,
       });
     };
@@ -83,7 +93,17 @@ export function TeletextThumbnail({
     return () => {
       cancelled = true;
     };
-  }, [page, pageNumber, subpage, subpageCount, showIndexLine, skipHeaderRow, scale]);
+  }, [
+    page,
+    pageNumber,
+    subpage,
+    subpageCount,
+    showIndexLine,
+    skipHeaderRow,
+    rows,
+    headerRow,
+    scale,
+  ]);
 
   return (
     <canvas
@@ -93,7 +113,7 @@ export function TeletextThumbnail({
          reads better than the hard pixel edges `image-rendering: pixelated`
          would give. */
       width={Math.round(PAGE_W * scale)}
-      height={Math.round(pageHeight(skipHeaderRow) * scale)}
+      height={Math.round(pageHeight(headerRow && skipHeaderRow, rows) * scale)}
       className="teletext-thumbnail"
       role={alt === '' ? 'presentation' : 'img'}
       aria-label={alt === '' ? undefined : alt}

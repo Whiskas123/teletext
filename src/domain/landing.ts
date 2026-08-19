@@ -55,12 +55,20 @@ export type MenuAction =
   | 'create'
   /** About: the one screen on the site that is prose. */
   | 'about'
-  /** Nothing yet — rendered, but with nowhere to go. */
+  /** Guestbook: leave a name and eight rows of teletext. */
+  | 'guestbook'
+  /**
+   * Nothing yet — rendered, but with nowhere to go.
+   *
+   * No entry uses this at the moment. It is kept because the menu is a list
+   * that grows, and the alternative to a word that admits it does nothing yet
+   * is a word that silently does nothing.
+   */
   | 'pending';
 
 /** One coloured way in. */
 export interface MenuEntry {
-  id: 'watch' | 'create' | 'suggest' | 'about';
+  id: 'watch' | 'create' | 'guestbook' | 'about';
   action: MenuAction;
   /** Palette colour, from the eight a teletext page had. */
   color: TeletextColor;
@@ -96,11 +104,14 @@ export const MENU: readonly MenuEntry[] = [
     hint: { pt: 'Criar e editar páginas', en: 'Create and edit pages' },
   },
   {
-    id: 'suggest',
-    action: 'pending',
+    id: 'guestbook',
+    action: 'guestbook',
     color: 'yellow',
-    label: { pt: 'sugerir', en: 'suggest' },
-    hint: { pt: 'Sugerir uma página', en: 'Suggest a page' },
+    // The same word in both languages. It is what the thing has been called
+    // online since guestbooks existed, Portuguese included; `livro de visitas`
+    // reads as a hotel reception rather than as this.
+    label: { pt: 'guestbook', en: 'guestbook' },
+    hint: { pt: 'Assinar o guestbook', en: 'Sign the guestbook' },
   },
   {
     id: 'about',

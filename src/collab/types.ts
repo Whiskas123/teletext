@@ -14,6 +14,12 @@ import {
   type TeletextColor,
   type TeletextPage,
 } from '../types/teletext';
+// Type-only, and deliberately so: `domain/identity.ts` imports the room palette
+// from this module as a *value*, so a plain import here would close a runtime
+// cycle. `import type` is erased entirely and cannot.
+import type { GuestbookEntry } from '../domain/guestbook';
+
+export type { GuestbookEntry };
 
 // Re-export the reused teletext primitives so collab consumers have a single
 // import surface for the shared data model.
@@ -95,6 +101,23 @@ export interface ChatMessage {
  */
 export interface ChatData {
   messages: ChatMessage[];
+}
+
+/**
+ * Guestbook shared state (playhtml id: `"guestbook"`).
+ *
+ * Global rather than per room: there is one book, and a signature left while
+ * watching in the Kitchen is the same signature as any other. What an entry is,
+ * and what makes one valid, lives in `domain/guestbook.ts` — this is only the
+ * shape the document holds.
+ *
+ * Entries are whole objects in a list rather than cells in a map, unlike
+ * {@link PagesData}. The map exists so two people editing one page merge per
+ * cell; a signature is written once and never edited, so there is nothing to
+ * merge and a plain append is both correct and smaller.
+ */
+export interface GuestbookData {
+  entries: GuestbookEntry[];
 }
 
 /**

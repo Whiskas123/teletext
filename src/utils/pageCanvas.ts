@@ -36,9 +36,15 @@ export const CELL_H = 18;
 export const PAGE_W = COLS * CELL_W;
 export const PAGE_H = ROWS * CELL_H;
 
-/** How tall the picture is, given whether the header row is being drawn. */
-export function pageHeight(skipHeaderRow = false): number {
-  return (ROWS - (skipHeaderRow ? 1 : 0)) * CELL_H;
+/**
+ * How tall the picture is: the rows actually drawn, one cell each.
+ *
+ * `rows` is how tall the thing being drawn is — {@link ROWS} for a page, and
+ * eight for a guestbook snippet (see `domain/guestbook.ts`). It defaults to a
+ * full page, so every existing caller means what it always did.
+ */
+export function pageHeight(skipHeaderRow = false, rows: number = ROWS): number {
+  return (rows - (skipHeaderRow ? 1 : 0)) * CELL_H;
 }
 
 /** Exported so anything drawing *beside* a page — the watched picture's index
@@ -149,6 +155,25 @@ export interface DrawPageOptions {
    */
   skipHeaderRow?: boolean;
   /**
+   * How many rows the thing being drawn has. Defaults to a full page.
+   *
+   * A guestbook snippet is eight (`domain/guestbook.ts`) — a third of a page,
+   * and eight rows of the same cells rather than a different kind of object.
+   * Passing it here rather than writing a second renderer is what keeps a
+   * snippet and a page the same picture: the sixel sub-grid, the doubled
+   * height, the pixel snapping and the palette are all defined once.
+   */
+  rows?: number;
+  /**
+   * Whether row 0 is a header — the page number, subpage counter and clock —
+   * or just another row of content.
+   *
+   * Distinct from {@link skipHeaderRow}, which drops a header that exists. A
+   * snippet has no header at all: it is eight rows of content, and row 0 is the
+   * first of them.
+   */
+  headerRow?: boolean;
+  /**
    * Device pixels per page pixel.
    *
    * Applied here rather than by the caller's `ctx.scale`, because the geometry
@@ -175,11 +200,14 @@ export function drawPage(
     now = new Date(),
     scale = 1,
     skipHeaderRow = false,
+    rows = ROWS,
+    headerRow = true,
   }: DrawPageOptions = {},
 ): void {
   const px = (v: number) => Math.round(v * scale);
-  // Everything below shifts up by the row that is not being drawn.
-  const firstRow = skipHeaderRow ? 1 : 0;
+  // Everything below shifts up by the row that is not being drawn. With no
+  // header row there is nothing to skip, whatever the caller asked for.
+  const firstRow = headerRow && skipHeaderRow ? 1 : 0;
   ctx.font = `${FONT_PX}px ${FONT_STACK}`;
   ctx.textBaseline = 'top';
 
@@ -187,7 +215,7 @@ export function drawPage(
   const subpageStr = formatSubpageIndicator(subpage, subpageCount);
   const dateTimeStr = formatHeaderDateTime(now);
 
-  for (let row = firstRow; row < ROWS; row++) {
+  for (let row = firstRow; row < rows; row++) {
     for (let col = 0; col < COLS; col++) {
       const index = row * COLS + col;
       // This row is covered by a double-height cell directly above it — its
@@ -203,7 +231,7 @@ export function drawPage(
       const y = (row - firstRow) * CELL_H;
 
       let isHeaderOverlay = false;
-      if (row === 0) {
+      if (headerRow && row === 0) {
         if (col < 3) {
           char = pageStr[col];
           fg = '#ffffff';
@@ -217,7 +245,7 @@ export function drawPage(
           fg = '#ffff00';
           isHeaderOverlay = true;
         }
-      } else if (row === ROWS - 1 && showIndexLine) {
+      } else if (row === rows - 1 && showIndexLine) {
         const hit = INDEX_LINE_RANGES.find((r) => col >= r.start && col < r.end);
         char = hit == null ? ' ' : hit.label[col - hit.start];
         if (hit != null) fg = COLOR_HEX[hit.fg] ?? fg;

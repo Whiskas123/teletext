@@ -10,6 +10,7 @@ import { Analytics } from '@vercel/analytics/react';
 import { GlobalProvider } from './collab/GlobalProvider';
 import { RoomContext } from './collab/RoomContext';
 import { AboutPage } from './components/Room/AboutPage';
+import { GuestbookPage } from './components/Room/GuestbookPage';
 import { Landing } from './components/Room/Landing';
 import { ModeratorLogin } from './components/Room/ModeratorLogin';
 import { RoomViewer } from './components/Room/RoomViewer';
@@ -83,6 +84,9 @@ function App() {
 
           {/* The prose: what this is, and why. Reached from "sobre". */}
           <Route path="/about" element={<AboutPage />} />
+
+          {/* The book of signatures: a name and eight rows of teletext. */}
+          <Route path="/guestbook" element={<GuestbookPage />} />
 
           {/* Moderator sign-in (device-local; see collab/moderator.ts). */}
           <Route path="/moderator" element={<ModeratorLogin />} />

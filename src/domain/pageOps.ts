@@ -59,8 +59,12 @@ function isValidGraphics(value: unknown): value is number | null | undefined {
  * integer in 0..63. Valid cells preserve their present optional fields exactly
  * (so normalization is the identity on already-valid cells); malformed or
  * missing cells collapse to the default empty cell.
+ *
+ * Exported because a page is not the only thing made of cells: the guestbook's
+ * snippets are 40x8 rather than 40x24 and have to repair themselves the same
+ * way, and two definitions of "a well-formed cell" would be one too many.
  */
-function normalizeCell(raw: unknown): Cell {
+export function normalizeCell(raw: unknown): Cell {
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
     return emptyCell();
   }

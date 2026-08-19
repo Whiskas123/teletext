@@ -85,7 +85,7 @@ describe('the front page', () => {
   it('offers the four ways in, in the palette, without asking for a name', () => {
     renderLanding();
 
-    for (const word of ['ver', 'criar', 'sugerir', 'sobre']) {
+    for (const word of ['ver', 'criar', 'guestbook', 'sobre']) {
       expect(screen.getByText(word)).toBeInTheDocument();
     }
     // Names are optional everywhere: no name prompt gates the entry screen.
@@ -212,17 +212,29 @@ describe('the front page', () => {
     expect(navigateMock).toHaveBeenCalledWith('/about');
   });
 
-  it('says so when an entry has nowhere to go yet, and goes nowhere', async () => {
+  it('guestbook opens the book of signatures', async () => {
     const user = userEvent.setup();
     renderLanding();
 
-    const entry = screen.getByRole('button', { name: /sugerir/i });
-    // A word that takes a click and silently does nothing is worse than one
-    // that is not there, so it is marked rather than left to be discovered.
-    expect(entry).toHaveAttribute('aria-disabled', 'true');
-    expect(entry).toHaveAccessibleName(/em breve/i);
-    await user.click(entry);
+    await user.click(screen.getByRole('button', { name: /assinar o guestbook/i }));
+    expect(navigateMock).toHaveBeenCalledWith('/guestbook');
+  });
 
-    expect(navigateMock).not.toHaveBeenCalled();
+  it('leads somewhere from every word in the index', async () => {
+    const user = userEvent.setup();
+    renderLanding();
+
+    // Every entry has somewhere to go now. The mechanism for one that does not
+    // is kept (`MenuAction.pending`) because the menu is a list that grows —
+    // this asserts that nothing is currently using it and quietly doing
+    // nothing, which is the failure it exists to prevent.
+    for (const word of ['ver', 'criar', 'guestbook', 'sobre']) {
+      expect(screen.getByText(word).closest('button')).not.toHaveAttribute(
+        'aria-disabled',
+      );
+    }
+
+    await user.click(screen.getByRole('button', { name: /sobre o projeto/i }));
+    expect(navigateMock).toHaveBeenCalled();
   });
 });

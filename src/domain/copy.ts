@@ -188,6 +188,54 @@ export interface Copy {
     toolPick: string;
     toolPickHint: string;
   };
+  /**
+   * The guestbook: the book itself, and the form for signing it.
+   *
+   * "Guestbook" stays in English in both languages. It is the word the thing
+   * has always had online, Portuguese included, and `livro de visitas` reads as
+   * a hotel reception rather than as the thing this is.
+   */
+  guestbook: {
+    title: string;
+    region: string;
+    /** One line under the title saying what to do. */
+    intro: string;
+    /** The list, and what stands in for it while nobody has signed. */
+    entries: string;
+    empty: string;
+    /** Marks the reader's own signature in the list. */
+    yours: string;
+    /** How an entry is dated, and named, when read out. */
+    signedBy(name: string): string;
+    /** Opens the form, and names it once it is open. */
+    sign: string;
+    /** Closes it again. */
+    close: string;
+    yourName: string;
+    namePlaceholder: string;
+    yourSnippet: string;
+    /**
+     * Said under the grid, per tool. Two strings rather than one that describes
+     * both: the hint is read while using one of them, and half of a combined
+     * hint would always be about the tool that is not selected.
+     */
+    textHint: string;
+    pixelHint: string;
+    tool: string;
+    toolText: string;
+    toolPixel: string;
+    color: string;
+    /** Only the text tool has one — see the note in `GuestbookPage`. */
+    background: string;
+    clear: string;
+    submit: string;
+    /** What comes back when the book refuses a signature. */
+    errorNoName: string;
+    errorNameTooLong(max: number): string;
+    errorBlank: string;
+    /** Said once a signature has landed. */
+    signed: string;
+  };
 }
 
 export const COPY: Record<Language, Copy> = {
@@ -344,6 +392,34 @@ export const COPY: Record<Language, Copy> = {
       toolPickHint:
         'Clica numa célula para copiar o que a fez: as cores se tiver um caractere, a forma e as cores se for um mosaico.',
     },
+    guestbook: {
+      title: 'guestbook',
+      region: 'Guestbook',
+      intro: 'Deixa o teu nome e oito linhas de teletexto.',
+      entries: 'Assinaturas',
+      empty: 'Ainda ninguém assinou. Podes ser a primeira pessoa.',
+      yours: 'a tua',
+      signedBy: (name) => `Assinado por ${name}`,
+      sign: 'Assinar o livro',
+      close: 'Fechar',
+      yourName: 'O teu nome',
+      namePlaceholder: 'como queres ser conhecido',
+      yourSnippet: 'A tua página',
+      textHint: 'Clica numa célula e escreve. As setas movem o cursor.',
+      pixelHint:
+        'Arrasta para pintar. Cada célula tem seis pixels; Alt+clique apaga um.',
+      tool: 'Ferramenta',
+      toolText: 'Texto',
+      toolPixel: 'Pixel',
+      color: 'Cor',
+      background: 'Fundo',
+      clear: 'Limpar',
+      submit: 'Assinar',
+      errorNoName: 'Escreve um nome.',
+      errorNameTooLong: (max) => `O nome tem de ter ${max} caracteres ou menos.`,
+      errorBlank: 'A página está vazia. Escreve ou desenha alguma coisa.',
+      signed: 'Assinado. Obrigado.',
+    },
   },
   en: {
     layout: {
@@ -497,6 +573,33 @@ export const COPY: Record<Language, Copy> = {
       toolPick: 'Pick',
       toolPickHint:
         'Click a cell to copy what made it: its colours if it holds a character, its shape and colours if it is a mosaic.',
+    },
+    guestbook: {
+      title: 'guestbook',
+      region: 'Guestbook',
+      intro: 'Leave your name and eight rows of teletext.',
+      entries: 'Signatures',
+      empty: 'Nobody has signed yet. You could be first.',
+      yours: 'yours',
+      signedBy: (name) => `Signed by ${name}`,
+      sign: 'Sign the book',
+      close: 'Close',
+      yourName: 'Your name',
+      namePlaceholder: 'what to call you',
+      yourSnippet: 'Your page',
+      textHint: 'Click a cell and type. The arrow keys move the cursor.',
+      pixelHint: 'Drag to paint. Each cell holds six pixels; Alt+click erases one.',
+      tool: 'Tool',
+      toolText: 'Text',
+      toolPixel: 'Pixel',
+      color: 'Colour',
+      background: 'Background',
+      clear: 'Clear',
+      submit: 'Sign',
+      errorNoName: 'Enter a name.',
+      errorNameTooLong: (max) => `A name must be ${max} characters or fewer.`,
+      errorBlank: 'The page is empty. Write or draw something on it.',
+      signed: 'Signed. Thank you.',
     },
   },
 };

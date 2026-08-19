@@ -444,7 +444,16 @@
     flex-wrap: nowrap;
   }
 
-  .frontpage-lang {
+  /*
+   * Scoped to `.frontpage`, and it has to be: `/about` borrows this class for
+   * its own switch, and unscoped this rule followed it there. On that page
+   * `--frontpage-gutter*` do not exist, so both offsets fell back to `auto` and
+   * the button — out of the flow, but with nothing telling it where to go — took
+   * the static position a flex container hands an absolute child: the top-left
+   * of the header, on top of the logo that goes home. `/about` keeps its switch
+   * in the flow, where `space-between` already puts it in the right corner.
+   */
+  .frontpage .frontpage-lang {
     position: absolute;
     /* The page's own padding, so the switch sits on its corner exactly. */
     top: var(--frontpage-gutter-y);
@@ -4763,5 +4772,434 @@ button.yellow-pages-number:hover {
      shares a narrow row with the switch. */
   .about-head .room-back-link {
     margin-right: 0;
+  }
+}
+
+/* --- Guestbook (/guestbook): a name, and eight rows of teletext --- */
+/*
+ * The same shell the about page uses — black, the front page's gutters, the
+ * back link borrowed rather than restyled — with two sections in it: the form
+ * for signing, and the book itself.
+ *
+ * Everything is scoped under `.guestbook`, except `.snippet-*`, which belongs
+ * to the grid component and is reused wherever a snippet is drawn.
+ */
+.guestbook {
+  min-height: 100vh;
+  min-height: 100dvh;
+  box-sizing: border-box;
+  --guestbook-gutter: clamp(2.5rem, 5vw, 4.25rem);
+  --guestbook-gutter-y: clamp(1.5rem, 4vw, 3.75rem);
+  padding: var(--guestbook-gutter-y) var(--guestbook-gutter);
+  background: #111;
+  color: #fff;
+}
+
+.guestbook-head {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.guestbook-body {
+  margin: clamp(2rem, 6vh, 4rem) 0 0;
+  padding-bottom: clamp(3rem, 10vh, 6rem);
+}
+
+/*
+ * The title, the line under it, and the way in to signing.
+ *
+ * Held to the same width as the closed book below, so the wordmark and the
+ * signatures share a left edge and the page reads as one column until it is
+ * asked to be two.
+ */
+.guestbook-masthead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  max-width: 46rem;
+  margin: 0 auto clamp(2rem, 5vh, 3rem);
+}
+
+.guestbook-title {
+  margin: 0 0 0.6rem;
+  font-family: "European Teletext", "Press Start 2P", monospace;
+  font-size: clamp(1.75rem, 4vw, 3.15rem);
+  font-weight: normal;
+  line-height: 1.12;
+}
+
+.guestbook-intro {
+  margin: 0;
+  font-family: monospace;
+  font-size: clamp(0.82rem, 1.15vw, 0.95rem);
+  line-height: 1.7;
+  color: #c8c8c8;
+}
+
+/*
+ * The one control on the page that is not part of a form.
+ *
+ * Yellow, because that is the colour of the word on the front page that leads
+ * here, and because it is the only thing on a page of black and grey that is
+ * asking to be pressed.
+ */
+.guestbook-open {
+  flex: 0 0 auto;
+  font-family: monospace;
+  font-size: 0.85rem;
+  padding: 0.5rem 1.1rem;
+  color: #111;
+  background: #ff0;
+  border: 1px solid #ff0;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.guestbook-open:hover {
+  background: #ffa;
+}
+
+/*
+ * The book, and the form beside it.
+ *
+ * Closed, this is one centred column and the signatures are the page. Open, it
+ * becomes two: the form on the left, the book on the right, so the book stays
+ * on screen while it is being added to.
+ *
+ * The form is *second* in the document and placed into the first column, rather
+ * than written first and moved. A narrow screen has no columns to place into,
+ * so it falls back to document order — which puts the book first and the form
+ * below it, which is where a panel that opens should go when there is nowhere
+ * to the side for it. Ordering the DOM the other way would need `order` to fix
+ * the narrow case, and `order` moves the picture without moving the reading.
+ */
+.guestbook-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: clamp(1.75rem, 4vw, 3rem);
+  max-width: 46rem;
+  margin-inline: auto;
+}
+
+.guestbook-layout-open {
+  max-width: 78rem;
+}
+
+@media (min-width: 900px) {
+  .guestbook-layout-open {
+    grid-template-columns: minmax(19rem, 27rem) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .guestbook-layout-open .guestbook-sign {
+    grid-column: 1;
+    grid-row: 1;
+    /* Signing is a long enough job that the book can scroll past it. */
+    position: sticky;
+    top: clamp(1.5rem, 4vw, 3rem);
+  }
+
+  .guestbook-layout-open .guestbook-list {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+
+.guestbook-heading {
+  margin: 0 0 1rem;
+  font-family: "European Teletext", "Press Start 2P", monospace;
+  font-size: clamp(1.05rem, 2vw, 1.5rem);
+  font-weight: normal;
+  line-height: 1.2;
+}
+
+/*
+ * The signing panel.
+ *
+ * Given an edge and a slightly lifted surface, because it is a thing that
+ * appeared when asked for rather than part of the page — and because in the
+ * left column it needs to read as one object beside a list of many.
+ *
+ * `container-type: inline-size` makes it the reference the snippet grid sizes
+ * itself against: the grid is 40 characters wide whatever happens, so its type
+ * has to shrink with this column rather than with the window.
+ */
+.guestbook-sign {
+  container-type: inline-size;
+  box-sizing: border-box;
+  padding: clamp(0.9rem, 2vw, 1.4rem);
+  background: #171717;
+  border: 1px solid #333;
+}
+
+.guestbook-field {
+  display: block;
+  margin-bottom: 1.1rem;
+}
+
+/* Every label on this screen speaks in the same small grey monospace, whether
+   it labels a field, a fieldset or a row of swatches. */
+.guestbook-label {
+  display: block;
+  margin-bottom: 0.4rem;
+  padding: 0;
+  font-family: monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #888;
+}
+
+.guestbook-name {
+  width: 100%;
+  max-width: 22rem;
+  box-sizing: border-box;
+  padding: 0.5rem 0.6rem;
+  font-family: monospace;
+  font-size: 0.95rem;
+  color: #fff;
+  background: #1a1a1a;
+  border: 1px solid #444;
+  border-radius: 4px;
+}
+
+.guestbook-name:focus-visible {
+  outline: 2px solid #ff0;
+  outline-offset: 1px;
+}
+
+.guestbook-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.guestbook-toolset,
+.guestbook-swatches {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.guestbook-tool {
+  font-family: monospace;
+  font-size: 0.8rem;
+  padding: 0.35rem 0.8rem;
+  color: #ccc;
+  background: #1a1a1a;
+  border: 1px solid #444;
+}
+
+.guestbook-tool + .guestbook-tool {
+  margin-left: 0.35rem;
+}
+
+/* The chosen tool is lit rather than merely darker: with two of them, "not the
+   other one" is not a state anybody can read at a glance. */
+.guestbook-tool-on {
+  color: #111;
+  background: #ff0;
+  border-color: #ff0;
+}
+
+.guestbook-swatch {
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  border: 1px solid #444;
+  border-radius: 0;
+  vertical-align: middle;
+}
+
+.guestbook-swatch + .guestbook-swatch {
+  margin-left: 0.25rem;
+}
+
+/*
+ * The chosen swatch, outlined outside its own box.
+ *
+ * A border would eat into the colour it is showing — and on the black swatch
+ * an inset marker is invisible against the page behind it.
+ */
+.guestbook-swatch-on {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.guestbook-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.guestbook-clear,
+.guestbook-submit {
+  font-family: monospace;
+  font-size: 0.85rem;
+  padding: 0.45rem 1.1rem;
+}
+
+.guestbook-submit {
+  color: #111;
+  background: #0f0;
+  border-color: #0f0;
+  font-weight: bold;
+}
+
+.guestbook-submit:hover {
+  background: #6f6;
+}
+
+/*
+ * Refusals and the thank-you share one line, which is always in the DOM.
+ *
+ * A `role="status"` that appears only when it has something to say is often
+ * not announced at all: the live region has to exist before the text lands in
+ * it, or a screen reader has nothing to watch.
+ */
+.guestbook-notice {
+  min-height: 1.4rem;
+  margin: 0.8rem 0 0;
+  font-family: monospace;
+  font-size: 0.82rem;
+  color: #ff0;
+}
+
+.guestbook-empty {
+  margin: 0;
+  font-family: monospace;
+  font-size: 0.85rem;
+  color: #888;
+}
+
+.guestbook-entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(1.5rem, 4vh, 2.5rem);
+}
+
+.guestbook-entry-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+  font-family: monospace;
+  font-size: 0.82rem;
+}
+
+.guestbook-entry-name {
+  font-weight: bold;
+}
+
+.guestbook-entry-mine {
+  padding: 0.05rem 0.35rem;
+  font-size: 0.7rem;
+  color: #111;
+  background: #0ff;
+}
+
+.guestbook-entry-date {
+  color: #777;
+  margin-left: auto;
+}
+
+/* The snippet as a picture. Full width of the column, and its own aspect ratio
+   keeps the eight rows in proportion however wide that is. */
+.guestbook-entry .teletext-thumbnail {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid #262626;
+  background: #000;
+}
+
+/*
+ * The snippet grid: 40 columns by 8 rows of real cells.
+ *
+ * Sized exactly as `.teletext-grid` is — `40em` wide and `1.35em` a row — so a
+ * cell here is the same shape as a cell in the editor. The font size is what
+ * scales it, since every dimension is in `em`: one number sets how big the
+ * whole grid is, and nothing else has to agree with it.
+ */
+.snippet-grid {
+  display: grid;
+  grid-template-columns: repeat(40, 1fr);
+  grid-template-rows: repeat(8, 1fr);
+  width: 40em;
+  height: 10.8em; /* 8 * 1.35em */
+  max-width: 100%;
+  font-family: 'Press Start 2P', 'Courier New', Courier, monospace;
+  /* The viewport-based fallback, for browsers without container queries. */
+  font-size: clamp(7px, 1.7vw, 15px);
+  line-height: 1.35;
+  letter-spacing: -0.03em;
+  font-weight: 400;
+  background: #000;
+  border: 1px solid #333;
+  isolation: isolate;
+  cursor: crosshair;
+  /* A drag paints; without this the browser reads the same gesture as a scroll
+     and the stroke stops dead on a phone. */
+  touch-action: none;
+}
+
+/*
+ * What actually sizes it: the panel it sits in, not the window.
+ *
+ * The grid is 40 characters wide by definition, so its type has to shrink with
+ * its column — and its column is a third of the page when the form is open
+ * beside the book, and the whole of it when the form is below. A viewport
+ * clamp cannot tell those apart and overflows the narrow one.
+ *
+ * 40 characters at `1cqw` each would be exactly full width, so 2.4 leaves room
+ * for the panel's own padding and the border.
+ */
+@supports (container-type: inline-size) {
+  .snippet-grid {
+    font-size: min(2.4cqw, 15px);
+  }
+}
+
+.snippet-grid:focus-visible {
+  outline: 2px solid #ff0;
+  outline-offset: 2px;
+}
+
+.snippet-cell {
+  min-width: 0;
+  min-height: 0;
+}
+
+.snippet-hint {
+  margin: 0.5rem 0 0;
+  max-width: 44rem;
+  font-family: monospace;
+  font-size: 0.72rem;
+  line-height: 1.6;
+  color: #888;
+}
+
+@media (max-width: 720px) {
+  .guestbook {
+    --guestbook-gutter: 1rem;
+  }
+
+  .guestbook-head .room-back-link {
+    margin-right: 0;
+  }
+
+  /* The tool row wraps to one control per line rather than squeezing the
+     swatches into a strip too narrow to hit. */
+  .guestbook-tools {
+    gap: 0.9rem;
   }
 }
