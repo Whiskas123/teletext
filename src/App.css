@@ -4870,12 +4870,12 @@ button.yellow-pages-number:hover {
  * becomes two: the form on the left, the book on the right, so the book stays
  * on screen while it is being added to.
  *
- * The form is *second* in the document and placed into the first column, rather
- * than written first and moved. A narrow screen has no columns to place into,
- * so it falls back to document order — which puts the book first and the form
- * below it, which is where a panel that opens should go when there is nowhere
- * to the side for it. Ordering the DOM the other way would need `order` to fix
- * the narrow case, and `order` moves the picture without moving the reading.
+ * The form comes *first* in the document, which serves both layouts with one
+ * order. Wide, it takes the left column. Narrow, there are no columns to take,
+ * so the grid falls back to document order and the form lands directly under
+ * the button that opened it — where a panel that just appeared belongs, rather
+ * than below a book that may be a screen and a half long. Nothing here needs
+ * `order`, which would move the picture without moving the reading.
  */
 .guestbook-layout {
   display: grid;

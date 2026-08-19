@@ -35,8 +35,13 @@ import { useLanguage } from './useLanguage';
  * opens on an empty form beside an empty grid says "fill this in" when what it
  * should say is "look at these". Signing splits the page: the form takes a
  * column on the left and the book moves right, staying on screen while it is
- * being added to. Narrow, there are no columns to take, so the form opens below
- * the book instead.
+ * being added to. Narrow, there are no columns to take, so the form simply
+ * follows the button that opened it and the book carries on below.
+ *
+ * That is why the form comes *first* in the document: one order serves both
+ * layouts. Wide, it is the left column; narrow, it is what appears under the
+ * button you just pressed. Nothing needs `order`, which moves the picture
+ * without moving the reading.
  *
  * ## Why this screen has no language switch
  *
@@ -61,10 +66,10 @@ export function GuestbookPage() {
 
   const nameRef = useRef<HTMLInputElement>(null);
 
-  // The form is below the book in the document, so that narrow screens read
-  // book-then-form and the columns are a matter of placement rather than order.
-  // That means opening it moves nothing the keyboard is on, hence this: the
-  // caret goes to the first field, which is where a signer is looking anyway.
+  // Straight into the first field. The form appears directly after the button
+  // that opened it, so this is where the keyboard was going next anyway — and
+  // on a phone it is what puts the panel, rather than the book below it, in
+  // front of the person who just asked to sign.
   useEffect(() => {
     if (open) nameRef.current?.focus();
   }, [open]);
@@ -140,29 +145,6 @@ export function GuestbookPage() {
         </div>
 
         <div className={`guestbook-layout${open ? ' guestbook-layout-open' : ''}`}>
-          <section className="guestbook-list" aria-labelledby="guestbook-list-heading">
-            <h2 id="guestbook-list-heading" className="guestbook-heading teletext-fg-cyan">
-              {copy.guestbook.entries}
-            </h2>
-
-            {entries.length === 0 ? (
-              <p className="guestbook-empty">{copy.guestbook.empty}</p>
-            ) : (
-              <ul className="guestbook-entries">
-                {entries.map((entry) => (
-                  <Entry
-                    key={entry.id}
-                    entry={entry}
-                    mine={entry.authorId === memberId}
-                    yoursLabel={copy.guestbook.yours}
-                    signedBy={copy.guestbook.signedBy}
-                    locale={language === 'pt' ? 'pt-PT' : 'en-GB'}
-                  />
-                ))}
-              </ul>
-            )}
-          </section>
-
           {open && (
             <section
               className="guestbook-sign"
@@ -269,6 +251,29 @@ export function GuestbookPage() {
               </p>
             </section>
           )}
+
+          <section className="guestbook-list" aria-labelledby="guestbook-list-heading">
+            <h2 id="guestbook-list-heading" className="guestbook-heading teletext-fg-cyan">
+              {copy.guestbook.entries}
+            </h2>
+
+            {entries.length === 0 ? (
+              <p className="guestbook-empty">{copy.guestbook.empty}</p>
+            ) : (
+              <ul className="guestbook-entries">
+                {entries.map((entry) => (
+                  <Entry
+                    key={entry.id}
+                    entry={entry}
+                    mine={entry.authorId === memberId}
+                    yoursLabel={copy.guestbook.yours}
+                    signedBy={copy.guestbook.signedBy}
+                    locale={language === 'pt' ? 'pt-PT' : 'en-GB'}
+                  />
+                ))}
+              </ul>
+            )}
+          </section>
         </div>
       </main>
     </div>
