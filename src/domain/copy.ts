@@ -67,6 +67,8 @@ export interface Copy {
     send: string;
     errorEmpty: string;
     errorTooLong: string;
+    /** Spoken for the lamp on the phone's chat tab. */
+    unread: string;
   };
   /** The vote console: its readouts, its keys, and everything it refuses. */
   vote: {
@@ -84,6 +86,8 @@ export interface Copy {
     carried: string;
     notCarried: string;
     noVote: string;
+    /** Spoken for the lamp on the phone's vote tab. */
+    inProgress: string;
     refused: string;
     /** Read aloud in place of a plate full of `<rect>`s. */
     spokenLive(page: string, accept: number, reject: number, threshold: number, base: number): string;
@@ -208,7 +212,7 @@ export const COPY: Record<Language, Copy> = {
       invalidName: 'O nome tem de ter entre 1 e 32 caracteres',
     },
     chat: {
-      name: 'Conversa',
+      name: 'Chat',
       region: 'Conversa da sala',
       log: 'Mensagens',
       empty: 'Ainda não há mensagens. Diz olá!',
@@ -217,6 +221,7 @@ export const COPY: Record<Language, Copy> = {
       send: 'Enviar',
       errorEmpty: 'A mensagem não pode estar vazia',
       errorTooLong: 'A mensagem excede 500 caracteres',
+      unread: 'Mensagens novas',
     },
     vote: {
       name: 'Votação',
@@ -232,6 +237,7 @@ export const COPY: Record<Language, Copy> = {
       carried: 'Aprovada',
       notCarried: 'Chumbada',
       noVote: 'Nenhuma votação em curso',
+      inProgress: 'Votação em curso',
       refused: 'Pedido recusado',
       spokenLive: (page, accept, reject, threshold, base) =>
         `Página ${page}: ${accept} a favor, ${reject} contra, ${threshold} de ${base} necessários`,
@@ -369,6 +375,7 @@ export const COPY: Record<Language, Copy> = {
       send: 'Send',
       errorEmpty: 'Message cannot be empty',
       errorTooLong: 'Message exceeds 500 characters',
+      unread: 'New messages',
     },
     vote: {
       name: 'Vote',
@@ -384,6 +391,7 @@ export const COPY: Record<Language, Copy> = {
       carried: 'Carried',
       notCarried: 'Not carried',
       noVote: 'No vote in progress',
+      inProgress: 'Vote in progress',
       refused: 'Request refused',
       spokenLive: (page, accept, reject, threshold, base) =>
         `Page ${page}: ${accept} in favour, ${reject} against, ${threshold} of ${base} needed`,

@@ -600,14 +600,102 @@
   opacity: 1;
 }
 
-/* The watch choices, revealed under the first entry. Indented under the word
-   they belong to, and set small, so the menu keeps its shape when it opens. */
+/*
+ * The watch choices, revealed under the first entry. Indented under the word
+ * they belong to, and set small, so the menu keeps its shape when it opens.
+ *
+ * Two kinds of thing, not seven doors. Laid out flat — one row of identical
+ * chips, "sozinho" and then six house names — the first chip read as a seventh
+ * room, and nothing on screen said that Living Room and Kitchen have other
+ * people in them. So each kind is named at the same size and the same left
+ * edge, and the rooms hang off their name behind a rule. Whichever kind is a
+ * button and whichever is a heading, the two names are peers on the page.
+ */
 .frontpage-submenu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  /* Wide enough on the left for the `>` marker to hang in, as the four menu
+     words do — it is the same marker, so it wants the same room. */
+  padding: 0.7rem 0 0.3rem 1.25rem;
+  max-width: 46rem;
+}
+
+/*
+ * The name of a kind, in the menu's own face so it reads as structure rather
+ * than as one more chip to press. A `<button>` when the kind is a single door
+ * and a `<p>` when it is a heading over six; the type is what differs, not the
+ * look, because on the page they are the same rank.
+ */
+.frontpage-watch-kind {
+  display: block;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: #fff;
+  font-family: "European Teletext", "Press Start 2P", monospace;
+  font-size: clamp(0.95rem, 1.6vw, 1.15rem);
+  line-height: 1.2;
+  text-align: left;
+  text-transform: lowercase;
+}
+
+/* Watching alone has nothing to choose inside it, so its name is the door. It
+   takes the menu's `>` marker for exactly that reason — it behaves like one of
+   the four words, and the marker is how a word says it goes somewhere. */
+button.frontpage-watch-kind {
+  position: relative;
+  cursor: pointer;
+}
+
+button.frontpage-watch-kind::before {
+  content: '>';
+  position: absolute;
+  right: 100%;
+  margin-right: 0.3em;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+
+button.frontpage-watch-kind:hover::before,
+button.frontpage-watch-kind:focus-visible::before {
+  opacity: 1;
+}
+
+/* As in the menu above: `index.css` fills every button on hover, and here the
+   marker is meant to be the whole hover state. */
+button.frontpage-watch-kind:hover,
+button.frontpage-watch-kind:focus-visible {
+  background: none;
+}
+
+button.frontpage-watch-kind:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+/* What makes a kind that kind, under its name and in the chips' own small
+   face. Six house names say nothing about who else is behind them; this is
+   where they say it. */
+.frontpage-watch-note {
+  margin: 0.2rem 0 0;
+  font-family: monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: #777;
+}
+
+/* The rooms hang off their name: indented past it, behind a rule in the colour
+   the occupancy counts use, so the line itself says other people are through
+   here. */
+.frontpage-watch-rooms {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
-  padding: 0.6rem 0 0.3rem 0.75rem;
-  max-width: 46rem;
+  margin-top: 0.55rem;
+  padding-left: 0.75rem;
+  border-left: 1px solid #066;
 }
 
 .frontpage-sub-btn {
@@ -1761,8 +1849,40 @@
 
 @media (min-width: 721px) {
   /* The column fills the window, so there is a surplus to centre the set in. */
+  /*
+   * The window is the whole of it: nothing on a watching screen scrolls.
+   *
+   * A television you have to scroll to see the bottom of is not a television,
+   * and a room where the conversation pushes the picture off the top of the page
+   * has its priorities backwards. So the layout is exactly the window's height
+   * and hides what will not fit; `min-height: 0` is threaded down every flex
+   * ancestor, because a flex item's floor is its content and without that the
+   * chat simply makes its own column taller until the page grows; and the one
+   * thing genuinely of unknown length does its own scrolling — the message log.
+   */
   .room-layout:has(.room-viewer) {
+    height: 100dvh;
     min-height: 100dvh;
+    overflow: hidden;
+  }
+
+  .room-layout:has(.room-viewer) .room-layout-body {
+    min-height: 0;
+    /*
+     * One line, always.
+     *
+     * The body wraps by default, and the main area asks for a 640px basis — so
+     * between about 720 and 1010 pixels the rail wrapped underneath the
+     * television, where the layout's new `overflow: hidden` clipped it off the
+     * bottom of the window entirely. It shrinks instead: `min-width: 0` on the
+     * main area lets the set give way, which it can afford to and the rail
+     * cannot.
+     */
+    flex-wrap: nowrap;
+  }
+
+  .room-layout:has(.room-viewer) .room-layout-main {
+    min-height: 0;
   }
 
   /*
@@ -1798,26 +1918,25 @@
   }
 
   /*
-   * Bigger than the set in a room, because the height it is capped by is no
-   * longer shared with anything. What is subtracted is the chrome above it —
-   * the layout's padding, the header, the gap under it — and 1.2 is the
-   * cabinet's 1000/830, turning a height budget into the width that produces
-   * it. The plain `max-width` first is the fallback for engines without `dvh`.
+   * How big the set is, on both watching screens.
+   *
+   * What is subtracted is the chrome above it — the layout's padding, the
+   * header, the gap under it — and 1.2 is the cabinet's 1000/830, turning a
+   * height budget into the width that produces it. The plain `max-width` first
+   * is the fallback for engines without `dvh`.
+   *
+   * The room's set is the same set, to the pixel.
+   *
+   * It was capped smaller — 880 against 1180 — on the reasoning that the rail
+   * beside it wants its own width. But a cap is a ceiling, not a size: the
+   * television is a flex item and gives way to the rail on its own when the
+   * window is too narrow for both. All the smaller ceiling did was make the same
+   * archive look like a lesser screen in company, on every monitor big enough
+   * for the full one.
    */
-  .room-viewer-solo .crt-tv {
+  .room-viewer .crt-tv {
     max-width: 1180px;
     max-width: min(1180px, calc((100dvh - 7.5rem) * 1.2));
-  }
-
-  /*
-   * The same arithmetic in a room, against a smaller ceiling: the rail beside the
-   * picture takes its own width, and a set allowed to grow to 1180px would push
-   * the vote console off the side of a 1280px monitor. The height budget is
-   * unchanged — the chrome above the set is the same on both screens.
-   */
-  .room-viewer:not(.room-viewer-solo) .crt-tv {
-    max-width: 880px;
-    max-width: min(880px, calc((100dvh - 7.5rem) * 1.2));
   }
 }
 
@@ -4027,14 +4146,21 @@ button.yellow-pages-number:hover {
 /* ── the chat console ─────────────────────────────────────────────────────── */
 
 .chat-console {
-  /* The one console that grows: the rail's spare height belongs to the
-     conversation, since the vote is a fixed instrument. */
+  /* The one console that grows: the spare height, in the rail or in the dock,
+     belongs to the conversation — the vote is a fixed instrument and takes what
+     it needs. `min-height: 0` because growing is only half of it: the log has to
+     be able to shrink below its own content too, or the column it sits in gets
+     taller until the page scrolls. */
   flex: 1 1 auto;
+  min-height: 0;
 }
 
 .room-console .chat-messages {
   flex: 1 1 auto;
-  min-height: 5rem;
+  /* Zero, not a floor: a minimum here is height the log refuses to give up, and
+     in a rail with none spare the overflow reappears at the bottom of the window
+     instead of inside the log, which is the one place it belongs. */
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
@@ -4240,17 +4366,29 @@ button.yellow-pages-number:hover {
 
 @media (min-width: 721px) {
   /*
-   * A column beside the picture, scrolling inside itself rather than growing the
-   * page: the television is pinned in the middle of the window and a rail that
-   * pushed the document taller would take it off the top.
+   * A column beside the picture, as tall as the window and no taller.
+   *
+   * It used to scroll as a whole, which put the composer below the fold in a
+   * busy room: you scrolled the rail to read, then scrolled it back to reply.
+   * It does not scroll at all now. The vote is a fixed instrument and takes the
+   * height it needs; the chat takes whatever is left and scrolls its own log
+   * inside itself, so the field you type into never moves.
    */
   .room-layout-sidebar {
     flex: 0 0 21rem;
     min-height: 0;
     align-self: stretch;
     gap: 0.6rem;
-    overflow-y: auto;
-    overscroll-behavior: contain;
+    overflow: hidden;
+  }
+
+  .room-layout-sidebar .vote-console {
+    flex: 0 0 auto;
+  }
+
+  .room-layout-sidebar .chat-console {
+    flex: 1 1 auto;
+    min-height: 0;
   }
 }
 
@@ -4328,13 +4466,35 @@ button.yellow-pages-number:hover {
   }
 
   /*
+   * The slab spans the window, like the sheet above it.
+   *
+   * `.room-viewer` centres its children, which for a flex column means each one
+   * is as wide as its own contents — the television sets its width from the
+   * cabinet, and the dock was setting its own from a chat message. So the slab
+   * came out narrower than the leaflet resting on it, with the page showing down
+   * both sides of the one element whose whole job is to look like the floor.
+   */
+  .room-viewer-phone .crt-dock {
+    align-self: stretch;
+    width: 100%;
+  }
+
+  /*
    * The handset no longer sticks or casts: the slab under it does both now, and
    * two shadows on one edge read as two objects.
+   *
+   * Nor is it capped any more. On its own it is held to 30rem, on the grounds
+   * that past a hand's width the keys stop being reachable by a thumb — but it
+   * is not on its own now, it is one of three panels sharing a dock, and a
+   * handset centred inside a full-width slab reads as the slab being the thing
+   * that is misaligned. Below 720px the cap almost never bound anyway.
    */
   .crt-dock .crt-remote {
     position: static;
     filter: none;
     padding-bottom: 0;
+    max-width: none;
+    margin-inline: 0;
   }
 
   .crt-dock-tab {
@@ -4393,6 +4553,16 @@ button.yellow-pages-number:hover {
    * somebody else asked for a page would be the panel taking the screen away
    * from you. This is how a control panel says "over here" without insisting.
    */
+  /*
+   * Green, and the same green as every other lit thing on this panel.
+   *
+   * It was amber, matching the vote console's own lamp, which reads amber while
+   * the room is deciding and green once something carried. On a tab that is the
+   * wrong distinction to draw: the tab is not reporting the outcome, it is
+   * reporting that there is something on the other side of it — which is what a
+   * lit lamp means everywhere else here, from the set's power light to an
+   * engaged key.
+   */
   .crt-dock-lamp {
     position: absolute;
     top: 0.3rem;
@@ -4400,8 +4570,8 @@ button.yellow-pages-number:hover {
     width: 0.4rem;
     height: 0.4rem;
     border-radius: 50%;
-    background: radial-gradient(circle at 50% 45%, #ffe08a, #f0a81e 45%, #6b4405);
-    box-shadow: 0 0 6px rgb(240 168 30 / 80%);
+    background: radial-gradient(circle at 50% 45%, #b6ff9c, #3ddc4c 45%, #0d5a1c);
+    box-shadow: 0 0 0 1px rgb(0 0 0 / 60%), 0 0 7px rgb(61 220 76 / 85%);
     animation: crt-dock-lamp-pulse 1.4s ease-in-out infinite;
   }
 

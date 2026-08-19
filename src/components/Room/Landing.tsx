@@ -27,7 +27,10 @@ import { useLanguage } from './useLanguage';
  * The ways in:
  *  - **ver** — reveals the choice of watching alone (`/watch`) or in one of the
  *    six fixed rooms (`/room/:roomId`). Both are watching, so both live under
- *    one word rather than competing for the front page.
+ *    one word rather than competing for the front page — but they are two kinds
+ *    of watching, so each kind is named and the rooms hang off their name. Laid
+ *    out flat, as seven identical chips in a row, "sozinho" read as a seventh
+ *    room and the house names said nothing about anyone else being there.
  *  - **criar** — the solo editor, opened on the first *free* playground page
  *    rather than the editor's default. Landing everyone on the same number
  *    meant two people creating a page at once overwrote each other's work.
@@ -186,36 +189,74 @@ export function Landing() {
 
                 {open && entry.action === 'watch' && (
                   <div id="frontpage-watch" className="frontpage-submenu">
-                    <button
-                      type="button"
-                      className="frontpage-sub-btn"
-                      onClick={() => navigate('/watch')}
-                    >
-                      {copy.watchAlone}
-                    </button>
-                    {ROOMS.map((room) => {
-                      const count = occupancy[room.id] ?? 0;
-                      return (
-                        <button
-                          key={room.id}
-                          type="button"
-                          className="frontpage-sub-btn"
-                          onClick={() => navigate(`/room/${room.id}`)}
-                          aria-label={`${copy.watchTogether}: ${room.label}`}
-                        >
-                          {room.label}
-                          {/* Live occupancy, so a room with people in it is the
-                              obvious one to join rather than a guess. */}
-                          <span
-                            className={`frontpage-sub-count${
-                              count > 0 ? ' frontpage-sub-count-live' : ''
-                            }`}
-                          >
-                            {count > 0 ? `${count} ${copy.watching}` : copy.empty}
-                          </span>
-                        </button>
-                      );
-                    })}
+                    {/*
+                      * Watching alone has nothing to choose inside it, so its
+                      * name is the door itself. Its note is tied to the button
+                      * by `aria-describedby` rather than folded into the label:
+                      * the name of the choice is the word, and "só tu" is what
+                      * is said about it.
+                      */}
+                    <div className="frontpage-watch-group">
+                      <button
+                        type="button"
+                        className="frontpage-watch-kind"
+                        onClick={() => navigate('/watch')}
+                        aria-describedby="frontpage-watch-alone-note"
+                      >
+                        {copy.watchAlone}
+                      </button>
+                      <p className="frontpage-watch-note" id="frontpage-watch-alone-note">
+                        {copy.watchAloneNote}
+                      </p>
+                    </div>
+
+                    {/*
+                      * The rooms are a set of doors, so their kind is a heading
+                      * and the six hang off it. Named as a group as well as
+                      * drawn as one, so it is a set of six rooms heard as well
+                      * as seen — otherwise the house names arrive as six loose
+                      * buttons with nothing saying who is behind them.
+                      */}
+                    <div className="frontpage-watch-group">
+                      <p
+                        className="frontpage-watch-kind teletext-fg-cyan"
+                        id="frontpage-watch-rooms-name"
+                      >
+                        {copy.watchTogether}
+                      </p>
+                      <p className="frontpage-watch-note" id="frontpage-watch-rooms-note">
+                        {copy.watchTogetherNote}
+                      </p>
+                      <div
+                        className="frontpage-watch-rooms"
+                        role="group"
+                        aria-labelledby="frontpage-watch-rooms-name frontpage-watch-rooms-note"
+                      >
+                        {ROOMS.map((room) => {
+                          const count = occupancy[room.id] ?? 0;
+                          return (
+                            <button
+                              key={room.id}
+                              type="button"
+                              className="frontpage-sub-btn"
+                              onClick={() => navigate(`/room/${room.id}`)}
+                              aria-label={`${copy.watchTogether}: ${room.label}`}
+                            >
+                              {room.label}
+                              {/* Live occupancy, so a room with people in it is
+                                  the obvious one to join rather than a guess. */}
+                              <span
+                                className={`frontpage-sub-count${
+                                  count > 0 ? ' frontpage-sub-count-live' : ''
+                                }`}
+                              >
+                                {count > 0 ? `${count} ${copy.watching}` : copy.empty}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 )}
               </li>

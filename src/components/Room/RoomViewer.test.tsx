@@ -36,13 +36,25 @@ vi.mock('../../collab/useRoomSync', () => ({
 const submitMock = vi.fn(() => ({ ok: true }) as ReturnType<
   import('../../collab/useVoting').VotingApi['submit']
 >);
+/** The active Change_Request, driven per test so the vote lamp can be asserted. */
+let votingActive: { id: string; target: number } | null = null;
 vi.mock('../../collab/useVoting', () => ({
   useVoting: () => ({
-    active: null,
+    active: votingActive,
     submit: submitMock,
     vote: vi.fn(),
     tally: { accept: 0, reject: 0, base: 0, threshold: 0 },
   }),
+}));
+
+/*
+ * The viewer reads the chat only to count it — the lamp on the phone's chat tab
+ * is the whole reason — so the log is driven from here even though the console
+ * itself is stubbed out below.
+ */
+const chatMessages = vi.fn<() => { id: string }[]>(() => []);
+vi.mock('../../collab/useChat', () => ({
+  useChat: () => ({ messages: chatMessages(), send: vi.fn(() => 'ok' as const) }),
 }));
 
 // The directory reads useGuide; mock it with an empty one.
@@ -116,6 +128,18 @@ function renderViewer() {
   );
 }
 
+/**
+ * The lamp on a dock tab, or `null`.
+ *
+ * Queried by attribute rather than by accessible name: the lamps are
+ * `aria-hidden`, because an `aria-label` inside a button joins that button's
+ * name and would have the tab renaming itself as other people type. What they
+ * signal is announced by the console behind them instead.
+ */
+function lamp(which: 'vote' | 'chat'): HTMLElement | null {
+  return document.querySelector(`[data-lamp="${which}"]`);
+}
+
 /** Nothing in a room may move the page without asking. */
 function expectNoDirectNavigation() {
   expect(setDisplayedPage).not.toHaveBeenCalled();
@@ -135,6 +159,8 @@ describe('RoomViewer', () => {
     stepSubpageBy.mockClear();
     submitMock.mockClear();
     isPhone.mockReturnValue(false);
+    chatMessages.mockReturnValue([]);
+    votingActive = null;
   });
 
   it('displays page 100 when useRoomSync reports displayedPageNumber 100', () => {
@@ -282,4 +308,57 @@ describe('RoomViewer', () => {
       ).toBeInTheDocument();
     });
   });
+
+    it('lights the vote tab for as long as the room is deciding', async () => {
+      const user = userEvent.setup();
+      isPhone.mockReturnValue(true);
+      votingActive = { id: 'cr-1', target: 220 };
+      setRoomSync(100);
+      renderViewer();
+
+      expect(lamp('vote')).toBeInTheDocument();
+
+      // A status light, not a notification: opening the tab does not put it out,
+      // because the vote is still running.
+      await user.click(screen.getByRole('tab', { name: copy.vote.name }));
+      expect(lamp('vote')).toBeInTheDocument();
+    });
+
+    it('lights the chat tab until the messages have been looked at', async () => {
+      const user = userEvent.setup();
+      isPhone.mockReturnValue(true);
+      chatMessages.mockReturnValue([{ id: 'm1' }, { id: 'm2' }]);
+      setRoomSync(100);
+      renderViewer();
+
+      expect(lamp('chat')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('tab', { name: copy.chat.name }));
+      expect(lamp('chat')).not.toBeInTheDocument();
+
+      // Read, and still read after stepping away — the mark moves on the way out
+      // as well as on the way in.
+      await user.click(screen.getByRole('tab', { name: copy.tv.remote }));
+      expect(lamp('chat')).not.toBeInTheDocument();
+    });
+
+    it('lights the chat tab again when something arrives while you are away', async () => {
+      const user = userEvent.setup();
+      isPhone.mockReturnValue(true);
+      chatMessages.mockReturnValue([{ id: 'm1' }]);
+      setRoomSync(100);
+      renderViewer();
+
+      await user.click(screen.getByRole('tab', { name: copy.chat.name }));
+      await user.click(screen.getByRole('tab', { name: copy.tv.remote }));
+      expect(lamp('chat')).not.toBeInTheDocument();
+
+      // Something said while the remote is up, which is the case the lamp is
+      // for. Moving to the vote is what brings the new count on screen — the
+      // mock is a plain function, so a render has to be provoked, and pressing
+      // the tab already selected would be a no-op React skips.
+      chatMessages.mockReturnValue([{ id: 'm1' }, { id: 'm2' }]);
+      await user.click(screen.getByRole('tab', { name: copy.vote.name }));
+      expect(lamp('chat')).toBeInTheDocument();
+    });
 });

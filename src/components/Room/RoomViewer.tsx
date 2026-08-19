@@ -43,6 +43,7 @@ import { useParams } from 'react-router-dom';
 import { RoomContext } from '../../collab/RoomContext';
 import { useRoomSync } from '../../collab/useRoomSync';
 import { useVoting } from '../../collab/useVoting';
+import { useChat } from '../../collab/useChat';
 import { useMediaQuery } from '../../utils/useMediaQuery';
 import { TeletextGrid } from '../TeletextGrid/TeletextGrid';
 import CrtTelevision from './CrtTelevision';
@@ -95,6 +96,10 @@ function RoomViewerContent({
     peekPrevNonEmpty,
   } = useRoomSync();
   const { submit, active } = useVoting();
+  // Only for the count: the log itself is the chat console's business. A room
+  // with the conversation behind a tab still has to be able to say that
+  // something arrived while you were looking elsewhere.
+  const { messages } = useChat();
   const copy = useCopy();
 
   const phone = useMediaQuery(PHONE_QUERY);
@@ -182,14 +187,44 @@ function RoomViewerContent({
   const chat = chatSidebar ?? <ChatSidebar />;
 
   /*
-   * A vote that starts while you are looking at the keypad should say so.
+   * The lamp on the vote tab: lit for as long as the room is deciding.
    *
-   * Only a lamp on the tab, not a jump to it: being moved off the remote
-   * mid-dial because somebody else asked for a page would be the panel taking
-   * the screen away from you. The lamp is how a control panel says "over here"
-   * without insisting.
+   * A status light rather than a notification — so it stays on while you are
+   * looking at the vote, the way the lamp on a set stays on while the set is on.
+   * It used to go out the moment you opened the tab, which meant the one place
+   * the light was worth checking was the one place it was never lit.
+   *
+   * Only a lamp, though, and never a jump: being moved off the keypad mid-dial
+   * because somebody else asked for a page would be the panel taking the screen
+   * away from you. This is how a control panel says "over here" without
+   * insisting.
    */
-  const voteWaiting = active !== null && phoneTab !== 'vote';
+  const voteRunning = active !== null;
+
+  /*
+   * The chat's lamp is the other kind of light.
+   *
+   * "New messages" is a fact about what you have not read, so unlike the vote's
+   * it goes out when you look and stays out while you are looking. The mark is
+   * moved on entering the tab *and* on leaving it: on entering because that is
+   * when you read them, and on leaving because anything that arrived while you
+   * sat there has been read too. Without the second, stepping away lit the lamp
+   * for messages you had just watched arrive.
+   *
+   * Starting from zero means a room you join with a conversation already in it
+   * lights the lamp, which is right: you have not read those either, and on a
+   * phone the chat is behind a tab where you would otherwise never learn of it.
+   */
+  const [seen, setSeen] = useState(0);
+  const chatUnread = phoneTab !== 'chat' && messages.length > seen;
+
+  const selectTab = useCallback(
+    (tab: PhoneTab) => {
+      if (tab === 'chat' || phoneTab === 'chat') setSeen(messages.length);
+      setPhoneTab(tab);
+    },
+    [phoneTab, messages.length],
+  );
 
   const phonePanel =
     phoneTab === 'vote' ? (
@@ -215,11 +250,25 @@ function RoomViewerContent({
           role="tab"
           aria-selected={phoneTab === tab}
           className={`crt-dock-tab${phoneTab === tab ? ' crt-dock-tab-on' : ''}`}
-          onClick={() => setPhoneTab(tab)}
+          onClick={() => selectTab(tab)}
         >
           {label}
-          {tab === 'vote' && voteWaiting && (
-            <span className="crt-dock-lamp" aria-label={copy.vote.region} />
+          {/*
+            * Both lamps are decorative, and deliberately so.
+            *
+            * An `aria-label` on a span *inside* a button joins that button's
+            * accessible name, so a lit lamp renamed the tab to "Conversa
+            * Mensagens novas" — a control whose name changes as other people
+            * type. Neither fact is lost by hiding them: a running vote is
+            * announced by the console's own `role="status"` legend, and an
+            * arriving message by the log's `aria-live`. The lamp is the sighted
+            * shorthand for what is already being said.
+            */}
+          {tab === 'vote' && voteRunning && (
+            <span className="crt-dock-lamp" data-lamp="vote" aria-hidden="true" />
+          )}
+          {tab === 'chat' && chatUnread && (
+            <span className="crt-dock-lamp" data-lamp="chat" aria-hidden="true" />
           )}
         </button>
       ))}

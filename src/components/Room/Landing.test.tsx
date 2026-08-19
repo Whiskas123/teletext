@@ -1,7 +1,8 @@
 // Feature: the front page — a coloured teletext index.
 // Verifies: the wordmark, the PT/EN switch and what it changes, the four
-// coloured ways in, that "ver" is where the rooms live now, and that an entry
-// with nowhere to go says so instead of pretending.
+// coloured ways in, that "ver" is where the rooms live now and holds two
+// distinct kinds of watching, and that an entry with nowhere to go says so
+// instead of pretending.
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -165,6 +166,30 @@ describe('the front page', () => {
     expect(
       screen.getAllByRole('button', { name: /^numa sala: / }),
     ).toHaveLength(6);
+  });
+
+  it('sets the two kinds of watching apart, and puts the rooms under theirs', async () => {
+    const user = userEvent.setup();
+    renderLanding();
+
+    await openWatch(user);
+
+    // Flat, the choices were seven identical chips and "sozinho" read as a
+    // seventh room. Each kind is named, and the note under the name is what
+    // says which kind it is — six house names do not mention other people.
+    expect(screen.getByText('só tu')).toBeInTheDocument();
+    expect(screen.getByText('com outras pessoas')).toBeInTheDocument();
+
+    // The rooms belong to their name rather than sitting loose beside it, and
+    // are grouped so that is heard as well as seen.
+    const rooms = screen.getByRole('group', { name: 'numa sala com outras pessoas' });
+    for (const room of ROOMS) {
+      expect(rooms).toContainElement(
+        screen.getByRole('button', { name: `numa sala: ${room.label}` }),
+      );
+    }
+    // Watching alone is the other kind, not one of them.
+    expect(rooms).not.toContainElement(screen.getByRole('button', { name: 'sozinho' }));
   });
 
   it('ver leads to watching alone, and to a room', async () => {

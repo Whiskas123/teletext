@@ -129,9 +129,18 @@ export const LANDING_COPY: Record<
     menu: string;
     /** Said of an entry that is rendered but has nowhere to go yet. */
     comingSoon: string;
-    /** The watch submenu, revealed under "ver". */
+    /**
+     * The watch submenu, revealed under "ver".
+     *
+     * Two kinds of thing, not seven doors: watching on your own, and watching
+     * in one of the rooms with whoever else is in it. Each kind is named, and
+     * the note under its name says what makes it that kind — six house names
+     * on their own do not tell anyone there are other people behind them.
+     */
     watchAlone: string;
+    watchAloneNote: string;
     watchTogether: string;
+    watchTogetherNote: string;
     watching: string;
     empty: string;
     /** Names the showcase region, and its control. */
@@ -147,7 +156,9 @@ export const LANDING_COPY: Record<
     menu: 'Menu',
     comingSoon: 'em breve',
     watchAlone: 'sozinho',
+    watchAloneNote: 'só tu',
     watchTogether: 'numa sala',
+    watchTogetherNote: 'com outras pessoas',
     watching: 'a ver',
     empty: 'vazia',
     onAir: 'No ar agora',
@@ -160,7 +171,9 @@ export const LANDING_COPY: Record<
     menu: 'Menu',
     comingSoon: 'coming soon',
     watchAlone: 'on your own',
+    watchAloneNote: 'just you',
     watchTogether: 'in a room',
+    watchTogetherNote: 'with other people',
     watching: 'watching',
     empty: 'empty',
     onAir: 'On air now',

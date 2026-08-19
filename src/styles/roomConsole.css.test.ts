@@ -80,7 +80,12 @@ function rules(css: string): { selector: string; body: string }[] {
     const prevClose = css.lastIndexOf('}', brace);
     const prevOpen = css.lastIndexOf('{', brace - 1);
     const start = Math.max(prevClose, prevOpen) + 1;
-    const selector = css.slice(Math.max(start, i), brace).trim();
+    const selector = css
+      .slice(Math.max(start, i), brace)
+      // A rule's leading comment sits between the previous `}` and this `{`, so
+      // it arrives glued to the selector and defeats any exact comparison.
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .trim();
 
     let depth = 0;
     let j = brace;
@@ -115,6 +120,68 @@ describe('the room console owns its own layout', () => {
       .map((rule) => rule.selector);
 
     expect(trespassers).toEqual([]);
+  });
+
+  /*
+   * The chain that stops the room scrolling.
+   *
+   * Every link has to hold or the whole thing fails silently: a flex item's
+   * floor is its content, so one missing `min-height: 0` anywhere between the
+   * window and the message log and the chat simply makes its own column taller
+   * until the page grows. Nothing typechecks a stylesheet and nothing renders it
+   * here, so this is the only thing standing between "I fixed it" and a page
+   * that still scrolls — which is exactly how it shipped broken once.
+   */
+  describe('the room fits the window', () => {
+    /** The declarations of the first rule whose selector matches. */
+    const bodyOf = (match: (selector: string) => boolean): string =>
+      parsed.find((rule) => match(rule.selector))?.body ?? '';
+
+    it('gives the layout the window height and hides the rest', () => {
+      const layout = bodyOf(
+        (sel) => sel.includes(':has(.room-viewer)') && !sel.includes('.room-layout-'),
+      );
+      expect(layout).toMatch(/height:\s*100dvh/);
+      expect(layout).toMatch(/overflow:\s*hidden/);
+    });
+
+    it('lets every link in the chain shrink below its content', () => {
+      for (const link of ['.room-layout-body', '.room-layout-main']) {
+        expect(
+          bodyOf((sel) => sel.includes(':has(.room-viewer)') && sel.includes(link)),
+        ).toMatch(/min-height:\s*0/);
+      }
+
+      expect(bodyOf((sel) => sel.includes('.chat-console'))).toMatch(
+        /min-height:\s*0/,
+      );
+    });
+
+    it('scrolls the log and nothing above it', () => {
+      const rail = parsed.find(
+        (rule) =>
+          rule.selector.trim() === '.room-layout-sidebar' &&
+          /flex:\s*0 0 21rem/.test(rule.body),
+      );
+      expect(rail?.body).toMatch(/overflow:\s*hidden/);
+
+      const log = bodyOf((sel) => sel.includes('.chat-messages'));
+      expect(log).toMatch(/overflow-y:\s*auto/);
+      // A floor here is height the log refuses to give up, and the overflow
+      // comes back at the bottom of the window instead.
+      expect(log).toMatch(/min-height:\s*0/);
+    });
+
+    it('keeps the rail beside the set rather than under it', () => {
+      // Wrapped, the rail lands below the television and the layout's own
+      // `overflow: hidden` takes it off the screen completely.
+      expect(
+        bodyOf(
+          (sel) =>
+            sel.includes(':has(.room-viewer)') && sel.includes('.room-layout-body'),
+        ),
+      ).toMatch(/flex-wrap:\s*nowrap/);
+    });
   });
 
   it('leaves the shared typography alone', () => {
