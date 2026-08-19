@@ -114,7 +114,7 @@ describe('Property 20: Page normalization yields 960 valid cells and is identity
       }),
       { numRuns: 200 },
     );
-  }, 15000);
+  });
 
   it('is the identity on already-valid 960-cell pages', () => {
     fc.assert(

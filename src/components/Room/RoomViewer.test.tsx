@@ -65,6 +65,16 @@ vi.mock('../../collab/usePresence', () => ({
   }),
 }));
 
+/*
+ * The phone layout is a media query, and jsdom has no `matchMedia` — the hook
+ * degrades to `false`, which is the desktop layout. Driven directly here so the
+ * two arrangements can both be asserted.
+ */
+const isPhone = vi.fn(() => false);
+vi.mock('../../utils/useMediaQuery', () => ({
+  useMediaQuery: () => isPhone(),
+}));
+
 // Stub TeletextGrid so we can read the displayed Page_Number directly.
 vi.mock('../TeletextGrid/TeletextGrid', () => ({
   TeletextGrid: ({ pageNumber }: { pageNumber?: number }) => (
@@ -124,6 +134,7 @@ describe('RoomViewer', () => {
     peekPrevNonEmpty.mockClear();
     stepSubpageBy.mockClear();
     submitMock.mockClear();
+    isPhone.mockReturnValue(false);
   });
 
   it('displays page 100 when useRoomSync reports displayedPageNumber 100', () => {
@@ -209,5 +220,66 @@ describe('RoomViewer', () => {
       screen.getByRole('region', { name: copy.vote.region }),
     ).toBeInTheDocument();
     expect(screen.getByTestId('chat-sidebar')).toBeInTheDocument();
+  });
+
+  describe('on a phone', () => {
+    /*
+     * The rail does not survive the width, so the consoles take turns in the
+     * dock under the picture. What matters is that both are still *reachable* —
+     * stacking them below a handset pinned to the foot of the window is what
+     * this replaced, and it put them a full screen away.
+     */
+    it('shows one panel at a time, chosen from the dock tabs', async () => {
+      const user = userEvent.setup();
+      isPhone.mockReturnValue(true);
+      setRoomSync(100);
+      renderViewer();
+
+      // The remote is what the dock opens on: dialling is the common errand.
+      expect(screen.getByRole('tab', { name: copy.tv.remote })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      expect(
+        screen.queryByRole('region', { name: copy.vote.region }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByTestId('chat-sidebar')).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('tab', { name: copy.vote.name }));
+      expect(
+        screen.getByRole('region', { name: copy.vote.region }),
+      ).toBeInTheDocument();
+
+      await user.click(screen.getByRole('tab', { name: copy.chat.name }));
+      expect(screen.getByTestId('chat-sidebar')).toBeInTheDocument();
+      // One at a time: the vote gave up the dock when the chat took it.
+      expect(
+        screen.queryByRole('region', { name: copy.vote.region }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('takes the handset out of the dock with the rest', async () => {
+      const user = userEvent.setup();
+      isPhone.mockReturnValue(true);
+      setRoomSync(100);
+      renderViewer();
+
+      // The remote is a panel like the other two, not a floor the others stand
+      // on: choosing another tab puts its keys away rather than pushing them
+      // down the screen, which is the whole point of the dock.
+      expect(
+        screen.getByRole('button', { name: copy.tv.dial('5') }),
+      ).toBeInTheDocument();
+
+      await user.click(screen.getByRole('tab', { name: copy.chat.name }));
+      expect(
+        screen.queryByRole('button', { name: copy.tv.dial('5') }),
+      ).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('tab', { name: copy.tv.remote }));
+      expect(
+        screen.getByRole('button', { name: copy.tv.dial('5') }),
+      ).toBeInTheDocument();
+    });
   });
 });

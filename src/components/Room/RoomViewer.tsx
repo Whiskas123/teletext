@@ -51,6 +51,7 @@ import ChatSidebar from './ChatSidebar';
 import VotePanel from './VotePanel';
 import YellowPagesDrawer from './YellowPagesDrawer';
 import { usePageRoll } from './usePageRoll';
+import { useCopy } from './useCopy';
 
 /**
  * Below this the set is drawn as a tube in a thin bezel and its front panel comes
@@ -59,6 +60,9 @@ import { usePageRoll } from './usePageRoll';
  * cabinet — see `PHONE_QUERY` there.
  */
 const PHONE_QUERY = '(max-width: 720px)';
+
+/** Which panel the phone's lower half is showing. */
+type PhoneTab = 'remote' | 'vote' | 'chat';
 
 export interface RoomViewerProps {
   /**
@@ -90,9 +94,22 @@ function RoomViewerContent({
     peekNextNonEmpty,
     peekPrevNonEmpty,
   } = useRoomSync();
-  const { submit } = useVoting();
+  const { submit, active } = useVoting();
+  const copy = useCopy();
 
   const phone = useMediaQuery(PHONE_QUERY);
+
+  /*
+   * On a phone the rail is not a rail.
+   *
+   * A room has three things under the picture where watching alone has one, and
+   * stacking them put the vote and the conversation below a handset already
+   * pinned to the foot of the window — a full screen down, on the screen least
+   * willing to scroll. So the lower half holds one at a time behind a strip of
+   * tabs, which is the arrangement the editor's own handset uses and the one
+   * this app has already taught people.
+   */
+  const [phoneTab, setPhoneTab] = useState<PhoneTab>('remote');
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const toggleDrawer = useCallback(() => setDrawerOpen((o) => !o), []);
@@ -162,15 +179,64 @@ function RoomViewerContent({
     [propose, phone],
   );
 
+  const chat = chatSidebar ?? <ChatSidebar />;
+
+  /*
+   * A vote that starts while you are looking at the keypad should say so.
+   *
+   * Only a lamp on the tab, not a jump to it: being moved off the remote
+   * mid-dial because somebody else asked for a page would be the panel taking
+   * the screen away from you. The lamp is how a control panel says "over here"
+   * without insisting.
+   */
+  const voteWaiting = active !== null && phoneTab !== 'vote';
+
+  const phonePanel =
+    phoneTab === 'vote' ? (
+      <div className="crt-dock-panel">
+        <VotePanel />
+      </div>
+    ) : phoneTab === 'chat' ? (
+      <div className="crt-dock-panel">{chat}</div>
+    ) : undefined;
+
+  const phoneTabs = (
+    <div className="crt-dock-tabs" role="tablist" aria-label={copy.layout.panels}>
+      {(
+        [
+          ['remote', copy.tv.remote],
+          ['vote', copy.vote.name],
+          ['chat', copy.chat.name],
+        ] as const
+      ).map(([tab, label]) => (
+        <button
+          key={tab}
+          type="button"
+          role="tab"
+          aria-selected={phoneTab === tab}
+          className={`crt-dock-tab${phoneTab === tab ? ' crt-dock-tab-on' : ''}`}
+          onClick={() => setPhoneTab(tab)}
+        >
+          {label}
+          {tab === 'vote' && voteWaiting && (
+            <span className="crt-dock-lamp" aria-label={copy.vote.region} />
+          )}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <RoomLayout
       roomId={roomId}
       sidebar={
-        <>
-          <VotePanel />
-          {/* The presence roster folds into the chat's own head; see PresenceList. */}
-          {chatSidebar ?? <ChatSidebar />}
-        </>
+        phone ? undefined : (
+          <>
+            <VotePanel />
+            {/* The presence roster folds into the chat's own head; see PresenceList. */}
+            {chat}
+          </>
+        )
       }
     >
       <div
@@ -188,6 +254,8 @@ function RoomViewerContent({
           onFastext={propose}
           refusals={refusals}
           compact={phone}
+          handsetHead={phone ? phoneTabs : undefined}
+          handsetInstead={phonePanel}
         >
           <TeletextGrid
             page={shownPage}

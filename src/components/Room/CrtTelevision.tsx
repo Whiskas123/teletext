@@ -131,6 +131,19 @@ export interface CrtTelevisionProps {
    * top of this file.
    */
   compact?: boolean;
+  /**
+   * Put something above the handset on the phone layout — a strip of tabs, in
+   * the one screen that has more to offer than a remote.
+   *
+   * Watching alone the handset is the whole of the lower half and this is left
+   * empty. A room also has a vote and a conversation, and stacking those below
+   * a handset that is already pinned to the foot of the window put both of them
+   * a screen away. So the room hands in a tab strip and, through
+   * {@link handsetInstead}, whichever panel it selects. See {@link RoomViewer}.
+   */
+  handsetHead?: ReactNode;
+  /** Shown in place of the handset while {@link handsetHead} has another tab open. */
+  handsetInstead?: ReactNode;
 }
 
 /* ── keys ──────────────────────────────────────────────────────────────────── */
@@ -810,6 +823,8 @@ export function CrtTelevision({
   onFastext,
   refusals = 0,
   compact = false,
+  handsetHead,
+  handsetInstead,
 }: CrtTelevisionProps) {
   const copy = useCopy();
   const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
@@ -1657,19 +1672,33 @@ export function CrtTelevision({
         * what matters here is that the set and its remote share one set of
         * state, so the LED window on the handset is the set's own.
         */}
+      {/*
+        * The dock: whatever the lower half of a phone is showing.
+        *
+        * Always drawn in the compact layout, even when it holds nothing but the
+        * handset, because it is the element the phone rules position and
+        * collapse — the leaflet coming up slides *this* out of the way, and a
+        * wrapper that appeared only in a room would mean two sets of rules for
+        * one piece of furniture.
+        */}
       {compact && (
-        <RemoteHandset
-          pageDigits={pageDigits}
-          subDigits={subDigits}
-          lit={lit}
-          subpage={subpage}
-          subpageCount={subpageCount}
-          onDigit={digitPress}
-          onPageStep={pageStep}
-          onSubpageStep={subpageStep}
-          onFastext={fastext}
-          onPower={togglePower}
-        />
+        <div className="crt-dock">
+          {handsetHead}
+          {handsetInstead ?? (
+            <RemoteHandset
+              pageDigits={pageDigits}
+              subDigits={subDigits}
+              lit={lit}
+              subpage={subpage}
+              subpageCount={subpageCount}
+              onDigit={digitPress}
+              onPageStep={pageStep}
+              onSubpageStep={subpageStep}
+              onFastext={fastext}
+              onPower={togglePower}
+            />
+          )}
+        </div>
       )}
     </>
   );
