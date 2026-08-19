@@ -1,117 +1,9 @@
-/* App-level layout – teletext screen is centered by child components */
 
-/* Presence list (room members + count) */
-.presence-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-
-.presence-count {
-  color: #888;
-  font-weight: 400;
-}
-
-.presence-empty {
-  margin: 0;
-  font-size: 0.8rem;
-  color: #777;
-  font-style: italic;
-}
-
-.presence-members {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.presence-member {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
-  color: #ddd;
-}
-
-.presence-swatch {
-  width: 0.9rem;
-  height: 0.9rem;
-  min-width: 0.9rem;
-  border: 1px solid #404040;
-  border-radius: 3px;
-  flex-shrink: 0;
-}
 
 .presence-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-/*
- * The rename disclosure. Reads as a line of the sidebar rather than a button,
- * because it opens a form rather than doing something.
- */
-.presence-rename-toggle {
-  width: 100%;
-  margin-top: 0.5rem;
-  padding: 0.5rem 0;
-  background: none;
-  border: 0;
-  border-top: 1px solid #2a2a2a;
-  color: #bbb;
-  font: inherit;
-  font-size: 0.8rem;
-  text-align: left;
-  cursor: pointer;
-}
-
-.presence-rename-toggle:hover {
-  color: #fff;
-}
-
-.presence-rename-toggle:focus-visible {
-  outline: 2px solid #ffff00;
-  outline-offset: -2px;
-}
-
-.presence-rename {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  padding-bottom: 0.25rem;
-}
-
-.presence-name-input {
-  width: 100%;
-  padding: 0.5rem 0.6rem;
-  font-size: 0.85rem;
-  font-family: 'Press Start 2P', 'Courier New', Courier, monospace;
-  letter-spacing: -0.02em;
-  background: #000;
-  color: #fff;
-  border: 1px solid #404040;
-  border-radius: 6px;
-  box-sizing: border-box;
-}
-
-.presence-name-input:focus {
-  outline: 2px solid #ffff00;
-  outline-offset: -2px;
-}
-
-.presence-name-input[aria-invalid='true'] {
-  border-color: #c44;
-}
-
-.presence-name-error {
-  margin: 0;
-  font-size: 0.75rem;
-  color: #f88;
-  line-height: 1.4;
 }
 
 /* Connection status (disconnected indicator) */
@@ -220,27 +112,6 @@
   gap: 1rem;
 }
 
-.chat-empty {
-  margin: 0;
-  font-size: 0.8rem;
-  color: #777;
-  font-style: italic;
-}
-
-.chat-messages {
-  list-style: none;
-  margin: 0;
-  padding: 0.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  max-height: 18rem;
-  overflow-y: auto;
-  background: #0a0a0a;
-  border: 1px solid #333;
-  border-radius: 6px;
-}
-
 .chat-message {
   display: flex;
   flex-direction: column;
@@ -275,45 +146,6 @@
   line-height: 1.4;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
-}
-
-.chat-form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.chat-input {
-  width: 100%;
-  padding: 0.5rem 0.6rem;
-  font-size: 0.85rem;
-  font-family: 'Press Start 2P', 'Courier New', Courier, monospace;
-  letter-spacing: -0.02em;
-  background: #000;
-  color: #fff;
-  border: 1px solid #404040;
-  border-radius: 6px;
-  box-sizing: border-box;
-}
-
-.chat-input:focus {
-  outline: 2px solid #ffff00;
-  outline-offset: -2px;
-}
-
-.chat-input::placeholder {
-  color: #666;
-}
-
-.chat-input[aria-invalid='true'] {
-  border-color: #c44;
-}
-
-.chat-error {
-  margin: 0;
-  font-size: 0.75rem;
-  color: #f88;
-  line-height: 1.4;
 }
 
 /* TV Guide (browsable book of page titles) */
@@ -1822,12 +1654,6 @@
      as well use the whole of it rather than sitting in a 260px strip. */
   .room-layout-sidebar {
     flex: 1 1 100%;
-  }
-
-  /* A phone has less height to spare than a monitor, and the message list is the
-     part that can afford to give some back. */
-  .chat-messages {
-    max-height: 12rem;
   }
 
   /*
@@ -4083,11 +3909,20 @@ button.yellow-pages-number:hover {
   opacity: 0.7;
 }
 
+/*
+ * Smaller than the window's own engraving, because there are three of them.
+ *
+ * The set's LED window letters two captions across a wide plate and can afford
+ * 10px. This visor has three, two of them under two-digit bays barely forty
+ * units wide, and the words are longer in Portuguese than in English — A FAVOR
+ * and CONTRA ran into each other and read as one word. Eight units with the
+ * tracking halved fits each caption inside its own bay in both languages.
+ */
 .vote-visor .cap {
   font-family: var(--rc-panel-font);
-  font-size: 10px;
+  font-size: 8px;
   fill: var(--rc-cap-ink);
-  letter-spacing: 1.4px;
+  letter-spacing: 0.7px;
   text-anchor: middle;
 }
 
@@ -4184,7 +4019,10 @@ button.yellow-pages-number:hover {
 
 .room-console .chat-messages {
   flex: 1 1 auto;
-  min-height: 6rem;
+  min-height: 5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
   margin: 0;
   padding: 0.5rem 0.55rem;
   border-radius: 4px;
@@ -4210,18 +4048,36 @@ button.yellow-pages-number:hover {
   text-align: center;
 }
 
+/*
+ * The composer: one line, with the key beside it.
+ *
+ * `flex-direction` is stated rather than left to the default, and the reason is
+ * a bug worth remembering. The chat used to live in a plain sidebar whose
+ * `.chat-form` was a *column*; that rule outlived the sidebar, so the `flex`
+ * shorthand below — written for a row, where `6rem` is a width to grow from —
+ * was read down the other axis and made the field six rems *tall*. A chat box
+ * the height of a paragraph, for one line of text.
+ *
+ * Nothing here relies on inheritance now: the axis is declared, and the error
+ * takes a row of its own by asking for the full width.
+ */
 .room-console .chat-form {
   display: flex;
+  flex-direction: row;
   flex-wrap: wrap;
+  align-items: stretch;
   gap: 0.4rem;
 }
 
 .room-console .chat-input {
   flex: 1 1 6rem;
+  min-width: 0;
 }
 
+/* Square-ish, so the key reads as a key and not as a banner under the field. */
 .room-console .chat-send {
   flex: 0 0 auto;
+  padding-inline: 0.9rem;
 }
 
 .room-console .chat-error {
@@ -4236,14 +4092,18 @@ button.yellow-pages-number:hover {
   gap: 0.35rem;
 }
 
-.presence-head {
+.room-console .presence-head {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 
+/* One line: "A VER (1)" broken across two rows reads as two labels, and the
+   count belongs to the word in front of it. */
 .room-console .presence-heading {
   flex: 1;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .room-console .presence-count {
@@ -4297,6 +4157,9 @@ button.yellow-pages-number:hover {
    standing open under it. */
 .room-console .presence-rename-toggle {
   flex: 0 0 auto;
+  /* Stated, because the sidebar-era rule this replaces stretched it to the full
+     width of the head and squeezed the heading beside it onto two lines. */
+  width: auto;
   padding: 0.15rem 0.45rem;
   border: 1px solid #0a0a0a;
   border-radius: 4px;
@@ -4316,7 +4179,9 @@ button.yellow-pages-number:hover {
 
 .room-console .presence-rename {
   display: flex;
+  flex-direction: row;
   flex-wrap: wrap;
+  align-items: stretch;
   gap: 0.35rem;
 }
 
@@ -4330,6 +4195,23 @@ button.yellow-pages-number:hover {
   box-shadow: inset 0 2px 5px rgb(0 0 0 / 85%);
   color: var(--rc-legend-ink);
   font-size: 0.8rem;
+}
+
+.room-console .presence-name-input:focus {
+  outline: none;
+  box-shadow: inset 0 2px 5px rgb(0 0 0 / 85%), 0 0 0 2px #6cf;
+}
+
+.room-console .presence-name-input[aria-invalid='true'] {
+  box-shadow: inset 0 2px 5px rgb(0 0 0 / 85%), 0 0 0 1px var(--rc-red);
+}
+
+/* Beside the field, on the same line, like the composer's own key. */
+.room-console .presence-rename-btn {
+  flex: 0 0 auto;
+  min-height: 0;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.5rem;
 }
 
 .room-console .presence-name-error {
