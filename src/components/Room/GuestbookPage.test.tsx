@@ -69,7 +69,7 @@ function renderGuestbook() {
 
 /** The form is not on the page until it is asked for. */
 async function openForm(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole('button', { name: 'Assinar o livro' }));
+  await user.click(screen.getByRole('button', { name: 'Assinar' }));
 }
 
 /** Type on the grid, which takes typing as a whole with the caret as the point. */
@@ -102,7 +102,7 @@ describe('the guestbook', () => {
       screen.queryByRole('group', { name: /a tua página/i }),
     ).not.toBeInTheDocument();
 
-    const opener = screen.getByRole('button', { name: 'Assinar o livro' });
+    const opener = screen.getByRole('button', { name: 'Assinar' });
     expect(opener).toHaveAttribute('aria-expanded', 'false');
 
     await user.click(opener);
