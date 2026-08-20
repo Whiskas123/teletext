@@ -7,6 +7,10 @@
  * read JSX to change a sentence — and because a translation is then a sibling
  * value rather than a fork of the markup.
  *
+ * The source of truth for this text is `ABOUT.md` at the root of the repo,
+ * which is where it is written and revised; this module is where it is
+ * published. When one changes, the other should follow.
+ *
  * ## Why paragraphs are arrays
  *
  * Two sentences carry links (the author, and the web archive the pages came
@@ -76,7 +80,13 @@ export interface AboutDoc {
   sections: Record<AboutSectionId, AboutSection>;
 }
 
-const AUTHOR = 'https://joaobernardo.me/en';
+/**
+ * The author's site, which has a language of its own: the Portuguese text links
+ * to the Portuguese front door and the English text to `/en`, so following the
+ * name mid-sentence does not switch language on the reader.
+ */
+const AUTHOR_PT = 'https://joaobernardo.me';
+const AUTHOR_EN = 'https://joaobernardo.me/en';
 const ARQUIVO = 'https://arquivo.pt';
 
 export const ABOUT: Record<Language, AboutDoc> = {
@@ -85,11 +95,11 @@ export const ABOUT: Record<Language, AboutDoc> = {
     region: 'Sobre o projeto',
     intro: [
       [
-        'O Tele-textual é uma instalação participativa de ',
-        { text: 'João Bernardo Narciso', href: AUTHOR },
-        ', construída sobre um arquivo do teletexto português. Reúne páginas recuperadas do arquivo da web ',
+        'Tele-textual é uma instalação participativa criada por ',
+        { text: 'João Bernardo Narciso', href: AUTHOR_PT },
+        ', construída com base num arquivo de teletexto dos canais portugueses. Reúne uma criteriosa selecção de páginas recuperadas do arquivo web ',
         { text: 'Arquivo.pt', href: ARQUIVO },
-        ' — notícias, meteorologia, futebol, lotarias, classificados, horóscopos e serviços de SMS — e volta a pô-las num ecrã. Podem ser vistas sozinho, ou numa sala com outras pessoas, onde o grupo decide em conjunto que página carregar a seguir, esperando que ela chegue. Através do editor, qualquer pessoa pode fazer uma página nova na mesma grelha que o teletexto usa. Este projeto vive no espaço entre essas duas partes: por um lado, é uma forma lenta e colectiva de olhar para páginas que foram esquecidas, e por outro lado uma forma de criar através de um conjunto de limitações impostas por uma tecnologia desatualizada.',
+        ', incluindo páginas de notícias, meteorologia, desporto, lotaria, classificados, horóscopo e serviços de SMS, e volta a colocá-las num ecrã acessível a todos. As páginas podem ser visualizadas individualmente ou em grupo, onde todos decidem em conjunto qual a página a carregar a seguir e aguardam que apareça. Para além do arquivo, é possível criar novas páginas de teletexto, na mesma grelha e com as mesmas restrições que esta tecnologia impunha. Esta obra reside no espaço entre estas duas partes: por um lado é uma forma lenta e coletiva de observar algo que pertence ao passado e que está praticamente perdido, e por outro lado é uma forma de criar coisas novas através um conjunto de restrições impostas por uma tecnologia obsoleta.',
       ],
     ],
     sections: {
@@ -97,10 +107,10 @@ export const ABOUT: Record<Language, AboutDoc> = {
         heading: 'teletexto',
         paragraphs: [
           [
-            'Durante algumas décadas o sinal de televisão transportou um serviço de texto, aproveitando uma banda de sinal que não era utilizada. Carregar em "TXT" no comando, marcar três dígitos, e esperar — às vezes um segundo, às vezes o tempo suficiente para duvidares se tinhas marcado o número errado - eram uma prática comum. Depois, a página montava-se: quarenta caracteres de largura, vinte e quatro linhas de altura, em oito cores e mais nada. A página 100 era o índice. A 888 eram as legendas. A meteorologia andava algures nas 400 e a lotaria estava onde o canal a tivesse posto. Os números eram decorados como se decoravam os números de telefone.',
+            'Desde o final dos anos 70 e até aos dias de hoje em alguns países, o sinal de televisão transmitia um serviço de texto numa banda de sinal que até então não era utilizada. Carregava-se no botão "TXT" no comando, marcavam-se três dígitos e esperava-se, às vezes um segundo, às vezes o suficiente para se perguntar se se tinha marcado o número errado. Depois, a página aparecia no ecrã: quarenta caracteres de largura, vinte e quatro linhas de altura, a oito cores e nada mais. A página 100 era o índice, a página 888 eram as legendas. A previsão do tempo estava algures na faixa dos 400 e os resultados da lotaria estava onde o canal os tivesses colocado. Memorizavam-se os números da mesma forma que se memorizavam números de telefone.',
           ],
           [
-            'Era uma pequena «proto-internet» pública e lenta a viver dentro da televisão, gratuita, e presente em todas as casas. Interessa-me porque guarda uma certa ideia de esfera pública: informação como infraestrutura, leve por design e por necessidade, disponível a toda a gente ao mesmo tempo, gratuita. Foi também uma das tecnologias de acessibilidade mais importantes da televisão, tornando o meio utilizável para pessoas surdas ou com perda auditiva. Teve uma vida social não planeada: alguns serviços tinham páginas de conversa onde mensagens SMS apareciam no ecrã para toda a gente. Para algumas pessoas (sobretudo pessoas queer) essas páginas foram espaços raros de liberdade.',
+            'Era uma pequena e lenta "proto-internet" pública que vivia dentro da televisão. Tenho interesse nele porque representa uma ideia particular da esfera pública, da informação como infraestrutura, leve por design, disponível para todos ao mesmo tempo, gratuitamente. Foi também uma das tecnologias de acessibilidade mais importantes que a televisão já teve, tornando o meio utilizável para os telespectadores surdos e com deficiência auditiva através de legendas e serviços de texto. E tinha uma vida social inesperada, uma vez que alguns serviços mantinham páginas de chat onde as mensagens SMS apareciam no ecrã para todos.',
           ],
         ],
       },
@@ -108,7 +118,7 @@ export const ABOUT: Record<Language, AboutDoc> = {
         heading: 'o arquivo',
         paragraphs: [
           [
-            'O Tele-textual não é um arquivo completo, nem pretende ser. O teletexto foi feito para ir sendo escrito por cima e quase nada foi guardado. O que está aqui reunido é o que os webcrawlers do Arquivo.pt apanhar nos dias em que calharam de passar, quando os canais portugueses espelhavam os seus serviços de teletexto online. Os canais iam reaproveitando os números das páginas, e por isso um mesmo número podia guardar páginas sem relação nenhuma e  de épocas diferentes.',
+            'O Tele-textual não é um arquivo completo nem poderia ser. O teletexto foi concebido para ir sendo re-escrito e quase nada foi preservado. O que está aqui reunido é uma seleção do que o webcrawler do Arquivo.pt conseguiu captar nos dias em que passou pelas páginas web dos canais portugueses  quando nelas era oferecido o serviços de teletexto online.',
           ],
         ],
       },
@@ -116,10 +126,10 @@ export const ABOUT: Record<Language, AboutDoc> = {
         heading: 'participar',
         paragraphs: [
           [
-            'Podes ver sozinho: consultando o índice das páginas amarelas, marcando um número, seguindo os atalhos coloridos. Ou podes entrar numa sala coletiva. Toda a gente na sala vê a mesma página ao mesmo tempo e conversa à margem, e ninguém fica com o comando. Mudar de página é um pedido que fica de pé sessenta segundos e precisa da anuência da maioria das pessoas presentes. Depois da decisão tomada, espera-se em conjunto que a página chegue, como no tempo do teletexto. Ler teletexto era uma coisa que se fazia numa sala, em voz alta, com quem lá estivesse. Pelo contrário, quase tudo o que construímos para a web é feito para ser usado sozinho e depressa.',
+            'Podes ver sozinho, consultando o indíce nas páginas amarelas, marcando um número, ou seguindo os links. Ou podes entrar numa sala e ter uma experiência coletiva. Todos na sala veem a mesma página ao mesmo tempo e conversam na margem. Ninguém fica com o comando, um pedido de mudança de página leva a uma votação e necessita da aprovação da maioria dos espectadores. Depois, esperam juntos que a página apareça, como nos velhos tempos do teletexto. Ler teletexto era algo que costumávamos fazer numa sala, em voz alta, com quem estivesse presente. A maior parte do que criamos para a web é concebido para ser utilizado individualmente e rapidamente. Esta é uma tentativa de fazer o contrário.',
           ],
           [
-            'As páginas de arquivo não são o site todo. Qualquer pessoa pode abrir o editor e fazer uma página sob as limitações do teletexto: quarenta por vinte e quatro, oito cores, altura simples ou dupla e texto intermitente, gráficos de mosaico desenhados dividindo cada célula de caractere em seis blocos. As páginas a partir da 700 estão abertas a toda a gente, e uma página a ser editada muda ao vivo no ecrã de quem a estiver a ver.',
+            'As páginas de arquivo não são o site todo. Qualquer pessoa pode abrir o editor e criar uma página seguindo as limitações do teletexto: 40 por 24 blocos, oito cores, texto simples ou com altura dupla, gráficos em mosaico que podem piscar. As páginas a partir da 700 estão abertas a todos, e uma página que está a ser editada muda em direto nos ecrãs de qualquer pessoa que a esteja a ver.',
           ],
         ],
       },
@@ -131,10 +141,10 @@ export const ABOUT: Record<Language, AboutDoc> = {
     intro: [
       [
         'Tele-textual is a participatory installation made by ',
-        { text: 'João Bernardo Narciso', href: AUTHOR },
-        ' built on the Portuguese teletext archive. It gathers a few thousand pages recovered from the web archive ',
+        { text: 'João Bernardo Narciso', href: AUTHOR_EN },
+        ' built on the Portuguese teletext archive. It gathers a curated selection of pages recovered the portuguese web archive ',
         { text: 'Arquivo.pt', href: ARQUIVO },
-        ' including news, weather, football, lottery, classifieds, horoscopes, and SMS services, and puts them back on a screen. They can be watched alone, or in a room with other people, where the group decides together which page to load next and waits for it to arrive. Alongside the archive there is an editor, and anyone can make a new page in the same grid the broadcasters had. The work lives in the space between those two halves: a slow, collective way of looking at something that is mostly lost, and a set of old constraints handed back to whoever wants to be creative and make something new inside them.',
+        ' including news, weather, sports, lottery, classifieds, horoscopes, and SMS services, and puts them back on a screen accessible to everyone. The pages can watched alone or in a room with other people, where the group decides together which page to load next and waits for it to arrive. Alongside the archive there is an editor, so anyone can make a new page in the same grid and with the same constraints the broadcasters had. This work lives in the space between those two halves: a slow, collective way of looking at something that is mostly lost, and a set of old constraints handed back to whoever wants to be creative and make something new inside them.',
       ],
     ],
     sections: {
@@ -142,10 +152,10 @@ export const ABOUT: Record<Language, AboutDoc> = {
         heading: 'teletext',
         paragraphs: [
           [
-            "For a few decades the television signal carried a text service in its unused lines. You pressed TXT on the remote, typed three digits, and waited, sometimes a second, sometimes long enough to wonder if you'd typed the wrong number. Then, the page assembled itself: forty characters wide, twenty-four rows deep, in eight colours and nothing else. Page 100 was the index. Page 888 was subtitles. The weather was somewhere in the 400s and the lottery was wherever the channel had put it, and you learned the numbers the way you learn a phone number.",
+            "From the late 70s up to this day in some countries, the television signal carried a text service in its unused lines. You pressed TXT on the remote, typed three digits, and waited, sometimes a second, sometimes long enough to wonder if you'd typed the wrong number. Then, the page assembled itself: forty characters wide, twenty-four rows deep, in eight colours and nothing else. Page 100 was the index, page 888 was subtitles. The weather was somewhere in the 400s and the lottery was wherever the channel had put it, and you learned the numbers the way you learn a phone number.",
           ],
           [
-            'It was a small, slow, public "proto-internet" living inside the television, free, and present in every house. I\'m interested in it because it holds a particular idea of the public sphere: information as infrastructure, lightweight by design, available to everyone at once, owed to you rather than sold to you. It was also one of the most important accessibility technologies television ever had, making the medium usable for deaf and hard-of-hearing viewers through subtitles and text services. And it had a social life nobody planned for, as some services ran chat pages where SMS messages appeared on screen for everyone. For some people (queer people especially) those pages were rare, semi-anonymous spaces.',
+            'It was a small, slow, public "proto-internet" living inside the television. I\'m interested in it because it holds a particular idea of the public sphere, of information as infrastructure, lightweight by design, available to everyone at once, free. It was also one of the most important accessibility technologies television ever had, making the medium usable for deaf and hard-of-hearing viewers through subtitles and text services. And it had a social life nobody planned for, as some services ran chat pages where SMS messages appeared on screen for everyone.',
           ],
         ],
       },
@@ -153,7 +163,7 @@ export const ABOUT: Record<Language, AboutDoc> = {
         heading: 'the archive',
         paragraphs: [
           [
-            "This is not a complete archive, and it couldn't be. Teletext was designed to be overwritten and almost none of it was kept. What is collected here is what a web crawler happened to catch on the days it happened to run, when Portuguese broadcasters mirrored their teletext services online. Broadcasters reused page numbers as they went, so a single number can hold unrelated pages from unrelated eras.",
+            "This is not a complete archive, and it couldn't be. Teletext was designed to be overwritten and almost none of it was kept. What is collected here is a curated selection of what a web crawler happened to catch on the days it happened to run, when Portuguese broadcasters mirrored their teletext services online.",
           ],
         ],
       },
@@ -161,10 +171,10 @@ export const ABOUT: Record<Language, AboutDoc> = {
         heading: 'taking part',
         paragraphs: [
           [
-            "You can watch on your own: dial a page, follow the coloured links, search every page by what's written on it. Or you can open a room. Everyone in the room sees the same page at the same moment and talks in the margin, and nobody holds the remote. Changing the page is a request that stands for sixty seconds and needs a majority of the people present. You wait, together, for a page to arrive, like in the old teletext days. Reading teletext was something you did in a room, out loud, with whoever else was there. Most of what we build for the web is designed to be used alone and at speed. This is an attempt at the other thing.",
+            "You can watch on your own: dial a page, follow the coloured links, search every page by what's written on it. Or you can open a room and have a collective experience. Everyone in the room sees the same page at the same moment and talks in the margin. Nobody holds the remote, as changing the page is a request leads to a voting and needs the approval of the majority of watchers. You wait, together, for a page to arrive, like in the old teletext days. Reading teletext was something we used to do in a room, out loud, with whoever else was there. Most of what we build for the web is designed to be used alone and at speed. This is an attempt at the other thing.",
           ],
           [
-            "The old pages aren't the whole site. Anyone can open the editor and make a page under teletext constraints: forty by twenty-four, eight colours, double height and blinking text, mosaic graphics drawn by splitting each character cell into six blocks. Pages 700 and up are open to everyone, and a page being edited changes live on the screens of anyone watching it. The constraint is the point.",
+            "The old pages aren't the whole site. Anyone can open the editor and make a page under teletext constraints: forty by twenty-four, eight colours, simple or double height text, mosaic graphics that can blink. Pages 700 and up are open to everyone, and a page being edited changes live on the screens of anyone watching it.",
           ],
         ],
       },

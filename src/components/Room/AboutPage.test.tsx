@@ -87,8 +87,6 @@ describe('the about page', () => {
     renderAbout();
 
     const author = screen.getByRole('link', { name: /joão bernardo narciso/i });
-    expect(author).toHaveAttribute('href', 'https://joaobernardo.me/en');
-
     const arquivo = screen.getByRole('link', { name: /arquivo\.pt/i });
     expect(arquivo).toHaveAttribute('href', 'https://arquivo.pt');
 
@@ -98,6 +96,24 @@ describe('the about page', () => {
       expect(link).toHaveAttribute('target', '_blank');
       expect(link).toHaveAttribute('rel', 'noreferrer');
     }
+  });
+
+  it('sends the reader to the author’s site in the language they are reading', async () => {
+    const user = userEvent.setup();
+    renderAbout();
+
+    // Following a name mid-sentence should not switch language on someone.
+    expect(screen.getByRole('link', { name: /joão bernardo narciso/i })).toHaveAttribute(
+      'href',
+      'https://joaobernardo.me',
+    );
+
+    await user.click(screen.getByRole('button', { name: /idioma|language/i }));
+
+    expect(screen.getByRole('link', { name: /joão bernardo narciso/i })).toHaveAttribute(
+      'href',
+      'https://joaobernardo.me/en',
+    );
   });
 
   it('offers the way back to the front page', () => {
