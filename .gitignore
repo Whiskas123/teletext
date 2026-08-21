@@ -36,3 +36,9 @@ archive-samples/
 .kiro
 # Agent worktrees: throwaway checkouts of this same repo.
 .claude/worktrees/
+
+# Dumps of the live playhtml document written by `bun run room:migrate`. They
+# are the undo for that script, so they are worth keeping — locally. In git
+# they would be an ever-growing pile of binary blobs holding whatever visitors
+# had written that day.
+room-backups/

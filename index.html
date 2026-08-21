@@ -1,10 +1,70 @@
 <!doctype html>
-<html lang="en">
+<!--
+  `lang` is Portuguese because the site is. The archive is ~3,150 captures of
+  Portuguese broadcast teletext; `DEFAULT_LANGUAGE` in
+  `src/domain/landing.ts` is `pt` for that reason, and this is the same fact
+  told to the crawler. It said `en` for a long time, which asked search engines
+  to match the wrong readers.
+
+  ## This file is a template
+
+  Everything between the `seo:start` and `seo:end` markers below is *replaced*,
+  per URL, by `scripts/prerender.ts` after `vite build` — including the `lang`
+  attribute above, on the English pages. The copy comes from
+  `src/domain/seo.ts`, where it is written once and the tags are generated from
+  it; it used to be written here three times over (plain, `og:`, `twitter:`),
+  which drifted the first time one of the three was edited.
+
+  What is left below the markers is the part that is the same at every address:
+  the icons, the theme colour, the fonts.
+
+  What is *between* them is a working Portuguese front page, not a placeholder.
+  `bun run dev` serves this file directly, and a build that cannot reach the
+  database still ships it, so the tags here have to be right on their own.
+-->
+<html lang="pt">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tele-textual</title>
+
+    <!-- seo:start -->
+    <title>Tele-textual — arquivo vivo de teletexto português</title>
+    <meta
+      name="description"
+      content="Um arquivo vivo do teletexto português. Vê páginas sozinho ou numa sala com outras pessoas, e cria as tuas próprias."
+    />
+    <link rel="canonical" href="https://teletext.joaobernardo.me/" />
+    <link rel="alternate" hreflang="pt-PT" href="https://teletext.joaobernardo.me/" />
+    <link rel="alternate" hreflang="en-GB" href="https://teletext.joaobernardo.me/en" />
+    <link rel="alternate" hreflang="x-default" href="https://teletext.joaobernardo.me/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Tele-textual" />
+    <meta property="og:url" content="https://teletext.joaobernardo.me/" />
+    <meta property="og:title" content="Tele-textual — arquivo vivo de teletexto português" />
+    <meta
+      property="og:description"
+      content="Um arquivo vivo do teletexto português. Vê páginas sozinho ou numa sala com outras pessoas, e cria as tuas próprias."
+    />
+    <meta property="og:image" content="https://teletext.joaobernardo.me/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Tele-textual" />
+    <meta property="og:locale" content="pt_PT" />
+    <meta property="og:locale:alternate" content="en_GB" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Tele-textual — arquivo vivo de teletexto português" />
+    <meta
+      name="twitter:description"
+      content="Um arquivo vivo do teletexto português. Vê páginas sozinho ou numa sala com outras pessoas, e cria as tuas próprias."
+    />
+    <meta name="twitter:image" content="https://teletext.joaobernardo.me/og.png" />
+    <!-- seo:end -->
+
+    <!-- Declared as PNG, which is what it is; it claimed to be an SVG before. -->
+    <link rel="icon" type="image/png" sizes="156x156" href="/logo.png" />
+    <link rel="apple-touch-icon" href="/logo.png" />
+    <meta name="theme-color" content="#000000" />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <!-- Press Start 2P is the teletext picture; Michroma is the lettering

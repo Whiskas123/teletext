@@ -14,7 +14,7 @@
  */
 
 import { type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from './LocalizedLink';
 
 import ConnectionStatus from './ConnectionStatus';
 import { useCopy } from './useCopy';

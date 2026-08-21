@@ -36,7 +36,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
+import { Link } from './LocalizedLink';
 
 import { useEditPage } from '../../collab/useEditPage';
 import { usePageTitles } from '../../collab/useGuide';

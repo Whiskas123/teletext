@@ -226,7 +226,14 @@ export function ManageArchivePage() {
           disabled={snapshot.saving || snapshot.pageCount === 0}
           onClick={() => void snapshot.snapshot()}
         >
-          {snapshot.saving ? 'Backing up…' : 'Back up live pages now'}
+          {snapshot.saving
+            ? // The document goes up in several requests now (see
+              // `domain/snapshotBatch.ts`), so this can take a few seconds.
+              // Counting them is the difference between "working" and "hung".
+              snapshot.progress != null && snapshot.progress.total > 1
+              ? `Backing up… ${snapshot.progress.done}/${snapshot.progress.total}`
+              : 'Backing up…'
+            : 'Back up live pages now'}
         </button>
         {snapshot.lastResult != null && (
           <span className="manage-note">Backed up {snapshot.lastResult.stored} pages.</span>

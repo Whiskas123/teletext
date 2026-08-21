@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocalizedNavigate as useNavigate } from './useLocalizedNavigate';
 import { useRoomOccupancy } from '../../collab/useRoomOccupancy';
 import { useOccupiedPages } from '../../collab/useOccupiedPages';
 import { firstFreePlaygroundPage } from '../../domain/access';

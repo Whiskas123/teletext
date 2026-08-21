@@ -14,6 +14,17 @@
  * only reports on the backup's freshness; an admin with this page open is what
  * actually refreshes it.
  *
+ * ## Why it is sent in batches
+ *
+ * A Vercel function refuses a body over 4.5 MB, and a page serialises to about
+ * 68 KB — so the whole document stopped fitting at around 66 pages and every
+ * backup after that answered `413`. See `domain/snapshotBatch.ts`, and note
+ * that the endpoint upserts without ever deleting, which is what makes several
+ * partial posts compose into one complete backup.
+ *
+ * A run that fails part way therefore leaves the pages it managed, which is why
+ * the error says how far it got rather than only that it failed.
+ *
  * ## Waiting for sync
  *
  * A just-mounted client has empty channels until the first sync arrives.
@@ -24,6 +35,8 @@
 
 import { useCallback, useState } from 'react';
 import { usePageData } from '@playhtml/react';
+
+import { batchPages } from '../domain/snapshotBatch';
 
 import { PAGES_CHANNEL } from './useEditPage';
 import { TITLES_CHANNEL } from './useGuide';
@@ -54,6 +67,8 @@ export interface SnapshotApi {
   lastResult: SnapshotOutcome | null;
   /** How many pages this client currently has synced. */
   pageCount: number;
+  /** Which request of how many is in flight, while `saving`. */
+  progress: { done: number; total: number } | null;
 }
 
 export function useSnapshot(): SnapshotApi {
@@ -68,6 +83,9 @@ export function useSnapshot(): SnapshotApi {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<SnapshotOutcome | null>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(
+    null,
+  );
 
   const pageCount = pages == null ? 0 : Object.keys(pages).length;
 
@@ -79,34 +97,52 @@ export function useSnapshot(): SnapshotApi {
 
     setSaving(true);
     setError(null);
+
+    // The metadata maps are small and are keyed by page number, so each request
+    // carries all of them: a batch has to be able to look up the title of any
+    // page it contains.
+    const meta = {
+      titles: titles ?? {},
+      kinds: kinds ?? {},
+      descriptions: descriptions ?? {},
+      subpageCounts: subpageCounts ?? {},
+    };
+
+    const batches = batchPages(pages ?? {});
+    const outcome: SnapshotOutcome = { stored: 0, rejected: 0 };
+    setProgress({ done: 0, total: batches.length });
+
     try {
-      const response = await fetch('/api/snapshot', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          pages: pages ?? {},
-          titles: titles ?? {},
-          kinds: kinds ?? {},
-          descriptions: descriptions ?? {},
-          subpageCounts: subpageCounts ?? {},
-        }),
-      });
+      for (const [index, batch] of batches.entries()) {
+        const response = await fetch('/api/snapshot', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ pages: batch, ...meta }),
+        });
 
-      if (response.status === 401) {
-        setError('Sign in as moderator to back up.');
-        return null;
-      }
-      if (!response.ok) {
-        setError(`Backup failed (${response.status}).`);
-        return null;
+        if (response.status === 401) {
+          setError('Sign in as moderator to back up.');
+          return null;
+        }
+        if (!response.ok) {
+          // Say what did land. The pages already sent are in the backup — the
+          // endpoint never deletes — so "failed" on its own would understate it.
+          setError(
+            batches.length > 1
+              ? `Backup failed (${response.status}) after ${outcome.stored} of ` +
+                `${pageCount} pages. What was sent is saved; retry to finish.`
+              : `Backup failed (${response.status}).`,
+          );
+          return null;
+        }
+
+        const body = (await response.json()) as Partial<SnapshotOutcome>;
+        outcome.stored += typeof body.stored === 'number' ? body.stored : 0;
+        outcome.rejected += typeof body.rejected === 'number' ? body.rejected : 0;
+        setProgress({ done: index + 1, total: batches.length });
       }
 
-      const body = (await response.json()) as Partial<SnapshotOutcome>;
-      const outcome: SnapshotOutcome = {
-        stored: typeof body.stored === 'number' ? body.stored : 0,
-        rejected: typeof body.rejected === 'number' ? body.rejected : 0,
-      };
       setLastResult(outcome);
       return outcome;
     } catch {
@@ -114,8 +150,9 @@ export function useSnapshot(): SnapshotApi {
       return null;
     } finally {
       setSaving(false);
+      setProgress(null);
     }
   }, [pages, titles, kinds, descriptions, subpageCounts, pageCount]);
 
-  return { snapshot, saving, error, lastResult, pageCount };
+  return { snapshot, saving, error, lastResult, pageCount, progress };
 }

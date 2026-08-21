@@ -54,9 +54,11 @@ about.
   label and the accessible name all say *em breve*.
 
 The language switch is Portuguese-first — the archive is ~3,150 captures of RTP
-and SIC teletext, and the people most likely to want them read Portuguese — and
-the choice is remembered in `localStorage`. It currently translates the front
-page; the rest of the app is still English.
+and SIC teletext, and the people most likely to want them read Portuguese. The
+choice is the **address**: Portuguese is unprefixed and English lives under
+`/en`, so the switch navigates rather than setting a preference, and a language
+is something you can link someone to. See
+[Each language gets its own address](#each-language-gets-its-own-address).
 
 ### Watching, and editing
 
@@ -270,6 +272,35 @@ Ordering is the whole difficulty: moving 200→201 while 201 exists destroys 201
 
 Only a connected browser can read the Yjs document, so the cron alone cannot refresh the backup — it reports freshness; the button does the work. Restore with `bun run db:restore --out restore.json`, then load that file from `/import`. Rehearse it once: an untested backup is not a backup.
 
+#### It is sent in batches, because it has to be
+
+A Vercel function refuses a request body over **4.5 MB**, and the limit is not
+configurable. A teletext page is 960 cells and serialises to about **68 KB**, so
+the document crosses that at roughly 66 pages — and the backup used to post all
+of it in one request.
+
+**This is how the backup stopped working.** Once the document passed the limit
+every attempt answered `413`, the button showed "Backup failed (413)", and
+`live_pages` kept whatever it held from the last time the document was small
+enough. Nothing else reported it. A backup that fails as the thing it protects
+grows fails exactly when there is most to lose, so the measurements are worth
+keeping in view: at 76 pages one request is 4.4 MB; at 300 it is 17 MB; at the
+full ~830 the corpus could reach, 48 MB.
+
+[`src/domain/snapshotBatch.ts`](src/domain/snapshotBatch.ts) splits the document
+by serialised size — not by page count, since a dense mosaic page and a
+near-blank one differ by an order of magnitude — into requests of at most 3 MB.
+Those same documents become 2, 7 and 18 requests, the largest 2.86 MB.
+
+What makes this safe is a property `api/snapshot.ts` already had: **pages are
+upserted and never deleted**, so a client holding only part of the document
+cannot wipe the rest of the backup. Several partial posts therefore compose into
+one complete backup, and a run that dies half way leaves the pages it managed
+rather than a corrupt snapshot — which is why a failure now says how far it got
+and invites a retry. The cost is that a backup is a few seconds wide rather than
+one instant, which for a document being edited continuously was never true
+anyway.
+
 ### Five render sizes
 
 RTP published at three sizes (520x400, 400x300, 320x250), SIC at two (320x240, 480x336). They differ in more than cell size: RTP renders 40x25 and one row is dropped on import, SIC renders 40x24 and nothing is dropped. And a shared cell size does not mean a shared font — SIC's 320x240 uses the same 8x10 cells as RTP's 320x250 without sharing a single stencil, because SIC draws two-pixel stems where RTP draws one.
@@ -286,10 +317,129 @@ That rewrite is `/((?!api/).*)` rather than `/(.*)` for a reason: the catch-all 
 
 Set `DATABASE_URL` (via the Neon integration), `ADMIN_PASSWORD`, `SESSION_SECRET`, and optionally `CRON_SECRET` — see `.env.example`.
 
+### One domain per library
+
+**Each hostname has its own set of pages, and sharing a database does not change that.** `GlobalProvider` asks for the room `teletext-house`, but playhtml prefixes the browser's own hostname before connecting, so `example.vercel.app` and `example.com` are two separate live documents — edits on one are invisible on the other. The prefix is not configurable. Postgres being shared is beside the point: it holds the corpus and the backup, while everything a visitor reads or edits lives in the document.
+
+So pick the domain first and stay on it. Moving between them is a copy:
+
+```sh
+bun run room:migrate --from old.example.com --to new.example.com          # dry run
+bun run room:migrate --from old.example.com --to new.example.com --apply
+```
+
+It connects to both rooms directly — no browser, unlike the backup — dumps each document to `room-backups/` before changing anything, and moves the six content channels. `--with-chat` brings the rooms' transcripts along; `presence:*` is never copied, because it would seat ghosts in every room on the new host. Each channel is written wholesale, so the destination's own copy of a page is replaced rather than merged with the source's.
+
+Afterwards it reconnects as a fresh client and compares a hash of every channel against the source, which is the only check worth trusting: a truncated write gets entry counts right, because the channels that arrived are whole and the ones still in a closed socket's buffer are simply absent.
+
+`scripts/migrateRoom.ts` has the details, including the `room-reset` handshake — playhtml's server can refuse every client that does not name the epoch it was last reset at, which from outside the browser means asking once, being told, and reconnecting.
+
+Once the pages have moved, close the old domain off. Leaving it reachable is not merely untidy: it still has its own live document, so anything typed there is written somewhere nobody is reading, and a later re-run of the migration would copy that stale document over the new domain.
+
+`teletext-workshop.vercel.app` is retired this way — Project Settings → Domains → Edit → **Redirect to Another Domain**, as a **308**. Not 301: both are permanent and neither costs anything in search ranking, but 301 lets a user agent rewrite the method to `GET`, while 308 preserves method and body. That distinction only matters because a domain redirect is domain-wide and so covers `/api/` as well, which the daily snapshot cron calls — Vercel triggers crons against a `.vercel.app` production URL. The cron is only a liveness check on the backup (`api/snapshot.ts`; the real backup is written by an admin's browser), so a redirect landing on it costs the freshness report and no data.
+
+## Being found
+
+The site lives at **`https://teletext.joaobernardo.me`**, and that hostname is
+written into `src/domain/seo.ts` as `SITE_URL`. Every absolute URL on the site —
+canonical links, `og:image`, `hreflang`, the sitemap — is built from it, so
+moving domain is one constant here plus the room migration described under
+[One domain per library](#one-domain-per-library).
+
+**Everything a crawler that does not render sees of a page is the HTML it is
+served.** `vite build` produces one `index.html` with an empty `#root`, and
+`vercel.json` rewrites every route to it, so `/`, `/about` and `/watch/220` used
+to serve identical bytes: one title, one description, no content. Google renders
+before deciding, so it could eventually see the app; Bing, DuckDuckGo and every
+link scraper (WhatsApp, Bluesky, Slack) never run JavaScript, so to them the
+archive did not exist.
+
+### Each address gets its own file
+
+[`scripts/prerender.ts`](scripts/prerender.ts) runs after `vite build` and walks
+every address the site has, writing each one a real HTML file — its own
+`<title>`, description, canonical, `hreflang` pair and social tags, and for an
+archive page the text of the page itself in the markup.
+
+- **A build step, not a serverless function.** `api/` holds exactly twelve
+  functions, which is the Hobby cap — the same wall `api/published.ts` describes
+  — so a thirteenth would fail the deploy. Static files sidestep it, cost
+  nothing per request, and are served *before* the rewrites, so
+  `dist/watch/220/index.html` answers `/watch/220` and the SPA catch-all never
+  sees it.
+- **Content from two tables, unioned,** because neither is complete: `live_pages`
+  is the backup of the playhtml document (including pages made by hand and never
+  published), and `published_pages` holds anything published since the last
+  backup, whose cells are rebuilt from the capture exactly as `api/published.ts`
+  builds them. `live_pages` wins where both have a page, since it carries
+  collaborative edits made after publication.
+- **The prerendered text is only as fresh as the last backup.** Only a connected
+  browser can read the Yjs document, so neither the cron nor this script can
+  refresh it — that is the **Back up live pages now** button on `/manage`. The
+  age is printed on every build and warned about past a week. A stale backup is
+  harmless for search (the rendered app is still correct) but the served text
+  lags what visitors see.
+- **It degrades rather than fails.** With no `DATABASE_URL` it writes the static
+  routes and stops. A site whose archive pages are not prerendered is a worse
+  search result; a failed build is no site at all.
+- **It is idempotent.** The `seo:start` / `seo:end` markers are written back, so
+  running it twice over one `dist` is a no-op rather than an error.
+
+`index.html` is now a template. What lies between the markers is a working
+Portuguese front page — `bun run dev` serves it directly, and a build with no
+database ships it — and everything outside them is what is the same at every
+address.
+
+### Each language gets its own address
+
+Portuguese stays unprefixed and English lives under `/en`
+([`src/domain/routes.ts`](src/domain/routes.ts)). The site was already live and
+every link to it that exists is unprefixed, so the new URLs are additive and
+nothing that worked stopped working.
+
+This is what makes per-language titles possible at all. The language used to be
+a `localStorage` key, which is invisible to everything that does not run
+JavaScript: one address could only ever carry one title, and Google's guidance
+is not to vary a URL's language by anything it cannot see. It is now
+`<Route path="/en/*">` and `<Route path="/*">` in `App.tsx`, mounting **one**
+route tree twice — the paths there are relative, so a route added to it exists
+in both languages rather than 404ing in one.
+
+Two consequences worth knowing:
+
+- **The preference is no longer remembered.** Storing it would mean either
+  ignoring the store or redirecting `/` on the strength of it, and that second
+  one sends a crawler somewhere a returning human is not. The URL is the whole
+  state, which is also what makes a language shareable.
+- **Reading the language and changing it are separate.** `useCopy` — how ~40
+  components get their words — reads `useCurrentLanguage()` from context and
+  needs no router, so small components stay renderable on their own.
+  `useLanguage()` is the write, and navigates.
+
+**It is not a second copy of the site.** playhtml scopes its document by
+hostname and the room name `GlobalProvider` pins, never by path
+(`playhtml.es.js` resolves the room as `host + room`, with the pathname used
+only when no explicit room is given — and one is). So `/en/watch/220` and
+`/watch/220` are the same cells in the same live document: someone editing in
+English and someone watching in Portuguese see each other keystroke by
+keystroke. Only a different *hostname* forks it.
+
+### The size of the prize
+
+At the time of writing this prerenders **76 pages**, not the ~830 the corpus
+covers. The corpus is ~3,150 captures across ~830 original page numbers, but
+only what has actually been published to a page number exists as an address:
+62 publication records and 41 pages in the live backup, overlapping to 76.
+
+Publishing more of the corpus from `/manage` grows this with no further work —
+the generator reads what is there.
+
+
 ## Tech
 
 - **React 19** + **TypeScript** + **Vite 7**, **React Router 7**
 - **playhtml / Yjs** for shared, live state
 - **Neon Postgres** + Vercel serverless functions for the archive, publication map and auth
-- **sharp** (dev only) to decode corpus images outside a browser
+- **sharp** (dev only) to decode corpus images outside a browser, and
+  **opentype.js** (dev only) to set the wordmark in the social image
 - **vitest** + **@testing-library/react** + **fast-check**

@@ -236,6 +236,22 @@ export interface Copy {
     /** Said once a signature has landed. */
     signed: string;
   };
+  /**
+   * The screen for a URL that is not one.
+   *
+   * It is translated, unlike the admin screens, because unlike them it is not
+   * reached on purpose: a mistyped address or a link that has rotted lands
+   * whoever followed it here, and they are as likely to be reading Portuguese
+   * as anyone else on the site.
+   */
+  notFound: {
+    title: string;
+    region: string;
+    /** What happened, in one line. */
+    message: string;
+    /** The two ways out: the front page, and the archive. */
+    watch: string;
+  };
 }
 
 export const COPY: Record<Language, Copy> = {
@@ -420,6 +436,12 @@ export const COPY: Record<Language, Copy> = {
       errorBlank: 'A página está vazia. Escreve ou desenha alguma coisa.',
       signed: 'Assinado. Obrigado.',
     },
+    notFound: {
+      title: 'página não encontrada',
+      region: 'Página não encontrada',
+      message: 'Este endereço não existe. Talvez tenha mudado, ou tenha sido mal escrito.',
+      watch: 'Ver teletexto',
+    },
   },
   en: {
     layout: {
@@ -600,6 +622,12 @@ export const COPY: Record<Language, Copy> = {
       errorNameTooLong: (max) => `A name must be ${max} characters or fewer.`,
       errorBlank: 'The page is empty. Write or draw something on it.',
       signed: 'Signed. Thank you.',
+    },
+    notFound: {
+      title: 'page not found',
+      region: 'Page not found',
+      message: 'There is nothing at this address. It may have moved, or been mistyped.',
+      watch: 'Watch teletext',
     },
   },
 };

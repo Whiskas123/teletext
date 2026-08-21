@@ -1,44 +1,34 @@
 /**
- * The visitor's chosen language, remembered between visits.
+ * The visitor's language, which is now part of the address.
  *
- * Kept in `localStorage` rather than `sessionStorage`, unlike the session member
- * id: which language you read in is a fact about you, not about this tab, and
- * having to re-pick it on every visit is exactly the kind of small insult that
- * makes a toggle feel broken.
+ * It used to be a `localStorage` key, and that had one fatal property: the two
+ * languages shared a URL. Everything that does not run JavaScript — every
+ * crawler, and every scraper that builds a link card — fetches a URL cold, with
+ * no storage and no cookies, so a single address could only ever carry one
+ * title and one description. Sharing an English reading of the site was
+ * impossible; so was letting a search engine index one.
  *
- * The rules for what counts as a language live in `domain/landing.ts`; this only
- * binds them to React and to storage. Storage access is wrapped because it
- * throws outright in a private window in some browsers — a language preference
- * is not worth a blank page, so it degrades to "this tab only".
+ * The rules for the paths live in `domain/routes.ts`; this binds them to the
+ * router. Reading the language is now `useLocation`, and choosing one is
+ * navigation — which is the point, because it means a language is a place you
+ * can link someone to.
+ *
+ * ## Why the preference is no longer remembered
+ *
+ * Storing it would mean either ignoring the store (dead weight) or redirecting
+ * `/` on the strength of it — and that second one is the trap. A crawler
+ * arrives with no storage, so it would be sent somewhere a returning human is
+ * not, and Google's own guidance is not to vary a URL's language by anything it
+ * cannot see. The URL is the whole state now, which is also what makes it
+ * shareable and bookmarkable.
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
-import {
-  DEFAULT_LANGUAGE,
-  LANGUAGE_STORAGE_KEY,
-  normalizeLanguage,
-  otherLanguage,
-  type Language,
-} from '../../domain/landing';
-
-/** Access `localStorage`, or `undefined` where it is unavailable. */
-function storage(): Storage | undefined {
-  try {
-    return typeof globalThis === 'undefined' ? undefined : globalThis.localStorage;
-  } catch {
-    return undefined;
-  }
-}
-
-/** The stored preference, or the default when there is none to read. */
-function storedLanguage(): Language {
-  try {
-    return normalizeLanguage(storage()?.getItem(LANGUAGE_STORAGE_KEY));
-  } catch {
-    return DEFAULT_LANGUAGE;
-  }
-}
+import { otherLanguage, type Language } from '../../domain/landing';
+import { switchLanguagePath } from '../../domain/routes';
+import { useCurrentLanguage } from './languageContext';
 
 export interface LanguageApi {
   language: Language;
@@ -49,33 +39,22 @@ export interface LanguageApi {
 }
 
 export function useLanguage(): LanguageApi {
-  // Read once, lazily: reading storage on every render would be a synchronous
-  // disk hit for a value that only this hook changes.
-  const [language, setLanguageState] = useState<Language>(storedLanguage);
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const language = useCurrentLanguage();
 
-  const setLanguage = useCallback((next: Language) => {
-    const value = normalizeLanguage(next);
-    setLanguageState(value);
-    try {
-      storage()?.setItem(LANGUAGE_STORAGE_KEY, value);
-    } catch {
-      // Kept for this tab regardless: the state above has already changed, so a
-      // storage that refuses to write costs the visitor their next visit, not
-      // this one.
-    }
-  }, []);
+  const setLanguage = useCallback(
+    (next: Language) => {
+      // The same address in the other language, not the front page: switching
+      // language while reading page 220 should keep you on page 220.
+      navigate(switchLanguagePath(pathname, next));
+    },
+    [navigate, pathname],
+  );
 
   const toggle = useCallback(() => {
-    setLanguageState((current) => {
-      const next = otherLanguage(current);
-      try {
-        storage()?.setItem(LANGUAGE_STORAGE_KEY, next);
-      } catch {
-        /* as above */
-      }
-      return next;
-    });
-  }, []);
+    setLanguage(otherLanguage(language));
+  }, [language, setLanguage]);
 
   return { language, other: otherLanguage(language), setLanguage, toggle };
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from './LocalizedLink';
 
 import { useGuestbook } from '../../collab/useGuestbook';
 import {
@@ -17,7 +17,7 @@ import {
 import { TeletextThumbnail } from '../TeletextGrid/TeletextThumbnail';
 import { SnippetGrid, type SnippetTool } from './SnippetGrid';
 import { useCopy } from './useCopy';
-import { useLanguage } from './useLanguage';
+import { useCurrentLanguage } from './languageContext';
 
 /**
  * GuestbookPage — the book of signatures, at `/guestbook`.
@@ -52,7 +52,7 @@ import { useLanguage } from './useLanguage';
  */
 export function GuestbookPage() {
   const copy = useCopy();
-  const { language } = useLanguage();
+  const language = useCurrentLanguage();
   const { entries, memberId, sign } = useGuestbook();
 
   const [open, setOpen] = useState(false);

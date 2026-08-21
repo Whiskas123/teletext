@@ -10,17 +10,19 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
 import { Landing } from './Landing';
+import { LanguageProvider } from './LanguageProvider';
 import { ROOMS } from './rooms';
-import { LANGUAGE_STORAGE_KEY } from '../../domain/landing';
+import type { Language } from '../../domain/landing';
 
 /**
  * A storage the test controls.
  *
- * Node 24 defines its own `localStorage` global and leaves it *undefined*
- * unless started with `--localstorage-file`, which shadows the one jsdom would
- * otherwise provide. `useLanguage` copes — it wraps every access and falls back
- * to remembering the choice for this tab only — but a test that wants to prove
- * the choice is *persisted* has to supply somewhere to persist it.
+ * Only `sessionStorage` needs one now — it holds the session member id. The
+ * language used to be kept in `localStorage` and is the address instead, so
+ * there is no longer a preference for a test to seed or to read back.
+ *
+ * Node 24 defines its own storage globals and leaves them *undefined* unless
+ * started with `--localstorage-file`, shadowing the ones jsdom would provide.
  */
 function memoryStorage(): Storage {
   const map = new Map<string, string>();
@@ -53,10 +55,12 @@ vi.mock('../../collab/useOccupiedPages', () => ({
   useOccupiedPages: () => occupiedPages,
 }));
 
-function renderLanding() {
+function renderLanding(language: Language = 'pt') {
   return render(
-    <MemoryRouter>
-      <Landing />
+    <MemoryRouter initialEntries={[language === 'en' ? '/en' : '/']}>
+      <LanguageProvider language={language}>
+        <Landing />
+      </LanguageProvider>
     </MemoryRouter>,
   );
 }
@@ -70,7 +74,6 @@ describe('the front page', () => {
   beforeEach(() => {
     navigateMock.mockReset();
     occupiedPages = [];
-    // A fresh one per test, so a language chosen in one does not leak.
     vi.stubGlobal('localStorage', memoryStorage());
     vi.stubGlobal('sessionStorage', memoryStorage());
   });
@@ -98,22 +101,22 @@ describe('the front page', () => {
     expect(screen.queryByText('watch')).not.toBeInTheDocument();
   });
 
-  it('PT/EN switches the menu and remembers the choice', async () => {
+  // The switch is navigation now, not a stored preference. That is what gives
+  // each language its own address — which is the only way a link card or a
+  // search result can be written in one of them.
+  it('PT/EN goes to the same page at the other language’s address', async () => {
     const user = userEvent.setup();
-    const { unmount } = renderLanding();
+    renderLanding();
 
     await user.click(screen.getByRole('button', { name: /language|idioma/i }));
+    expect(navigateMock).toHaveBeenCalledWith('/en');
+  });
+
+  it('is written in the language of the address it was reached at', () => {
+    renderLanding('en');
 
     expect(screen.getByText('watch')).toBeInTheDocument();
     expect(screen.queryByText('ver')).not.toBeInTheDocument();
-    expect(window.localStorage.getItem(LANGUAGE_STORAGE_KEY)).toBe('en');
-
-    // A language is a fact about the reader, not about this visit: coming back
-    // to Portuguese having chosen English is a small insult that reads as the
-    // toggle being broken.
-    unmount();
-    renderLanding();
-    expect(screen.getByText('watch')).toBeInTheDocument();
   });
 
   it('criar opens the first free playground page', async () => {

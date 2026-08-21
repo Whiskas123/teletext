@@ -5,13 +5,21 @@
 // which do not take a reader out of the room they were watching in.
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
+const navigateMock = vi.fn();
+vi.mock('react-router-dom', async () => {
+  const actual =
+    await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
+  return { ...actual, useNavigate: () => navigateMock };
+});
+
 import { AboutPage } from './AboutPage';
+import { LanguageProvider } from './LanguageProvider';
 import { ABOUT, ABOUT_SECTIONS } from '../../domain/about';
-import { LANGUAGE_STORAGE_KEY } from '../../domain/landing';
+import type { Language } from '../../domain/landing';
 
 /** A storage the test controls — see the note in `Landing.test.tsx`. */
 function memoryStorage(): Storage {
@@ -28,10 +36,12 @@ function memoryStorage(): Storage {
   } as Storage;
 }
 
-function renderAbout() {
+function renderAbout(language: Language = 'pt') {
   return render(
-    <MemoryRouter>
-      <AboutPage />
+    <MemoryRouter initialEntries={[language === 'en' ? '/en/about' : '/about']}>
+      <LanguageProvider language={language}>
+        <AboutPage />
+      </LanguageProvider>
     </MemoryRouter>,
   );
 }
@@ -48,39 +58,42 @@ describe('the about page', () => {
     expect(screen.queryByRole('heading', { level: 1, name: 'about' })).not.toBeInTheDocument();
   });
 
-  it('carries every section in both languages', async () => {
-    const user = userEvent.setup();
-    renderAbout();
-
+  // Each language is its own address, so this reads them as a reader would
+  // arrive at them rather than by clicking the switch: the switch navigates
+  // now, and navigation is what the other test is about.
+  it('carries every section in both languages', () => {
     for (const { id } of ABOUT_SECTIONS) {
+      const { unmount } = renderAbout();
       expect(
         screen.getByRole('heading', { level: 2, name: ABOUT.pt.sections[id].heading }),
       ).toBeInTheDocument();
-    }
+      unmount();
 
-    await user.click(screen.getByRole('button', { name: /idioma|language/i }));
-
-    for (const { id } of ABOUT_SECTIONS) {
+      renderAbout('en');
       expect(
         screen.getByRole('heading', { level: 2, name: ABOUT.en.sections[id].heading }),
       ).toBeInTheDocument();
+      cleanup();
     }
   });
 
-  it('remembers the language, which is a fact about the reader', async () => {
+  // The switch is on this screen precisely because a reader can arrive here
+  // from a link without ever having seen the front page. It now takes them to
+  // this same screen at the other language's address, which is a place they can
+  // link to in turn — where a stored preference was private to their browser.
+  it('switches to the same page at the other language’s address', async () => {
     const user = userEvent.setup();
-    const { unmount } = renderAbout();
+    renderAbout();
 
     await user.click(screen.getByRole('button', { name: /idioma|language/i }));
-    expect(screen.getByRole('heading', { level: 1, name: 'about' })).toBeInTheDocument();
-    expect(window.localStorage.getItem(LANGUAGE_STORAGE_KEY)).toBe('en');
+    expect(navigateMock).toHaveBeenCalledWith('/en/about');
+  });
 
-    // The switch is on this screen precisely because a reader can arrive here
-    // from a link without ever having seen the front page — so the choice they
-    // make here has to be the same choice the front page would have stored.
-    unmount();
-    renderAbout();
-    expect(screen.getByRole('heading', { level: 1, name: 'about' })).toBeInTheDocument();
+  it('is written in the language of the address it was reached at', () => {
+    renderAbout('en');
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'about' }),
+    ).toBeInTheDocument();
   });
 
   it('links out to the author and the archive, without stealing the tab', () => {
@@ -98,18 +111,16 @@ describe('the about page', () => {
     }
   });
 
-  it('sends the reader to the author’s site in the language they are reading', async () => {
-    const user = userEvent.setup();
-    renderAbout();
-
+  it('sends the reader to the author’s site in the language they are reading', () => {
     // Following a name mid-sentence should not switch language on someone.
+    const { unmount } = renderAbout();
     expect(screen.getByRole('link', { name: /joão bernardo narciso/i })).toHaveAttribute(
       'href',
       'https://joaobernardo.me',
     );
+    unmount();
 
-    await user.click(screen.getByRole('button', { name: /idioma|language/i }));
-
+    renderAbout('en');
     expect(screen.getByRole('link', { name: /joão bernardo narciso/i })).toHaveAttribute(
       'href',
       'https://joaobernardo.me/en',

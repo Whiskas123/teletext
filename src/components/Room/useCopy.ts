@@ -1,7 +1,7 @@
 /**
  * useCopy — the words, in the language this visitor chose.
  *
- * A one-line wrapper over {@link useLanguage} and {@link COPY}, which is the
+ * A one-line wrapper over {@link useCurrentLanguage} and {@link COPY}, which is the
  * point: components ask for `copy.chat.send` and never for a language, so none
  * of them has to know that a preference exists or where it is kept.
  *
@@ -13,10 +13,10 @@
  */
 
 import { COPY, type Copy } from '../../domain/copy';
-import { useLanguage } from './useLanguage';
+import { useCurrentLanguage } from './languageContext';
 
 export function useCopy(): Copy {
-  const { language } = useLanguage();
+  const language = useCurrentLanguage();
   return COPY[language];
 }
 
