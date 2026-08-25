@@ -5077,6 +5077,71 @@ button.yellow-pages-number:hover {
   color: #888;
 }
 
+/*
+ * Waiting for the book.
+ *
+ * The shared document has to sync before any signature is readable, and the
+ * column used to say "nobody has signed yet" for that second — a wrong answer
+ * where a slow one was wanted. What stands there instead is the *shape* of the
+ * entries that are coming: a name band and a snippet band at the snippet's own
+ * proportions, so when the real ones land nothing below them moves.
+ */
+.guestbook-loading-text {
+  margin: 0 0 clamp(1.5rem, 4vh, 2.5rem);
+  font-family: monospace;
+  font-size: 0.85rem;
+  color: #0ff;
+}
+
+.guestbook-placeholder-name {
+  display: block;
+  width: 8rem;
+  height: 0.82rem;
+  background: #262626;
+}
+
+/* 560x144: the thumbnail's own pixel size for eight rows (40 * CELL_W by
+   8 * CELL_H in `utils/pageCanvas.ts`), so the band is exactly as tall as the
+   picture that replaces it. */
+.guestbook-placeholder-snippet {
+  width: 100%;
+  aspect-ratio: 560 / 144;
+  border: 1px solid #262626;
+  background: #0a0a0a;
+}
+
+.guestbook-entry-placeholder {
+  animation: guestbook-wait 1.4s ease-in-out infinite;
+}
+
+/* Staggered, so the three bands read as one thing loading rather than three
+   things flashing in unison. */
+.guestbook-entry-placeholder:nth-child(2) {
+  animation-delay: 0.18s;
+}
+
+.guestbook-entry-placeholder:nth-child(3) {
+  animation-delay: 0.36s;
+}
+
+@keyframes guestbook-wait {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+/* The text says what is happening; the pulse only decorates it. */
+@media (prefers-reduced-motion: reduce) {
+  .guestbook-entry-placeholder {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
 .guestbook-entries {
   list-style: none;
   margin: 0;

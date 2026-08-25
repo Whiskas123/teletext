@@ -53,7 +53,7 @@ import { useCurrentLanguage } from './languageContext';
 export function GuestbookPage() {
   const copy = useCopy();
   const language = useCurrentLanguage();
-  const { entries, memberId, sign } = useGuestbook();
+  const { entries, loading, memberId, sign } = useGuestbook();
 
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
@@ -252,12 +252,42 @@ export function GuestbookPage() {
             </section>
           )}
 
-          <section className="guestbook-list" aria-labelledby="guestbook-list-heading">
+          {/*
+            * `aria-busy` while the book is still arriving, so a screen reader is
+            * told to wait rather than handed a column that is about to change
+            * under it.
+            */}
+          <section
+            className="guestbook-list"
+            aria-labelledby="guestbook-list-heading"
+            aria-busy={loading}
+          >
             <h2 id="guestbook-list-heading" className="guestbook-heading teletext-fg-cyan">
               {copy.guestbook.entries}
             </h2>
 
-            {entries.length === 0 ? (
+            {/*
+              * Three states, and the order matters: "still coming" has to be
+              * distinguishable from "empty", or a cold load spends its first
+              * second telling the reader that nobody has ever signed. The
+              * placeholder bands are the shape of the entries that will replace
+              * them, so the column does not jump when they do.
+              */}
+            {loading ? (
+              <div className="guestbook-loading" role="status">
+                <p className="guestbook-loading-text">{copy.guestbook.loading}</p>
+                <ul className="guestbook-entries" aria-hidden="true">
+                  {[0, 1, 2].map((n) => (
+                    <li key={n} className="guestbook-entry guestbook-entry-placeholder">
+                      <div className="guestbook-entry-head">
+                        <span className="guestbook-placeholder-name" />
+                      </div>
+                      <div className="guestbook-placeholder-snippet" />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : entries.length === 0 ? (
               <p className="guestbook-empty">{copy.guestbook.empty}</p>
             ) : (
               <ul className="guestbook-entries">

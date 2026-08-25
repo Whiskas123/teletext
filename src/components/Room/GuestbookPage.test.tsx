@@ -31,11 +31,13 @@ function memoryStorage(): Storage {
 
 const signMock = vi.fn<GuestbookApi['sign']>();
 let entries: GuestbookEntry[] = [];
+let loading = false;
 const MEMBER_ID = 'member-me';
 
 vi.mock('../../collab/useGuestbook', () => ({
   useGuestbook: (): GuestbookApi => ({
     entries,
+    loading,
     memberId: MEMBER_ID,
     sign: signMock,
   }),
@@ -83,12 +85,24 @@ describe('the guestbook', () => {
     signMock.mockReset();
     signMock.mockReturnValue({ ok: true, name: 'Ana' });
     entries = [];
+    loading = false;
     vi.stubGlobal('localStorage', memoryStorage());
   });
 
   it('says the book is empty rather than showing an empty area', () => {
     renderGuestbook();
     expect(screen.getByText(/ainda ninguém assinou/i)).toBeInTheDocument();
+  });
+
+  // The shared document takes a moment to sync, and for that moment an empty
+  // list is "not here yet", not "nobody has signed". Saying the latter is a
+  // wrong answer that corrects itself a second later.
+  it('says the book is still coming rather than saying it is empty', () => {
+    loading = true;
+    renderGuestbook();
+
+    expect(screen.getByText(/a carregar as assinaturas/i)).toBeInTheDocument();
+    expect(screen.queryByText(/ainda ninguém assinou/i)).not.toBeInTheDocument();
   });
 
   it('opens on the book, not on a form', async () => {

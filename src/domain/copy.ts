@@ -203,6 +203,14 @@ export interface Copy {
     /** The list, and what stands in for it while nobody has signed. */
     entries: string;
     empty: string;
+    /**
+     * What stands in for it while the book is still arriving.
+     *
+     * Distinct from `empty` on purpose: the shared document takes a moment to
+     * sync on a cold load, and saying "nobody has signed yet" during it is a
+     * wrong answer rather than a slow one.
+     */
+    loading: string;
     /** Marks the reader's own signature in the list. */
     yours: string;
     /** How an entry is dated, and named, when read out. */
@@ -414,6 +422,7 @@ export const COPY: Record<Language, Copy> = {
       intro: 'Deixa o teu nome e oito linhas de teletexto.',
       entries: 'Assinaturas',
       empty: 'Ainda ninguém assinou. Podes ser a primeira pessoa.',
+      loading: 'A carregar as assinaturas…',
       yours: 'a tua',
       signedBy: (name) => `Assinado por ${name}`,
       sign: 'Assinar',
@@ -602,6 +611,7 @@ export const COPY: Record<Language, Copy> = {
       intro: 'Leave your name and eight rows of teletext.',
       entries: 'Signatures',
       empty: 'Nobody has signed yet. You could be first.',
+      loading: 'Loading the signatures…',
       yours: 'yours',
       signedBy: (name) => `Signed by ${name}`,
       sign: 'Sign the book',
