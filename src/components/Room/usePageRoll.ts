@@ -19,6 +19,16 @@
  * While idle (not rolling) the content stays live, so edits made to the page
  * currently on screen show up immediately.
  *
+ * ## The roll is capped
+ *
+ * Counting one page every {@link PAGE_ROLL_MS} is right for a short hop and
+ * interminable for a long one: 999 → 120 is 820 steps, eighteen seconds of
+ * watching digits before the page you asked for arrives. A real set had the
+ * same problem and the viewer's patience did not. So the roll runs at its own
+ * speed for {@link PAGE_ROLL_MAX_MS} and then gives up counting and lands on
+ * the target — the beginning of the roll is the part that reads as a teletext
+ * set, and the rest is only waiting.
+ *
  * Shared by the room viewer and the solo viewer.
  */
 
@@ -28,6 +38,9 @@ import type { TeletextPage } from '../../collab/types';
 
 /** Delay between each rolling digit step when the displayed page changes. */
 export const PAGE_ROLL_MS = 22;
+
+/** How long the roll may count before jumping straight to the dialled page. */
+export const PAGE_ROLL_MAX_MS = 3000;
 
 /** Lowest / highest Page_Number the roll cycles through (teletext pages). */
 const MIN_PAGE = 100;
@@ -95,6 +108,7 @@ export function usePageRoll(
     skipRef.current = false;
     rollingRef.current = true;
     stopRoll();
+    const startedAt = Date.now();
     rollTimer.current = setInterval(() => {
       const cur = displayRef.current;
       if (cur === target) {
@@ -103,9 +117,11 @@ export function usePageRoll(
         setShownPage(pageRef.current); // reveal the target page content
         return;
       }
-      // A step lands on its first tick instead of counting; the content is still
-      // revealed by the settle above, so the number never arrives before it.
-      setDisplayNumber(straightThere ? target : nextRollStep(cur));
+      // A step lands on its first tick instead of counting, and so does a roll
+      // that has counted for long enough; the content is still revealed by the
+      // settle above, so the number never arrives before it.
+      const outOfPatience = Date.now() - startedAt >= PAGE_ROLL_MAX_MS;
+      setDisplayNumber(straightThere || outOfPatience ? target : nextRollStep(cur));
     }, PAGE_ROLL_MS);
   }, [targetPageNumber, stopRoll, setDisplayNumber]);
 
