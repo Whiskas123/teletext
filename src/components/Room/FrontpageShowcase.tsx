@@ -29,11 +29,12 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 
 import {
-  showcaseImageUrl,
+  showcasePictureUrl,
   useShowcase,
   type ShowcaseEntry,
 } from '../../collab/useShowcase';
 import { SHOWCASE_SECONDS_PER_SCREEN, shuffleBySeed } from '../../domain/showcase';
+import { PAGE_W, pageHeight } from '../../utils/pageCanvas';
 
 export interface FrontpageShowcaseProps {
   /** Chosen: opens this page in the viewer. */
@@ -107,7 +108,7 @@ export function FrontpageShowcase({ onSelect, label, pageWord }: FrontpageShowca
             it is already in place when it does. `copy` is in the key because
             the same page legitimately appears in both. */}
         {[0, 1].map((copy) =>
-          entries.map((entry) => (
+          entries.map((entry, index) => (
             <button
               key={`${copy}-${entry.page_number}.${entry.subpage}`}
               type="button"
@@ -123,13 +124,37 @@ export function FrontpageShowcase({ onSelect, label, pageWord }: FrontpageShowca
             >
               <img
                 className="teletext-thumbnail"
-                src={showcaseImageUrl(
+                src={showcasePictureUrl(
                   entry.page_number,
                   entry.subpage,
                   entry.updated_at,
                 )}
                 alt=""
-                loading="lazy"
+                // The strip's own size, so the row is its full height before a
+                // single picture has arrived. Without it every tile is a
+                // zero-height box that grows as it loads, and the menu below
+                // is shoved down the page one picture at a time.
+                width={PAGE_W}
+                height={pageHeight(true)}
+                /*
+                 * Eagerly, and not lazily, for the copy that is really there.
+                 *
+                 * `loading="lazy"` is right for the archive, where a filter can
+                 * match a thousand captures. It is wrong here: the strip is a
+                 * dozen-odd pictures that the build has already preloaded, and
+                 * deferring them means each tile is fetched as the animation
+                 * carries it into view — so the strip runs with holes in it,
+                 * filling in behind the leading edge, which is precisely the
+                 * "still loading" impression the front page must not give.
+                 *
+                 * The duplicate copy stays lazy. It is the same set of URLs, so
+                 * it costs nothing either way, and being explicit says that the
+                 * second copy is not what anyone is waiting for.
+                 */
+                loading={copy === 1 ? 'lazy' : 'eager'}
+                // High for the first few: they are what is on screen when the
+                // strip appears, and they compete with the bundle for the line.
+                fetchPriority={copy === 0 && index < 4 ? 'high' : undefined}
                 decoding="async"
               />
               {/* Decoration: the same words are already the button's own

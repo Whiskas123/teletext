@@ -97,7 +97,7 @@ export const ABOUT: Record<Language, AboutDoc> = {
       [
         'Tele-textual é uma instalação participativa criada por ',
         { text: 'João Bernardo Narciso', href: AUTHOR_PT },
-        ', construída com base num arquivo de teletexto dos canais portugueses. Reúne uma criteriosa selecção de páginas recuperadas do arquivo web ',
+        ', construída com base num arquivo de teletexto dos canais portugueses. Reúne uma selecção de páginas recuperadas do arquivo web ',
         { text: 'Arquivo.pt', href: ARQUIVO },
         ', incluindo páginas de notícias, meteorologia, desporto, lotaria, classificados, horóscopo e serviços de SMS, e volta a colocá-las num ecrã acessível a todos. As páginas podem ser visualizadas individualmente ou em grupo, onde todos decidem em conjunto qual a página a carregar a seguir e aguardam que apareça. Para além do arquivo, é possível criar novas páginas de teletexto, na mesma grelha e com as mesmas restrições que esta tecnologia impunha. Esta obra reside no espaço entre estas duas partes: por um lado é uma forma lenta e coletiva de observar algo que pertence ao passado e que está praticamente perdido, e por outro lado é uma forma de criar coisas novas através um conjunto de restrições impostas por uma tecnologia obsoleta.',
       ],

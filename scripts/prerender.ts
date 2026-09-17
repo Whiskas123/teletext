@@ -70,6 +70,12 @@ import { pageRows } from '../src/domain/pageSearch';
 import { shiftPageDown } from '../src/domain/pageTransform';
 import { localizePath } from '../src/domain/routes';
 import {
+  SHOWCASE_BOOT_ID,
+  SHOWCASE_DIR,
+  showcasePicturePath,
+  type ShowcaseBootEntry,
+} from '../src/domain/showcase';
+import {
   LOCALE,
   SITE_URL,
   headTags,
@@ -172,6 +178,158 @@ async function loadPages(): Promise<{ pages: SourcePage[]; backupAge: number | n
   };
 }
 
+/**
+ * The front page's strip, written into `dist/` as files.
+ *
+ * ## Why the build does this at all
+ *
+ * The strip is the first thing on the front page and it was the last thing to
+ * arrive: the bundle had to boot, `useShowcase` had to ask `/api/showcase` what
+ * was on the strip — a function invocation and a database query, about half a
+ * second — and only then did the `<img>`s exist for the browser to start
+ * fetching. Three serial steps before the first picture was even requested.
+ *
+ * Everything needed is already known here, at build time, where this script is
+ * holding an open connection to the same table. So it writes the pictures out
+ * as ordinary files and lists them in the landing page's own HTML. The browser
+ * finds them with its preload scanner, while the bundle is still downloading,
+ * and fetches them from the CDN rather than from a function.
+ *
+ * ## Why they are re-encoded
+ *
+ * A moderator's browser draws the page on a canvas and `toBlob` hands back a
+ * full-colour RGBA PNG — about 22 KB for something that is flat colour and hard
+ * edges. As an indexed PNG the same picture is about 5 KB, and the difference
+ * is invisible: a teletext page is eight colours and the rest is the
+ * antialiasing on the glyph edges. Twenty pages is the difference between
+ * ~450 KB and ~110 KB, which is the difference between the strip arriving and
+ * the strip appearing.
+ *
+ * `sharp` does the encoding and is a *dev* dependency — it is not wanted in any
+ * function. If it cannot be loaded, the stored bytes are written unchanged and
+ * the build says so: a heavier front page is worth shipping, a broken one is
+ * not.
+ */
+async function writeShowcase(): Promise<ShowcaseBootEntry[]> {
+  if (!isConfigured()) return [];
+
+  const rows = await db()`
+    select page_number, subpage, position, title, image, image_type, updated_at
+    from showcase_pages
+    order by position, page_number, subpage
+  `;
+  if (rows.length === 0) return [];
+
+  // Optional, and deliberately so — see above.
+  let encode: ((bytes: Buffer) => Promise<Buffer>) | null = null;
+  try {
+    const { default: sharp } = await import('sharp');
+    encode = (bytes) =>
+      sharp(bytes)
+        // 16, not 8: the glyph edges are antialiased, so the page holds a few
+        // hundred distinct colours even though it is drawn from eight. At 16 it
+        // is indistinguishable from the original; at 8 the lettering thins.
+        .png({ palette: true, colours: 16, effort: 10, compressionLevel: 9 })
+        .toBuffer();
+  } catch {
+    console.warn(
+      '  ! sharp could not be loaded — the front page pictures are written as\n' +
+        '    stored, about four times larger than they need to be.',
+    );
+  }
+
+  const entries: ShowcaseBootEntry[] = [];
+  let stored = 0;
+  let written = 0;
+
+  for (const row of rows) {
+    // Neon returns `bytea` as a `\x…` hex string over the HTTP driver, the same
+    // way `api/showcase.ts` receives it.
+    const raw: unknown = row.image;
+    if (raw == null) continue;
+    const original = Buffer.isBuffer(raw)
+      ? raw
+      : Buffer.from(String(raw).replace(/^\\x/, ''), 'hex');
+    if (original.length === 0) continue;
+
+    // Re-encoding is an optimisation, never a reason to lose a picture: a page
+    // sharp chokes on is written as it was rather than dropped off the strip.
+    let bytes = original;
+    if (encode != null) {
+      try {
+        const smaller = await encode(original);
+        if (smaller.length > 0 && smaller.length < original.length) bytes = smaller;
+      } catch (error) {
+        console.warn(
+          `  ! page ${row.page_number}-${row.subpage}: could not re-encode ` +
+            `(${error instanceof Error ? error.message : String(error)}) — ` +
+            'written as stored.',
+        );
+      }
+    }
+
+    const updatedAt = new Date(row.updated_at).toISOString();
+    const src = showcasePicturePath(
+      Number(row.page_number),
+      Number(row.subpage),
+      updatedAt,
+      // Whatever it is now, it is a PNG if it went through sharp.
+      bytes === original && String(row.image_type ?? '').includes('gif') ? 'gif' : 'png',
+    );
+
+    const file = join(dist, src);
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, bytes);
+
+    entries.push({
+      page_number: Number(row.page_number),
+      subpage: Number(row.subpage),
+      position: Number(row.position),
+      title: row.title ?? '',
+      updated_at: updatedAt,
+      src,
+    });
+    stored += original.length;
+    written += bytes.length;
+  }
+
+  console.log(
+    `  ${entries.length} front-page pictures written to dist/${SHOWCASE_DIR}/ — ` +
+      `${(written / 1024).toFixed(0)} KB` +
+      (written < stored ? ` (${(stored / 1024).toFixed(0)} KB as stored)` : ''),
+  );
+
+  return entries;
+}
+
+/**
+ * The strip, as the landing page's own HTML carries it.
+ *
+ * Two things, and they are for two different readers. The `preload` links are
+ * for the browser's preload scanner, which reads the raw bytes of `<head>`
+ * before any script has run and starts the pictures then — the whole point of
+ * the exercise. The JSON block is for `useShowcase`, so its first render has
+ * the strip rather than an empty band that fills in after a round trip.
+ *
+ * Only the two landing addresses get it. Everywhere else it would be twenty
+ * fetches for a strip that page does not have.
+ */
+function showcaseHead(entries: readonly ShowcaseBootEntry[]): string {
+  if (entries.length === 0) return '';
+
+  const links = entries
+    .map((entry) => `<link rel="preload" as="image" href="${entry.src}" />`)
+    .join('\n    ');
+
+  // `<` escaped, so a title holding `</script>` cannot end the block early.
+  const json = JSON.stringify(entries).replace(/</g, '\\u003c');
+
+  return (
+    `\n    ${links}` +
+    `\n    <script type="application/json" id="${SHOWCASE_BOOT_ID}">${json}</script>`
+  );
+}
+
 /** Both languages' URLs for one path, which is what `hreflang` needs. */
 function alternates(path: string): Record<Language, string> {
   return Object.fromEntries(
@@ -233,6 +391,7 @@ async function main(): Promise<void> {
   }
 
   const { pages, backupAge } = await loadPages();
+  const showcase = await writeShowcase();
 
   const targets: Target[] = [
     ...STATIC_PATHS.map((path) => ({
@@ -271,6 +430,12 @@ async function main(): Promise<void> {
         .replace(
           /<div id="root">[\s\S]*?<\/div>|<div id="root"><\/div>/,
           `<div id="root">${fallbackBody(target, language)}</div>`,
+        )
+        // The strip, for the front page only — the pictures to start fetching
+        // and the list to draw them from. See {@link showcaseHead}.
+        .replace(
+          '</head>',
+          `${target.path === '/' ? showcaseHead(showcase) : ''}\n  </head>`,
         )
         // The note at the top of `index.html` explains the file to whoever
         // edits it. It is build-time documentation and there is no reason to

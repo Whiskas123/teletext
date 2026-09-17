@@ -19,6 +19,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { usePageData } from '@playhtml/react';
 
 import { normalizePage } from '../domain/pageOps';
+import {
+  SHOWCASE_BOOT_ID,
+  showcaseVersionKey,
+  type ShowcaseBootEntry,
+} from '../domain/showcase';
 import { pageKey, type SubpageCounts, SUBPAGE_COUNTS_CHANNEL } from '../domain/subpages';
 import { blobToBase64, renderPageBlob } from '../utils/pageCanvas';
 import { PAGES_CHANNEL } from './useEditPage';
@@ -52,6 +57,67 @@ export function showcaseImageUrl(
   return version == null ? base : `${base}&v=${encodeURIComponent(version)}`;
 }
 
+/**
+ * What the build baked into this page's HTML, read once.
+ *
+ * `scripts/prerender.ts` writes the strip into a `<script type="application/json">`
+ * on the two landing addresses, next to a `<link rel="preload">` per picture.
+ * Reading it here means the hook's *first* render already has the strip — no
+ * empty frame, and no waiting on `/api/showcase` before the `<img>`s exist for
+ * the browser to fetch. See the note in `src/domain/showcase.ts`.
+ *
+ * Read at module scope rather than in the hook: the block is written once by
+ * the build and never changes, so parsing it per mount would be work repeated
+ * for an answer that cannot have moved.
+ *
+ * Anything unexpected — no block, malformed JSON, a build that could not reach
+ * the database — leaves this empty, and the hook behaves exactly as it did
+ * before: it asks the endpoint and fills in when the answer arrives.
+ */
+function readBoot(): ShowcaseBootEntry[] {
+  try {
+    const block = globalThis.document?.getElementById(SHOWCASE_BOOT_ID);
+    if (block?.textContent == null) return [];
+    const parsed: unknown = JSON.parse(block.textContent);
+    return Array.isArray(parsed) ? (parsed as ShowcaseBootEntry[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+const BOOT = readBoot();
+
+/** The build's picture for each page *at the version the build saw*. */
+const BOOT_PICTURES = new Map(
+  BOOT.map((entry) => [
+    showcaseVersionKey(entry.page_number, entry.subpage, entry.updated_at),
+    entry.src,
+  ]),
+);
+
+/**
+ * Where the front page should fetch a page's picture.
+ *
+ * The build's own file when it has one for this exact version — a static file
+ * on the CDN, already preloaded and already in cache — and the endpoint for
+ * anything else: a page put on the strip, or redrawn, since the last deploy.
+ * Those arrive a moment later and are baked in at the next build.
+ *
+ * `/manage` deliberately does *not* use this (see `ShowcasePanel`): a moderator
+ * pressing Redraw has to see the new drawing, not the one the build kept.
+ */
+export function showcasePictureUrl(
+  pageNumber: number,
+  subpage: number,
+  version?: string,
+): string {
+  const baked =
+    version == null
+      ? undefined
+      : BOOT_PICTURES.get(showcaseVersionKey(pageNumber, subpage, version));
+  return baked ?? showcaseImageUrl(pageNumber, subpage, version);
+}
+
 export interface ShowcaseApi {
   entries: ShowcaseEntry[];
   loading: boolean;
@@ -75,12 +141,29 @@ export interface ShowcaseApi {
   ): Promise<{ ok: true } | { ok: false; error: string }>;
 }
 
-export function useShowcase(): ShowcaseApi {
+export interface ShowcaseOptions {
+  /**
+   * Always read past the edge cache.
+   *
+   * `/api/showcase` is held at the edge for a few minutes (see the note in
+   * `api/showcase.ts`), which is what a visitor wants and what a moderator
+   * cannot have: someone who just put a page on the strip and reloaded
+   * `/manage` would be shown the list as it was before they touched it, with
+   * nothing to say why. So the screen that *edits* the strip always asks the
+   * database, and the screen that only shows it takes the cached answer.
+   */
+  fresh?: boolean;
+}
+
+export function useShowcase({ fresh = false }: ShowcaseOptions = {}): ShowcaseApi {
   const [pages] = usePageData<PagesData>(PAGES_CHANNEL, {});
   const [counts] = usePageData<SubpageCounts>(SUBPAGE_COUNTS_CHANNEL, {});
   const { title } = usePageTitles();
 
-  const [entries, setEntries] = useState<ShowcaseEntry[]>([]);
+  // Seeded from the build, so the strip is on screen in the first frame rather
+  // than after a round trip. The fetch below still runs and still wins — this
+  // is a head start, not a cache.
+  const [entries, setEntries] = useState<ShowcaseEntry[]>(BOOT);
   const [error, setError] = useState<string | null>(null);
 
   /**
@@ -100,7 +183,15 @@ export function useShowcase(): ShowcaseApi {
   useEffect(() => {
     let cancelled = false;
 
-    fetch('/api/showcase', { headers: { accept: 'application/json' } })
+    // A parameter the endpoint ignores, which is enough to read past the edge:
+    // it is a different cache key, so the edge fetches rather than answering
+    // from what it has. Used for `fresh` callers, and for every `reload()` —
+    // which is only ever called after this browser added or removed a page, and
+    // has to see its own change.
+    const url =
+      fresh || attempt > 0 ? `/api/showcase?fresh=${Date.now()}` : '/api/showcase';
+
+    fetch(url, { headers: { accept: 'application/json' } })
       .then(async (response) => {
         if (!response.ok) throw new Error(`Failed (${response.status}).`);
         const body = (await response.json()) as { showcase?: ShowcaseEntry[] };
@@ -121,7 +212,7 @@ export function useShowcase(): ShowcaseApi {
     return () => {
       cancelled = true;
     };
-  }, [attempt]);
+  }, [attempt, fresh]);
 
   const has = useCallback(
     (pageNumber: number, subpage: number) =>

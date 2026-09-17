@@ -98,6 +98,22 @@ export default async function handler(
         from showcase_pages
         order by position, page_number, subpage
       `;
+      // Held at the edge, because every visitor asks this and the answer only
+      // changes when a moderator changes it. Uncached it was a function
+      // invocation and a database query — about half a second — on the path to
+      // the front page's first picture, for a list of twenty rows that had been
+      // the same for weeks. The landing page no longer waits on it at all (the
+      // build bakes the strip into the HTML; see `scripts/prerender.ts`), so
+      // this is what `/manage` and a newly-added page are served from.
+      //
+      // `stale-while-revalidate` is the half that matters: past the five
+      // minutes the edge answers from what it has and refreshes behind the
+      // reader, so nobody waits for the database and a change is still on
+      // screen within minutes.
+      res.setHeader(
+        'Cache-Control',
+        'public, s-maxage=300, stale-while-revalidate=86400',
+      );
       json(res, 200, { showcase: rows });
       return;
     }

@@ -62,7 +62,10 @@ export function ManageArchivePage() {
     offset: archive.offset,
   });
 
-  const showcase = useShowcase();
+  // Fresh, not from the edge: this is the screen that changes the strip, and it
+  // has to show what the database holds rather than what the CDN was handed a
+  // few minutes ago. See {@link ShowcaseOptions}.
+  const showcase = useShowcase({ fresh: true });
   const snapshot = useSnapshot();
   const { kindOf, setKind } = usePageKinds();
 
