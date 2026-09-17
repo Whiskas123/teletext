@@ -1251,6 +1251,123 @@ button.frontpage-watch-kind:focus-visible {
   height: 100%;
 }
 
+/* ── mix ───────────────────────────────────────────────────────────────────── */
+/*
+ * Teletext over the picture, which is what teletext always was.
+ *
+ * A page was never a screen of its own: it was drawn into whatever the tube was
+ * already showing, and every character cell coded black as its background was a
+ * hole the broadcast came through. That is the whole of mix mode, and it is
+ * the whole of this rule — `background-color: transparent` on the cells that
+ * were black, and the live picture sitting behind them. The grid renders
+ * identically either way and knows nothing about any of it; see the MIX key in
+ * `CrtTelevision.tsx` for what is behind the hole.
+ *
+ * Scoped to the set rather than written on `.teletext-bg-black` under a class of
+ * its own, because a black cell is only a hole on a television. The same grid is
+ * a thumbnail on the front page, an export, and the thing being drawn on in the
+ * editor, and in all three a black cell is black.
+ */
+.crt-signal {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  /* The tube is 4:3 and a webcam rarely is: fill it and lose the edges, rather
+     than letterbox a television. */
+  object-fit: cover;
+  /* Mirrored, because what is on this tube is the person in front of it, and a
+     picture of yourself that moves the wrong way is a puzzle rather than a
+     reflection. */
+  transform: scaleX(-1);
+  /*
+   * Held down and taken off the boil.
+   *
+   * Teletext is eight saturated colours at full brightness and it has to stay
+   * legible over whatever the room happens to look like — a bright wall behind
+   * you would otherwise white out half a page of yellow text. A broadcast set
+   * did the same thing in hardware, mixing the text in at a level that kept it
+   * readable over the picture.
+   */
+  filter: brightness(0.72) saturate(0.85) contrast(1.05);
+}
+
+.crt-tv[data-mix] .crt-raster .teletext-screen {
+  background: transparent;
+}
+
+.crt-tv[data-mix] .crt-raster .teletext-bg-black {
+  background-color: transparent;
+}
+
+/*
+ * The lamp beside MIX while the browser's permission prompt is up.
+ *
+ * `steps(1)` rather than a fade: this is a lamp being switched, and the wait it
+ * marks belongs to the person answering the prompt, which can be as long as they
+ * like. Under `prefers-reduced-motion` it simply stays lit — the information is
+ * "the set is asking", and that survives the blink being taken away.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .crt-lamp-tuning {
+    animation: crt-lamp-blink 900ms steps(1) infinite;
+  }
+}
+
+@keyframes crt-lamp-blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  50.01%,
+  100% {
+    opacity: 0.25;
+  }
+}
+
+/*
+ * What the tube says when the input MIX asked for has nothing on it.
+ *
+ * Over the page rather than instead of it, and in the page's own typeface: the
+ * teletext is still coming through, and the only thing missing is what was
+ * meant to be behind it.
+ */
+.crt-no-signal {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6em;
+  max-width: 80%;
+  padding: 1.2em 1.6em;
+  background: #000;
+  border: 0.3em solid #f00;
+  font-family: 'Press Start 2P', 'Courier New', Courier, monospace;
+  /* `cqw` against the glass, as everything else in the picture is, so the notice
+     is the same fraction of the tube whatever size the set is drawn at — with a
+     floor in absolute units, because the phone's tube is small enough that the
+     fraction alone would put this under nine pixels. A notice nobody can read is
+     not a notice. */
+  font-size: max(2.4cqw, 0.75rem);
+  line-height: 1.5;
+  text-align: center;
+  color: #ff0;
+  pointer-events: none;
+}
+
+.crt-no-signal strong {
+  font-weight: 400;
+  letter-spacing: 0.1em;
+}
+
+.crt-no-signal span {
+  color: #fff;
+  font-size: 0.8em;
+}
+
 /* Shadow mask lines. Fine enough to read as a tube, not as a filter. */
 .crt-scanlines {
   position: absolute;
@@ -1698,6 +1815,19 @@ button.frontpage-watch-kind:focus-visible {
 .crt-remote .cap {
   font-size: 13px;
   letter-spacing: 1.6px;
+}
+
+/*
+ * The maker's name along the bottom of the handset, ranged right.
+ *
+ * Here rather than as a `text-anchor` attribute on the element, because a class
+ * rule beats a presentation attribute however specific the attribute looks —
+ * `.cap`'s own `text-anchor: middle` would win, and the wordmark would centre
+ * itself on the point it was meant to end at and hang off the plastic. Two
+ * classes deep so it outranks `.cap`.
+ */
+.crt-remote .crt-remote-mark {
+  text-anchor: end;
 }
 
 /* Bigger keys, further to travel. */

@@ -126,6 +126,16 @@ export interface Copy {
     fastext(label: string, page: number): string;
     switchOff: string;
     switchOn: string;
+    /**
+     * The MIX key: teletext over the live picture, as a broadcast set did it.
+     * Here the live picture is the visitor's own camera — see `domain/signal.ts`.
+     */
+    mixOn: string;
+    mixOff: string;
+    /** What the tube says when there is no picture to mix with. */
+    noSignal: string;
+    cameraRefused: string;
+    cameraMissing: string;
   };
   /** The editor's own panel. */
   editor: {
@@ -351,6 +361,11 @@ export const COPY: Record<Language, Copy> = {
       fastext: (label, page) => `${label} (página ${page})`,
       switchOff: 'Desligar o televisor',
       switchOn: 'Ligar o televisor',
+      mixOn: 'MIX: pôr o teletexto por cima da imagem da câmara',
+      mixOff: 'MIX: voltar ao fundo preto e desligar a câmara',
+      noSignal: 'SEM SINAL',
+      cameraRefused: 'A câmara foi recusada',
+      cameraMissing: 'Não há câmara neste aparelho',
     },
     editor: {
       page: 'Página',
@@ -430,7 +445,7 @@ export const COPY: Record<Language, Copy> = {
       yourName: 'O teu nome',
       namePlaceholder: '',
       yourSnippet: 'A tua página',
-      textHint: 'Clica numa célula e escreve. As setas movem o cursor.',
+      textHint: 'Clica numa célula e escreve com o teclado.',
       pixelHint:
         'Arrasta para pintar.',
       tool: 'Ferramenta',
@@ -540,6 +555,11 @@ export const COPY: Record<Language, Copy> = {
       fastext: (label, page) => `${label} (page ${page})`,
       switchOff: 'Switch the television off',
       switchOn: 'Switch the television on',
+      mixOn: 'MIX: lay the teletext over the camera picture',
+      mixOff: 'MIX: back to the black background, camera off',
+      noSignal: 'NO SIGNAL',
+      cameraRefused: 'The camera was refused',
+      cameraMissing: 'There is no camera on this device',
     },
     editor: {
       page: 'Page',

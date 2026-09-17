@@ -60,6 +60,19 @@
  * strip lifted from the artwork comes out about ninety pixels tall on a phone,
  * with keys under twenty-five — below what a finger can reliably hit.
  *
+ * ## MIX
+ *
+ * Teletext was drawn into the picture that was already on the tube, and every
+ * cell coded black as its background was a hole the broadcast showed through.
+ * The MIX key opens those holes. There is no broadcast behind this archive, so
+ * what shows through is the one live picture a browser can offer — the camera
+ * pointed at whoever is watching, held by {@link useCameraSignal} and never sent
+ * anywhere. The holes themselves are one CSS rule keyed off `data-mix` on the
+ * set; the grid renders exactly as it always did (see `App.css`).
+ *
+ * Switching the set off gives the camera back, the same way it drops every other
+ * key: an unplugged television is not watching anybody.
+ *
  * ## Power
  *
  * The power button collapses the raster the way a CRT does: the picture
@@ -80,8 +93,11 @@ import {
 } from 'react';
 
 import { INDEX_LINE } from '../../domain/indexLine';
+import { isSignalFault, type SignalState } from '../../domain/signal';
+import { MIX_ENABLED } from '../../features';
 import { SevenSegment } from '../chrome/SevenSegment';
 import { useMediaQuery } from '../../utils/useMediaQuery';
+import { useCameraSignal } from './useCameraSignal';
 import { useCopy } from './useCopy';
 import { useDialPad } from './useDialPad';
 
@@ -326,6 +342,52 @@ function GlassSurface() {
   );
 }
 
+/* ── the second input ──────────────────────────────────────────────────────── */
+
+/**
+ * The live picture, behind the page.
+ *
+ * A `<video>` and nothing else: no canvas, no frame ever read back, so the
+ * stream goes from the camera to this element and stops there. `muted` is not a
+ * preference — an unmuted video is not allowed to start without a gesture, and
+ * this one has no sound to play anyway. `playsInline` keeps iOS from throwing it
+ * into the system's fullscreen player, which would put the phone's video
+ * chrome over a television set.
+ *
+ * `srcObject` is a property, not an attribute, so it is set in an effect rather
+ * than rendered — and cleared on the way out, so the element is not still
+ * holding the stream when the tracks are stopped.
+ */
+function SignalPicture({ stream }: { stream: MediaStream }) {
+  const video = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const element = video.current;
+    if (element == null) return;
+    element.srcObject = stream;
+    // Autoplay should carry a muted video, but a browser refusing it is not
+    // worth an unhandled rejection: the worst case is a still tube, and the
+    // `autoPlay` attribute has already asked once.
+    const started = element.play?.();
+    if (started != null) void started.catch(() => {});
+    return () => {
+      element.srcObject = null;
+    };
+  }, [stream]);
+
+  return (
+    <video
+      ref={video}
+      className="crt-signal"
+      autoPlay
+      muted
+      playsInline
+      disablePictureInPicture
+      aria-hidden="true"
+    />
+  );
+}
+
 /* ── the remote ────────────────────────────────────────────────────────────── */
 
 /**
@@ -342,12 +404,20 @@ const FASTEXT_FILLS = ['#b7302a', '#2f8f43', '#c9a72a', '#2a8fae'] as const;
 /**
  * The handset's canvas, in the same user units the cabinet is drawn in.
  *
- * Wider than it is tall by about two to one, so that spanning a phone it comes
- * out a little over half the height of the picture above it: enough for two rows
- * of keys a thumb can hit, and not so much that the set has nowhere to be.
+ * Wider than it is tall by about five to three, so that spanning a phone it
+ * comes out a little over half the height of the picture above it: enough for
+ * two rows of keys a thumb can hit, and not so much that the set has nowhere to
+ * be.
+ *
+ * The last forty-eight units are the function row, which holds one key. MIX
+ * could not go anywhere in the rows above it — the top row is full at four caps
+ * and a display, the keypad is a keypad, and the fastext strip is four fifths of
+ * the width by definition — and shaving those to make room would have cost every
+ * key on the handset a few units to buy one. A band of blank plastic under the
+ * strip was cheaper, and it is where a set of the era put its odd keys anyway.
  */
 const REMOTE_W = 680;
-const REMOTE_H = 356;
+const REMOTE_H = 404;
 
 /** Half the gap between caps, in the handset's units — see {@link PanelKey}. */
 const REMOTE_HIT_PADDING = 5;
@@ -373,8 +443,21 @@ const REMOTE_FT_PITCH = 165;
 const REMOTE_FT_Y = 296;
 const REMOTE_FT_H = 32;
 const REMOTE_FT_HIT_Y = 284;
-const REMOTE_FT_HIT_H = 56;
+/**
+ * Twelve units shorter than the blank plastic below the strip used to allow.
+ *
+ * The function row now starts at 341 once its own padding is counted, and two
+ * hit areas that overlap mean a press near the boundary lands on whichever
+ * element happens to be later in the document — a key that works or does not
+ * depending on where it is in the file. So the strip gives back the units it was
+ * only ever borrowing, and keeps the ones above it, which nothing else wants.
+ */
+const REMOTE_FT_HIT_H = 46;
 const REMOTE_FT_HIT_PADDING = 10;
+
+/** The function row: MIX, and the lamp that says whether it is on. */
+const REMOTE_MIX = { x: 20, y: 346, width: 145, height: 44 };
+const REMOTE_MIX_LAMP = { cx: 196, cy: 368 };
 
 /** The rockers and the power key, in a row beside the LED window. */
 const REMOTE_ROCKER_W = 76;
@@ -441,6 +524,63 @@ function KeyCap({
   );
 }
 
+/**
+ * The lamp beside the MIX key, which is the only thing that reports the camera.
+ *
+ * Amber rather than the power key's green: this is a function that is engaged,
+ * not a set that is alive, and every television with two lamps on it made that
+ * distinction the same way. It blinks while the browser's permission prompt is
+ * up, because that wait belongs to the person answering it and can last as long
+ * as they like — a lamp that lit only on the answer would leave the key looking
+ * dead for the whole of it. A fault turns it red for as long as the tube is
+ * saying why, and then it goes out.
+ *
+ * Drawn twice at two scales, so the ring is given rather than derived: the panel
+ * carries a 4.5-unit lamp on a 1000-unit cabinet and the handset a 7.5 on 680,
+ * and the hairline around it is not the same fraction of either.
+ */
+function MixLamp({
+  cx,
+  cy,
+  r,
+  ring,
+  strokeWidth = 1,
+  state,
+}: {
+  cx: number;
+  cy: number;
+  r: number;
+  ring: number;
+  strokeWidth?: number;
+  state: SignalState;
+}) {
+  const fill = isSignalFault(state)
+    ? 'url(#ledR)'
+    : state === 'off'
+      ? '#141312'
+      : 'url(#ledA)';
+  return (
+    <>
+      <circle
+        className={state === 'tuning' ? 'crt-lamp-tuning' : undefined}
+        cx={cx}
+        cy={cy}
+        r={r}
+        fill={fill}
+      />
+      <circle
+        cx={cx}
+        cy={cy}
+        r={ring}
+        fill="none"
+        stroke="#000"
+        strokeOpacity=".7"
+        strokeWidth={strokeWidth}
+      />
+    </>
+  );
+}
+
 export interface RemoteHandsetProps {
   /** Three glyphs for the page window, already dialled or rolled. */
   pageDigits: string;
@@ -456,6 +596,10 @@ export interface RemoteHandsetProps {
   onSubpageStep?: (delta: 1 | -1) => void;
   onFastext?: (pageNumber: number) => void;
   onPower: () => void;
+  /** Hole the black background through to the live picture, or stop. */
+  onMix?: () => void;
+  /** What the MIX lamp is reporting; see {@link SignalState}. */
+  signal: SignalState;
 }
 
 /**
@@ -481,6 +625,8 @@ function RemoteHandset({
   onSubpageStep,
   onFastext,
   onPower,
+  onMix,
+  signal,
 }: RemoteHandsetProps) {
   const copy = useCopy();
 
@@ -779,6 +925,47 @@ function RemoteHandset({
             );
           })}
         </g>
+
+        {/*
+          * ===== FUNCTION ROW =====
+          *
+          * MIX, its lamp, and the maker's name in the space left over — which is
+          * what a remote of this vintage had along its bottom edge, and what
+          * keeps a row with one key in it from reading as an accident.
+          */}
+        <g id="remote-mix">
+          {MIX_ENABLED && (
+            <>
+              <PanelKey
+                id="rc-mix"
+                label={signal === 'live' ? copy.tv.mixOff : copy.tv.mixOn}
+                onPress={onMix}
+                hit={REMOTE_MIX}
+                pad={REMOTE_HIT_PADDING}
+              >
+                <KeyCap {...REMOTE_MIX} />
+                <text
+                  className="lg"
+                  fill="#dcdcda"
+                  x={REMOTE_MIX.x + REMOTE_MIX.width / 2}
+                  y={REMOTE_MIX.y + 30}
+                >
+                  MIX
+                </text>
+              </PanelKey>
+              <MixLamp {...REMOTE_MIX_LAMP} r={7.5} ring={11} strokeWidth={1.6} state={signal} />
+            </>
+          )}
+          {/* Ranged right off the body's edge rather than centred on a guessed
+              width — `.cap` is set in a face that is not loaded on every device,
+              and a wordmark that overflows the plastic on the one machine
+              without Michroma is worse than no wordmark. See `.crt-remote-mark`
+              in `App.css`, which is where the anchor has to live: a class rule
+              beats the `text-anchor` presentation attribute. */}
+          <text className="cap crt-remote-mark" x={REMOTE_W - 26} y={REMOTE_MIX_LAMP.cy + 6}>
+            TELETEXTRON
+          </text>
+        </g>
       </svg>
     </div>
   );
@@ -812,6 +999,22 @@ const FASTEXT_KEY_WIDTH = 51.5;
 const FASTEXT_KEY_PITCH = 57.5;
 const FASTEXT_X0 = 380;
 
+/**
+ * MIX, in the one gap the front panel had left.
+ *
+ * The keypad ends at 604 and the page rockers begin at 642, which is 38 units of
+ * blank plastic — and a 26-wide cap in the middle of it leaves exactly six units
+ * either side, the same gap every other pair of keys on this panel has. So the
+ * key that had nowhere to go turns out to fit the panel's own rhythm without
+ * moving anything, and its hit area meets its neighbours' at the halfway line
+ * like all the rest (see {@link PanelKey}).
+ *
+ * Smaller than the keys around it because it is a function rather than a
+ * destination: you press a number ten times an evening and MIX twice.
+ */
+const MIX_KEY = { x: 610, y: 641, width: 26, height: 26 };
+const MIX_LAMP = { cx: 623, cy: 702 };
+
 export function CrtTelevision({
   children,
   pageNumber,
@@ -837,10 +1040,31 @@ export function CrtTelevision({
   // See {@link useDialPad}.
   const dial = useDialPad(onPageEntry);
 
+  // The set's second input: the camera, when MIX has asked for it. The set owns
+  // it rather than the screen around it, because it is a key on this panel and
+  // nothing outside has any business holding a camera on the viewer's behalf.
+  const signal = useCameraSignal();
+
   // Powered for everything except a tube that has finished collapsing: the
   // switch-off animation is still showing a picture, so the panel stays lit
   // through it and only goes dark when the dot does.
   const lit = power !== 'off';
+
+  /*
+   * An unplugged television is not watching anybody.
+   *
+   * Keyed off the tube going dark rather than off the press, so the camera
+   * survives the collapse: the raster spends 900ms squashing what it was showing
+   * into a dot, and a picture that vanished at the start of that would take half
+   * the animation's subject with it. Written as an effect rather than a line in
+   * `togglePower` because there is more than one way to end up dark — reduced
+   * motion skips straight to `off` — and this is the one place that sees all of
+   * them. `stop` is stable, so this runs when `lit` changes and not otherwise.
+   */
+  const stopSignal = signal.stop;
+  useEffect(() => {
+    if (!lit) stopSignal();
+  }, [lit, stopSignal]);
 
   // A press mid-collapse or mid-bloom is dropped rather than reversed: a real
   // set's relay can't be flipped again until it's finished throwing, and
@@ -890,6 +1114,15 @@ export function CrtTelevision({
   const pageStep = lit ? onPageStep : undefined;
   const subpageStep = lit ? onSubpageStep : undefined;
   const fastext = lit ? onFastext : undefined;
+  // Undefined on a build with MIX switched off, the same way it is undefined on
+  // a set that is switched off: the key is a piece of plastic and then, one step
+  // further on, not there at all. See `MIX_ENABLED` in `features.ts`.
+  const mix = lit && MIX_ENABLED ? signal.toggle : undefined;
+
+  // The holes in the page, and the picture behind them. Both are the same fact
+  // and it is stated once: `data-mix` opens the black cells (see `App.css`) and
+  // the `<video>` is what shows through them.
+  const mixing = lit && signal.state === 'live';
 
   // What the LED window reads. A dial in progress shows the digits so far and a
   // dash for each still to come (`2--`), which is what told you the set had
@@ -910,7 +1143,12 @@ export function CrtTelevision({
 
   return (
     <>
-      <div className="crt-tv" data-power={power} data-compact={compact || undefined}>
+      <div
+        className="crt-tv"
+        data-power={power}
+        data-compact={compact || undefined}
+        data-mix={mixing || undefined}
+      >
         <svg
           className="crt-tv-svg"
           viewBox={viewBox}
@@ -989,6 +1227,13 @@ export function CrtTelevision({
               <stop offset=".45" stopColor="#d8321f" />
               <stop offset="1" stopColor="#4a0d06" />
             </radialGradient>
+            {/* A function engaged, which on these panels was never the same
+                colour as a set being alive. See {@link MixLamp}. */}
+            <radialGradient id="ledA" cx=".5" cy=".45" r=".55">
+              <stop offset="0" stopColor="#ffe7a6" />
+              <stop offset=".45" stopColor="#f0a81e" />
+              <stop offset="1" stopColor="#5a3a05" />
+            </radialGradient>
             <linearGradient id="ftkey" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0" stopColor="#fff" stopOpacity=".22" />
               <stop offset=".25" stopColor="#fff" stopOpacity="0" />
@@ -1048,6 +1293,11 @@ export function CrtTelevision({
             <symbol id="k40x26">
               <rect x=".5" y=".5" width="39" height="25" rx="2.5" fill="url(#key)" stroke="#0a0a0a" />
               <path d="M3 1.8H37" stroke="#9a9a94" strokeOpacity=".55" />
+            </symbol>
+            {/* The one square cap: MIX, in the gap beside the keypad. */}
+            <symbol id="k26">
+              <rect x=".5" y=".5" width="25" height="25" rx="2.5" fill="url(#key)" stroke="#0a0a0a" />
+              <path d="M3 1.8H23" stroke="#9a9a94" strokeOpacity=".55" />
             </symbol>
 
             {/* ===== realism layer ===== */}
@@ -1551,6 +1801,53 @@ export function CrtTelevision({
                   })}
                 </g>
 
+                {/*
+                  * MIX, between the keypad and the rockers.
+                  *
+                  * The cap carries two overlapping outlines rather than the word
+                  * — twenty-six units will not hold three letters at the legend
+                  * size the other keys use — and the word goes under it on the
+                  * caption line the panel already has at 683. Two rectangles,
+                  * one in front of the other, is what the key does: a page laid
+                  * over a picture.
+                  */}
+                {MIX_ENABLED && (
+                  <g id="mix">
+                    <PanelKey
+                      id="btn-mix"
+                      label={signal.state === 'live' ? copy.tv.mixOff : copy.tv.mixOn}
+                      onPress={mix}
+                      hit={MIX_KEY}
+                    >
+                      <use href="#k26" x={MIX_KEY.x} y={MIX_KEY.y} filter="url(#castKey)" />
+                      <rect
+                        className="lg"
+                        x="615"
+                        y="648"
+                        width="11"
+                        height="8"
+                        fill="none"
+                        stroke="#dcdcda"
+                        strokeWidth="1.4"
+                      />
+                      <rect
+                        className="lg"
+                        x="620"
+                        y="653"
+                        width="11"
+                        height="8"
+                        fill="#2a2927"
+                        stroke="#dcdcda"
+                        strokeWidth="1.4"
+                      />
+                    </PanelKey>
+                    <text className="cap" x={MIX_LAMP.cx} y="683">
+                      MIX
+                    </text>
+                    <MixLamp {...MIX_LAMP} r={4.5} ring={7} state={signal.state} />
+                  </g>
+                )}
+
                 {/* page (large) over subpage (small): size hierarchy */}
                 <g id="page-nav">
                   <PanelKey
@@ -1654,9 +1951,37 @@ export function CrtTelevision({
           * over the top from in here.
           */}
         <div className="crt-glass">
-          <div className="crt-raster">{children}</div>
+          {/*
+            * The live picture goes *inside* the raster, under the page.
+            *
+            * Inside, because everything that happens to the picture has to
+            * happen to both halves of it: the tube collapsing into a line takes
+            * the camera with it, which is the whole point of switching a
+            * television off. Under, because teletext was drawn into the signal
+            * and not the other way round — the page is on top and the black
+            * cells are the holes. See `[data-mix]` in `App.css`.
+            */}
+          <div className="crt-raster">
+            {signal.stream != null && <SignalPicture stream={signal.stream} />}
+            {children}
+          </div>
           <div className="crt-beam" />
           <div className="crt-dot" />
+          {/*
+            * What a set put up when the input it was asked for had nothing on
+            * it. Over the page rather than instead of it: the teletext is still
+            * being transmitted, and it is only the picture behind that is
+            * missing. It says itself and then gets out of the way — see
+            * `SIGNAL_ERROR_MS`.
+            */}
+          {isSignalFault(signal.state) && (
+            <div className="crt-no-signal" role="status">
+              <strong>{copy.tv.noSignal}</strong>
+              <span>
+                {signal.state === 'refused' ? copy.tv.cameraRefused : copy.tv.cameraMissing}
+              </span>
+            </div>
+          )}
           <div className="crt-scanlines" />
           <GlassSurface />
         </div>
@@ -1696,6 +2021,8 @@ export function CrtTelevision({
               onSubpageStep={subpageStep}
               onFastext={fastext}
               onPower={togglePower}
+              onMix={mix}
+              signal={signal.state}
             />
           )}
         </div>
