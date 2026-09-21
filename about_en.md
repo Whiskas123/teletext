@@ -1,0 +1,21 @@
+**Tele-textual** is a participatory installation by [João Bernardo Narciso](https://joaobernardo.me/en) built on an archive of old teletext pages from Portuguese television. Beyond the archive, anyone can create new pages, which then become accessible to everyone. Tele-textual is thus a window onto a piece of our collective past, while also enabling new things to be made within the constraints of a (seemingly) obsolete technology.
+
+Collective experience is central to this project. Pages can be browsed alone or in rooms with other people, where the group collectively decides which page to view next. Several people can also create and edit pages at the same time on a shared canvas.
+
+## What is teletext?
+Teletext is a service for broadcasting text and simple graphics via television. It emerged in the United Kingdom in the 1970s and spread across much of Europe, but only reached Portugal in the second half of the 1990s. Channels broadcast teletext as numbered pages from 100 to 999. These could contain a wide range of information: news, weather forecasts, sports results, lottery draws, horoscopes, commercial advertisements, and many other kinds of useful information. There were even classified ads and chat rooms, in which users could take part by sending SMS messages. This brought an unexpected interactivity to teletext that, in a way, anticipated what the internet would democratise years later.
+
+Even with the advent of the internet, the service remained important for a long time because it was free, easy to use, and widely available: all you needed was a television set.
+
+Teletext also serves an important accessibility function, since channels still commonly broadcast subtitles through page 888.
+
+## How was the archive built?
+Because most pages were ephemeral, with many updated or rewritten daily, it is very difficult to build a comprehensive teletext archive. The main international archiving efforts work on a relatively small scale, using specialised equipment to extract the teletext data embedded in certain analogue recordings.
+
+The Tele-textual archive was built by taking advantage of a technological anachronism. The porutugese RTP and SIC channels offered teletext browsers on their websites. Using [Arquivo.pt](https://arquivo.pt), the Portuguese web archive, it was possible to compile over three thousand pages. Since teletext arrived in Portugal relatively late, at roughly the same time as the internet, this method made it possible to build a respectably sized archive, providing an overview of what this service was like in Portugal.
+
+## What is the purpose of this project?
+1. Tele-textual is an effort to archive and celebrate a communication technology that was so present in so many people's lives, yet gradually faded from our habits and memories. The technology itself matters, and so do the ways it was used and what people chose to communicate through it. The archived pages capture the *zeitgeist* of the periods in which they were published and are enormously varied. Examples include pages about major events such as Expo 98 and Porto 2001 (European Culture Capital), the Police's advice for its Safe School programme, which urged children not to show off their CD players, and the ads for SMS services promising polyphonic ringtones or love compatibility tests (the "TV Amor" service) in exchange for a hidden monthly fee.
+2. Tele-textual is a tribute to the ingenuity of those who, under such severe technological limitations, designed true works of art, which can now be rediscovered at a time when pixel art is enjoying renewed interest.
+3. Collective experience is central to Tele-textual. In a world where screens proliferate and streaming is the main way of watching television content, gathering several people around a single screen, whether to watch or to create new pages, is a disruptive act.
+4. Finally, Tele-textual is a tool that encourages creativity in an innovative way. Many artists and thinkers have historically pointed to constraint as a creative engine. At a time when getting from an idea to a finished work is technically ever simpler and more accessible, it is fascinating to try to create something within the limitations imposed by a supposedly archaic technology.
