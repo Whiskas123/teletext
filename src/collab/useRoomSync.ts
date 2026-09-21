@@ -34,9 +34,10 @@ import { useCallback, useMemo } from 'react';
 import { usePageData } from '@playhtml/react';
 import {
   inPageRange,
-  nextNonEmptyPage,
+  nextPageWithContent,
   normalizePage,
-  prevNonEmptyPage,
+  pageWithContentFrom,
+  prevPageWithContent,
 } from '../domain/pageOps';
 import {
   MIN_SUBPAGE,
@@ -125,6 +126,14 @@ export interface RoomSyncApi {
   peekNextNonEmpty(): number | null;
   /** The page {@link gotoPrevNonEmpty} would move to. See {@link peekNextNonEmpty}. */
   peekPrevNonEmpty(): number | null;
+  /**
+   * Where dialling `target` should land: itself when it shows something,
+   * otherwise the next page that does. `null` when the number is out of range
+   * or nothing in the service shows anything — including while the document is
+   * still syncing, which is why the caller keeps the number rather than
+   * treating this as a refusal. See `pageWithContentFrom`.
+   */
+  resolveDial(target: number): number | null;
   /** Step the whole room through the page's carousel, wrapping at both ends. */
   stepSubpageBy(delta: number): void;
 }
@@ -201,14 +210,14 @@ export function useRoomSync(): RoomSyncApi {
   );
 
   const gotoNextNonEmpty = useCallback((): NavigationResult => {
-    const target = nextNonEmptyPage(displayedPageNumber, pages ?? {});
+    const target = nextPageWithContent(displayedPageNumber, pages ?? {});
     if (target === null) return 'none-available';
     setDisplayedPageDirect(target);
     return 'ok';
   }, [displayedPageNumber, pages, setDisplayedPageDirect]);
 
   const gotoPrevNonEmpty = useCallback((): NavigationResult => {
-    const target = prevNonEmptyPage(displayedPageNumber, pages ?? {});
+    const target = prevPageWithContent(displayedPageNumber, pages ?? {});
     if (target === null) return 'none-available';
     setDisplayedPageDirect(target);
     return 'ok';
@@ -226,13 +235,18 @@ export function useRoomSync(): RoomSyncApi {
    * page they would have jumped to on a set nobody had to agree with.
    */
   const peekNextNonEmpty = useCallback(
-    () => nextNonEmptyPage(displayedPageNumber, pages ?? {}),
+    () => nextPageWithContent(displayedPageNumber, pages ?? {}),
     [displayedPageNumber, pages],
   );
 
   const peekPrevNonEmpty = useCallback(
-    () => prevNonEmptyPage(displayedPageNumber, pages ?? {}),
+    () => prevPageWithContent(displayedPageNumber, pages ?? {}),
     [displayedPageNumber, pages],
+  );
+
+  const resolveDial = useCallback(
+    (target: number) => pageWithContentFrom(target, pages ?? {}),
+    [pages],
   );
 
   return {
@@ -246,6 +260,7 @@ export function useRoomSync(): RoomSyncApi {
     gotoPrevNonEmpty,
     peekNextNonEmpty,
     peekPrevNonEmpty,
+    resolveDial,
     stepSubpageBy,
   };
 }

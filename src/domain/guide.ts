@@ -4,8 +4,7 @@
  * This module is framework-free and side-effect-free so it can be unit- and
  * property-tested without a live playhtml/Yjs connection. It reuses the shared
  * collaborative shapes (`PagesData`, `TitlesData`) from `src/collab/types.ts`
- * and the page predicates (`isNonEmptyPage`, `normalizePage`) from
- * `src/domain/pageOps.ts`.
+ * and the page predicate (`hasContentAt`) from `src/domain/pageOps.ts`.
  *
  * Requirements covered: 9.7, 9.11, 9.13.
  * Correctness property: 22 (guide listing has exactly the qualifying entries in
@@ -13,7 +12,13 @@
  */
 
 import type { PagesData, TitlesData } from '../collab/types';
-import { isNonEmptyPage, normalizePage } from './pageOps';
+/*
+ * The listing qualifies a page the same way the PAGE keys reach one — borrowed
+ * rather than restated, because the two coming apart is exactly what put a
+ * blank page in the directory and under the step keys at the same time. A row
+ * leading to a blank screen is a dead end; see `hasVisibleContent`.
+ */
+import { hasContentAt } from './pageOps';
 
 /** Lowest valid Page_Number (inclusive). Teletext pages run 100..999. */
 const MIN_PAGE = 100;
@@ -39,16 +44,9 @@ function titleAt(titles: TitlesData, n: number): string {
   return typeof raw === 'string' ? raw : '';
 }
 
-/** Whether the stored page at Page_Number `n` is a Non_Empty_Page. */
-function isNonEmptyAt(pages: PagesData, n: number): boolean {
-  const raw = pages ? (pages as Record<PropertyKey, unknown>)[n] : undefined;
-  if (raw === undefined || raw === null) return false;
-  return isNonEmptyPage(normalizePage(raw));
-}
-
 /**
- * The TV_Guide listing: exactly the Page_Numbers in `100..999` that are a
- * Non_Empty_Page OR have a Page_Title of length 1 or greater, each paired with
+ * The TV_Guide listing: exactly the Page_Numbers in `100..999` that show
+ * something OR have a Page_Title of length 1 or greater, each paired with
  * its current Page_Title (`''` when none), ordered strictly ascending by
  * Page_Number.
  *
@@ -64,7 +62,7 @@ export function guideEntries(
   const entries: GuideEntry[] = [];
   for (let n = MIN_PAGE; n <= MAX_PAGE; n++) {
     const title = titleAt(titles, n);
-    const qualifies = title.length >= 1 || isNonEmptyAt(pages, n);
+    const qualifies = title.length >= 1 || hasContentAt(pages, n);
     if (qualifies) {
       entries.push({ pageNumber: n, title });
     }

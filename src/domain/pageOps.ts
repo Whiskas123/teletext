@@ -126,10 +126,49 @@ function isEmptyCell(cell: Cell): boolean {
  * Whether a page is a Non_Empty_Page: it contains at least one cell differing
  * from the default empty cell (space char, white on black, no graphics).
  *
- * Requirements: 3.6, 3.7, 3.8 (navigation depends on this).
+ * This is the *claim* on a page number, not the picture on it — a cell can
+ * differ from the default and still draw nothing (a coloured space, a mosaic
+ * with no pixels lit). Use it to decide whether a number is spoken for, which
+ * is what the management screen, the renumbering planner and "give me a free
+ * playground page" all mean by occupied; use {@link hasVisibleContent} to
+ * decide whether there is anything to look at.
  */
 export function isNonEmptyPage(page: TeletextPage): boolean {
   return page.some((cell) => !isEmptyCell(cell));
+}
+
+/**
+ * Whether a cell paints anything at all on the screen.
+ *
+ * Transcribed from what the grid actually renders (`CellView` in
+ * `TeletextGrid.tsx`), because a viewer's idea of "there is something here"
+ * can only be the picture:
+ *
+ * - a background other than black is a coloured block, and shows;
+ * - a cell with `graphics` set renders as a mosaic *instead of* its character,
+ *   and the mosaic shows only if at least one of its six pixels is lit;
+ * - otherwise the character shows, unless it is a space.
+ *
+ * Foreground colour, blink and double height are not content on their own:
+ * they change how something is drawn, and there is nothing to draw. A page of
+ * yellow spaces is a blank screen, however many cells it has stored.
+ */
+export function isVisibleCell(cell: Cell): boolean {
+  if (cell.bg !== 'black') return true;
+  if (typeof cell.graphics === 'number') return (cell.graphics & 0x3f) !== 0;
+  return cell.char !== ' ' && cell.char !== '';
+}
+
+/**
+ * Whether a page shows anything — the test every reader's navigation uses.
+ *
+ * The stricter half of the pair described on {@link isNonEmptyPage}. A page
+ * that holds cells but draws none of them is a blank screen, and walking the
+ * service with the PAGE keys must not stop on one: it looks exactly like a set
+ * that has failed to receive the page.
+ */
+export function hasVisibleContent(page: TeletextPage): boolean {
+  return page.some(isVisibleCell);
 }
 
 /**
@@ -147,45 +186,77 @@ function wrapPage(n: number): number {
   return (((n - MIN_PAGE) % PAGE_COUNT) + PAGE_COUNT) % PAGE_COUNT + MIN_PAGE;
 }
 
-/** Whether the stored page at Page_Number `n` is a Non_Empty_Page. */
-function isNonEmptyAt(pages: PagesData, n: number): boolean {
+/**
+ * Whether the page stored at Page_Number `n` shows anything.
+ *
+ * Reads the bare page-number key, which is subpage 1 — the screen a set lands
+ * on when you dial the number, and so the one that decides whether dialling it
+ * gets you a picture. See `domain/subpages.ts` for why subpage 1 keeps the
+ * plain key.
+ */
+export function hasContentAt(pages: PagesData, n: number): boolean {
   const raw = pages ? (pages as Record<PropertyKey, unknown>)[n] : undefined;
   if (raw === undefined || raw === null) return false;
-  return isNonEmptyPage(normalizePage(raw));
+  return hasVisibleContent(normalizePage(raw));
 }
 
 /**
- * The nearest higher Non_Empty_Page relative to `cur`, wrapping from 999 to 100.
+ * The nearest higher page with something on it relative to `cur`, wrapping
+ * from 999 to 100.
  *
- * Returns `null` if and only if no Non_Empty_Page other than `cur` exists in the
+ * Returns `null` if and only if no page other than `cur` shows anything in the
  * range 100..999.
  *
  * Requirements: 3.6 (advance skipping empty pages, wrap 999->100), 3.8 (null when
- * no other non-empty page). Property 6.
+ * no other non-empty page). Property 6. The requirement says Non_Empty_Page;
+ * what is skipped here is the wider set of pages that *look* empty, for the
+ * reason given on {@link hasVisibleContent} — a set that stops on a blank
+ * screen reads as broken, whatever the document says is stored there.
  */
-export function nextNonEmptyPage(cur: number, pages: PagesData): number | null {
+export function nextPageWithContent(cur: number, pages: PagesData): number | null {
   for (let step = 1; step <= PAGE_COUNT; step++) {
     const n = wrapPage(cur + step);
     if (n === cur) continue;
-    if (isNonEmptyAt(pages, n)) return n;
+    if (hasContentAt(pages, n)) return n;
   }
   return null;
 }
 
 /**
- * The nearest lower Non_Empty_Page relative to `cur`, wrapping from 100 to 999.
+ * The nearest lower page with something on it relative to `cur`, wrapping from
+ * 100 to 999.
  *
- * Returns `null` if and only if no Non_Empty_Page other than `cur` exists in the
+ * Returns `null` if and only if no page other than `cur` shows anything in the
  * range 100..999.
  *
  * Requirements: 3.7 (return to previous skipping empty pages, wrap 100->999), 3.8
- * (null when no other non-empty page). Property 6.
+ * (null when no other non-empty page). Property 6. See
+ * {@link nextPageWithContent} on what counts as empty.
  */
-export function prevNonEmptyPage(cur: number, pages: PagesData): number | null {
+export function prevPageWithContent(cur: number, pages: PagesData): number | null {
   for (let step = 1; step <= PAGE_COUNT; step++) {
     const n = wrapPage(cur - step);
     if (n === cur) continue;
-    if (isNonEmptyAt(pages, n)) return n;
+    if (hasContentAt(pages, n)) return n;
   }
   return null;
+}
+
+/**
+ * Where dialling `target` should actually land.
+ *
+ * A number with a picture on it is its own answer. A number with nothing on it
+ * is not a page — it is the gap between two pages — and a set that sat on it
+ * would be showing a fault it does not have, so the dial carries on to the next
+ * number that does show something, exactly as the ▲ key would.
+ *
+ * `null` means there is nowhere to go: the number is out of range, or nothing
+ * in the whole service shows anything — which is also what an unsynced document
+ * looks like, so callers must treat `null` as "leave the dial alone" rather
+ * than as an error.
+ */
+export function pageWithContentFrom(target: number, pages: PagesData): number | null {
+  if (!inPageRange(target)) return null;
+  if (hasContentAt(pages, target)) return target;
+  return nextPageWithContent(target, pages);
 }

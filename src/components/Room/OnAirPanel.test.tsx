@@ -146,11 +146,14 @@ describe('the two groups', () => {
     expect(within(cards[3]).getByText('Playground 700–999')).toBeInTheDocument();
   });
 
-  it('says when a page holds no content', () => {
+  it('says when a page draws nothing, and that it cannot be reached', () => {
     renderPanel();
 
+    // The warning is the operator's only sign that a claimed number is a blank
+    // screen: readers never land on one, so nothing else would ever mention it.
     const cards = screen.getAllByRole('listitem');
-    expect(within(cards[0]).getByText(/holds no content/i)).toBeInTheDocument();
+    expect(within(cards[0]).getByText(/draws nothing/i)).toBeInTheDocument();
+    expect(within(cards[0]).getByText(/cannot reach it/i)).toBeInTheDocument();
   });
 
   it('offers a bulk-change tick only on a published page', () => {

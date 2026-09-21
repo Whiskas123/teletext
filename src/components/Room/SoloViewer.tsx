@@ -77,6 +77,7 @@ export function SoloViewer({ pageNumber: pageNumberProp }: SoloViewerProps) {
     subpageCount,
     page,
     setDisplayedPage,
+    dialPage,
     gotoNextNonEmpty,
     gotoPrevNonEmpty,
     stepSubpageBy,
@@ -100,11 +101,15 @@ export function SoloViewer({ pageNumber: pageNumberProp }: SoloViewerProps) {
   // Dialling, on the other hand, keeps the roll: counting up to the number you
   // typed is what a set did while it waited for that page to come round again,
   // and it is the one piece of teletext that was never instant.
+  //
+  // `dialPage` rather than `setDisplayedPage`: a number with nothing on it is
+  // the gap between two pages rather than a page, so the dial carries on to the
+  // next one that shows something instead of stopping on a blank screen.
   const handleDialPage = useCallback(
     (target: number) => {
-      setDisplayedPage(target);
+      dialPage(target);
     },
-    [setDisplayedPage],
+    [dialPage],
   );
 
   const phone = useMediaQuery(PHONE_QUERY);
@@ -121,12 +126,18 @@ export function SoloViewer({ pageNumber: pageNumberProp }: SoloViewerProps) {
   // the picture rather than pushing it aside, so the page you chose is still in
   // plain sight and the next one is a click away. On a phone the open leaflet
   // *is* the screen, so it folds itself back to show you what you asked for.
+  // A row of the directory names a page and nothing more, so it dials: if that
+  // page has since been emptied the listing is a dead end, and carrying on to
+  // the next page with something on it is better than a blank screen. A search
+  // hit names a *screen*, which the dial's rule cannot see and must not
+  // second-guess, so it is applied exactly as chosen.
   const handleSelectPage = useCallback(
     (target: number, subpage?: number) => {
-      setDisplayedPage(target, subpage);
+      if (subpage == null) dialPage(target);
+      else setDisplayedPage(target, subpage);
       if (phone) setDrawerOpen(false);
     },
-    [setDisplayedPage, phone],
+    [dialPage, setDisplayedPage, phone],
   );
 
   // The same three controls the front panel is given, handed to a screen that

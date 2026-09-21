@@ -29,6 +29,7 @@ import { usePageData } from '@playhtml/react';
 
 import { applyMenu, type CustomMenu, type MenuDraft } from '../domain/menu';
 import { pageToArray } from '../domain/pageEncoding';
+import { hasVisibleContent } from '../domain/pageOps';
 import { shiftPageDown } from '../domain/pageTransform';
 import { MAX_DESCRIPTION_LENGTH } from '../domain/publication';
 import { validateTitle } from '../domain/titles';
@@ -495,10 +496,13 @@ export function useArchiveAdmin({
       const stored = livePages?.[pageKey(pageNumber, subpage) as number];
       if (stored == null) return null;
       const page = pageToArray(stored);
-      // An entry that normalises to nothing is an empty slot, not content.
-      return page.some((cell) => cell.char !== ' ' || cell.graphics != null)
-        ? page
-        : null;
+      // A screen that draws nothing is an empty slot, not content: the card
+      // shows the same blank either way, and saying "no content" is the more
+      // useful of the two — it is what tells the operator this is a number to
+      // clear rather than a page to keep. Same test the reader's navigation
+      // uses, so what a card calls empty and what the PAGE keys skip cannot
+      // drift apart again.
+      return hasVisibleContent(page) ? page : null;
     },
     [livePages],
   );

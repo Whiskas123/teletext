@@ -13,11 +13,24 @@
  *
  * Hence one definition, in one place, used by everything that needs to know
  * which numbers are spoken for.
+ *
+ * ## Claimed is broader than visible, deliberately
+ *
+ * A page counts as claimed when any of its cells differs from the default
+ * ({@link isNonEmptyPage}), not when it draws something
+ * (`hasVisibleContent`). The two came apart on a page of coloured spaces:
+ * the PAGE keys walked onto it because it held cells, while this screen never
+ * listed it because it held no ink, so the one page a visitor could reach was
+ * the one page an operator could not delete. Reaching is now the narrow
+ * question and claiming the wide one, which is the way round that leaves
+ * nothing stranded: anything a reader can land on is listed here, and so is
+ * anything that would be overwritten by a shift.
  */
 
 import { useMemo } from 'react';
 import { usePageData } from '@playhtml/react';
 
+import { isNonEmptyPage } from '../domain/pageOps';
 import { pageToArray } from '../domain/pageEncoding';
 import { PAGES_CHANNEL } from './useEditPage';
 import { TITLES_CHANNEL } from './useGuide';
@@ -42,10 +55,10 @@ export function useOccupiedPages(): number[] {
     for (const [key, stored] of Object.entries(pages ?? {})) {
       const pageNumber = asPage(key);
       if (pageNumber == null) continue;
-      // A key with no ink is an empty slot, not content — clearing a page
-      // leaves the key behind.
-      const page = pageToArray(stored);
-      if (page.some((cell) => cell.char !== ' ' || cell.graphics != null)) {
+      // A key whose cells are all the default one is an empty slot, not a
+      // claim — clearing a page leaves the key behind, and `deletePage` frees
+      // a number by writing an empty map rather than by removing the key.
+      if (isNonEmptyPage(pageToArray(stored))) {
         occupied.add(pageNumber);
       }
     }

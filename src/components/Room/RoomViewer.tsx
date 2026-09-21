@@ -94,6 +94,7 @@ function RoomViewerContent({
     stepSubpageBy,
     peekNextNonEmpty,
     peekPrevNonEmpty,
+    resolveDial,
   } = useRoomSync();
   const { submit, active } = useVoting();
   // Only for the count: the log itself is the chat console's business. A room
@@ -143,10 +144,15 @@ function RoomViewerContent({
    */
   const propose = useCallback(
     (target: number) => {
-      const result = submit(target);
+      // What is proposed is where the number *leads*, not the number itself: a
+      // page with nothing on it is the gap between two pages, and asking a room
+      // to agree to a blank screen is asking them to agree to a fault. With
+      // nothing anywhere to lead to — an unsynced document, most likely — the
+      // number goes as dialled and the room can refuse it in the usual way.
+      const result = submit(resolveDial(target) ?? target);
       if (!result.ok) setRefusals((count) => count + 1);
     },
-    [submit],
+    [submit, resolveDial],
   );
 
   /*

@@ -19,9 +19,10 @@ import { usePageData } from '@playhtml/react';
 
 import {
   inPageRange,
-  nextNonEmptyPage,
+  nextPageWithContent,
   normalizePage,
-  prevNonEmptyPage,
+  pageWithContentFrom,
+  prevPageWithContent,
 } from '../domain/pageOps';
 import {
   MIN_SUBPAGE,
@@ -55,6 +56,17 @@ export interface SoloViewApi {
    * points into the middle of a carousel; it defaults to the first.
    */
   setDisplayedPage(n: number, subpage?: number): SetDisplayedPageRejection | null;
+  /**
+   * Dial a Page_Number, landing on the next page with something on it when the
+   * number itself is blank.
+   *
+   * What the keypad calls. {@link setDisplayedPage} is the literal move, for a
+   * caller that has picked a particular screen and means it; this one is the
+   * reader's request — "show me page 726" — and a blank 726 is not a page, so
+   * the dial carries on to the first number after it that shows something. With
+   * nothing anywhere to go to, the number is taken as dialled.
+   */
+  dialPage(n: number): SetDisplayedPageRejection | null;
   /** Advance to the next higher non-empty page (wrapping 999 → 1). */
   gotoNextNonEmpty(): NavigationResult;
   /** Return to the next lower non-empty page (wrapping 1 → 999). */
@@ -73,7 +85,7 @@ export function useSoloView(
   initialPageNumber: number = DEFAULT_DISPLAYED_PAGE,
   initialSubpage: number = MIN_SUBPAGE,
 ): SoloViewApi {
-  const [displayedPageNumber, setDisplayedPageNumber] = useState(() =>
+  const [requestedPageNumber, setRequestedPageNumber] = useState(() =>
     inPageRange(initialPageNumber) ? initialPageNumber : DEFAULT_DISPLAYED_PAGE,
   );
   const [requestedSubpage, setRequestedSubpage] = useState(() =>
@@ -81,6 +93,40 @@ export function useSoloView(
   );
   const [pages] = usePageData<PagesData>(PAGES_CHANNEL, {});
   const { countOf } = useSubpages();
+
+  /*
+   * Whether the reader has been to a page of their own choosing yet.
+   *
+   * Until they have, the number the screen opened on is still a request rather
+   * than a destination, and it gets the same rule the keypad gets below: the
+   * URL `/watch/726` should no more sit on a blank 726 than a dialled 726
+   * should. It cannot be applied where the state above is initialized, because
+   * at that moment the document has not synced and every page looks empty —
+   * so it is applied on the way out instead, and stops applying the moment the
+   * reader touches a control.
+   *
+   * A URL that named a screen of a carousel (`/watch/220/3`) is exempt from the
+   * start: it is a link somebody made to that screen, like a search result, and
+   * the rule can only see the first screen of a page. Trusting the link is the
+   * same choice {@link SoloViewApi.setDisplayedPage} makes for the same reason.
+   */
+  const [readerHasNavigated, setReaderHasNavigated] = useState(
+    () => normalizeSubpage(initialSubpage) !== MIN_SUBPAGE,
+  );
+
+  /*
+   * Derived rather than corrected after the fact: writing the resolved number
+   * back into state from an effect would render the blank page first and then
+   * replace it, which is a flash of exactly the screen this is here to avoid.
+   * `?? requestedPageNumber` is the unsynced document again — see `dialPage`.
+   */
+  const displayedPageNumber = useMemo(
+    () =>
+      readerHasNavigated
+        ? requestedPageNumber
+        : (pageWithContentFrom(requestedPageNumber, pages ?? {}) ?? requestedPageNumber),
+    [readerHasNavigated, requestedPageNumber, pages],
+  );
 
   const subpageCount = countOf(displayedPageNumber);
 
@@ -97,7 +143,8 @@ export function useSoloView(
   const setDisplayedPage = useCallback(
     (n: number, target: number = MIN_SUBPAGE): SetDisplayedPageRejection | null => {
       if (!inPageRange(n)) return 'out-of-range';
-      setDisplayedPageNumber(n);
+      setRequestedPageNumber(n);
+      setReaderHasNavigated(true);
       // A new page starts at the top of its carousel unless the caller asked
       // for a particular screen — arriving on subpage 3 because that is where
       // you left the last page would be nobody's intent.
@@ -107,10 +154,26 @@ export function useSoloView(
     [],
   );
 
+  const dialPage = useCallback(
+    (n: number): SetDisplayedPageRejection | null => {
+      if (!inPageRange(n)) return 'out-of-range';
+      // `?? n` rather than a refusal: `null` here means nothing in the service
+      // shows anything, which is also what the document looks like before it
+      // has synced. Honouring the number as dialled is the harmless answer —
+      // the page fills in underneath if it turns out to have content.
+      setRequestedPageNumber(pageWithContentFrom(n, pages ?? {}) ?? n);
+      setReaderHasNavigated(true);
+      setRequestedSubpage(MIN_SUBPAGE);
+      return null;
+    },
+    [pages],
+  );
+
   const goto = useCallback(
     (target: number | null): NavigationResult => {
       if (target === null) return 'none-available';
-      setDisplayedPageNumber(target);
+      setRequestedPageNumber(target);
+      setReaderHasNavigated(true);
       setRequestedSubpage(MIN_SUBPAGE);
       return 'ok';
     },
@@ -118,12 +181,12 @@ export function useSoloView(
   );
 
   const gotoNextNonEmpty = useCallback(
-    (): NavigationResult => goto(nextNonEmptyPage(displayedPageNumber, pages ?? {})),
+    (): NavigationResult => goto(nextPageWithContent(displayedPageNumber, pages ?? {})),
     [goto, displayedPageNumber, pages],
   );
 
   const gotoPrevNonEmpty = useCallback(
-    (): NavigationResult => goto(prevNonEmptyPage(displayedPageNumber, pages ?? {})),
+    (): NavigationResult => goto(prevPageWithContent(displayedPageNumber, pages ?? {})),
     [goto, displayedPageNumber, pages],
   );
 
@@ -140,6 +203,7 @@ export function useSoloView(
     subpageCount,
     page,
     setDisplayedPage,
+    dialPage,
     gotoNextNonEmpty,
     gotoPrevNonEmpty,
     stepSubpageBy,

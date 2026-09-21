@@ -433,7 +433,8 @@ export function OnAirPageCard({
 
         {!row.hasContent && (
           <span className="manage-note manage-note-warn">
-            Holds no content — only a title or a directory role.
+            Draws nothing — a title, a directory role, or cells left blank.
+            Readers cannot reach it; delete it to free the number.
           </span>
         )}
 

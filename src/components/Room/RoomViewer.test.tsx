@@ -102,6 +102,10 @@ const gotoNextNonEmpty = vi.fn<RoomSyncApi['gotoNextNonEmpty']>(() => 'ok');
 const gotoPrevNonEmpty = vi.fn<RoomSyncApi['gotoPrevNonEmpty']>(() => 'ok');
 const peekNextNonEmpty = vi.fn<RoomSyncApi['peekNextNonEmpty']>(() => 220);
 const peekPrevNonEmpty = vi.fn<RoomSyncApi['peekPrevNonEmpty']>(() => 150);
+// The room's dial resolves a blank number to the next page with something on
+// it; here every number leads to itself, so a test that presses a key is
+// testing the key rather than the archive it happens to be pointed at.
+const resolveDial = vi.fn<RoomSyncApi['resolveDial']>((target) => target);
 const stepSubpageBy = vi.fn<RoomSyncApi['stepSubpageBy']>();
 
 function setRoomSync(displayedPageNumber: number, subpages = { subpage: 1, count: 1 }) {
@@ -116,6 +120,7 @@ function setRoomSync(displayedPageNumber: number, subpages = { subpage: 1, count
     gotoPrevNonEmpty,
     peekNextNonEmpty,
     peekPrevNonEmpty,
+    resolveDial,
     stepSubpageBy,
   });
 }
