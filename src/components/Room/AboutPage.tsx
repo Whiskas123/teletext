@@ -3,6 +3,7 @@ import { Link } from './LocalizedLink';
 import {
   ABOUT,
   ABOUT_SECTIONS,
+  isAboutEmphasis,
   isAboutLink,
   type AboutParagraph,
 } from '../../domain/about';
@@ -80,6 +81,19 @@ export function AboutPage() {
                   <Paragraph runs={paragraph} />
                 </p>
               ))}
+              {/* The last section is written as numbered reasons rather than
+                  prose, and it is numbered in the text itself — "1." is part of
+                  what the section says, not decoration — so it is a real
+                  ordered list and the browser draws the numbers. */}
+              {section.points && (
+                <ol className="about-list">
+                  {section.points.map((point, index) => (
+                    <li key={index} className="about-para about-item">
+                      <Paragraph runs={point} />
+                    </li>
+                  ))}
+                </ol>
+              )}
             </section>
           );
         })}
@@ -89,31 +103,48 @@ export function AboutPage() {
 }
 
 /**
- * One paragraph's runs: plain text, and the odd link.
+ * One paragraph's runs: plain text, the odd link, and the odd emphasised phrase.
  *
- * Both links here leave the site, so both carry `rel="noreferrer"` and open in a
- * new tab — a reader following the author's name mid-sentence is not leaving,
- * they are glancing, and losing a room they were watching in to do it would be a
- * real cost.
+ * Every link here leaves the site, so each carries `rel="noreferrer"` and opens
+ * in a new tab — a reader following the author's name mid-sentence is not
+ * leaving, they are glancing, and losing a room they were watching in to do it
+ * would be a real cost.
+ *
+ * Emphasis renders as `<strong>` or `<em>` rather than a styled span, because
+ * the distinction the text is making is the one those elements mean: the
+ * project's name announced, and a borrowed term held at arm's length. A screen
+ * reader gets the same two signals a sighted reader does.
  */
 function Paragraph({ runs }: { runs: AboutParagraph }) {
   return (
     <>
-      {runs.map((run, index) =>
-        isAboutLink(run) ? (
-          <a
-            key={index}
-            className="about-link"
-            href={run.href}
-            target="_blank"
-            rel="noreferrer"
-          >
-            {run.text}
-          </a>
-        ) : (
-          <span key={index}>{run}</span>
-        ),
-      )}
+      {runs.map((run, index) => {
+        if (isAboutLink(run)) {
+          return (
+            <a
+              key={index}
+              className="about-link"
+              href={run.href}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {run.text}
+            </a>
+          );
+        }
+        if (isAboutEmphasis(run)) {
+          return run.emphasis === 'strong' ? (
+            <strong key={index} className="about-strong">
+              {run.text}
+            </strong>
+          ) : (
+            <em key={index} className="about-em">
+              {run.text}
+            </em>
+          );
+        }
+        return <span key={index}>{run}</span>;
+      })}
     </>
   );
 }

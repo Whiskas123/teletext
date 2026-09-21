@@ -127,6 +127,29 @@ describe('the about page', () => {
     );
   });
 
+  // The closing section is written as numbered reasons, and the numbering is
+  // part of what it says. A real list keeps that for a reader who is hearing
+  // the page rather than seeing it.
+  it('gives the closing section as a numbered list, in both languages', () => {
+    for (const language of ['pt', 'en'] as const) {
+      const { unmount } = renderAbout(language);
+      const points = ABOUT[language].sections.purpose.points ?? [];
+      expect(points).toHaveLength(4);
+      expect(screen.getByRole('list')).toBeInTheDocument();
+      expect(screen.getAllByRole('listitem')).toHaveLength(points.length);
+      unmount();
+    }
+  });
+
+  it('announces the project by name in the opening line', () => {
+    const { unmount } = renderAbout();
+    expect(screen.getByText('Tele-textual', { selector: 'strong' })).toBeInTheDocument();
+    unmount();
+
+    renderAbout('en');
+    expect(screen.getByText('Tele-textual', { selector: 'strong' })).toBeInTheDocument();
+  });
+
   it('offers the way back to the front page', () => {
     renderAbout();
     expect(screen.getByRole('link', { name: /início|home/i })).toHaveAttribute('href', '/');

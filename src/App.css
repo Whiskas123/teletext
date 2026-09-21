@@ -4870,6 +4870,46 @@ button.yellow-pages-number:hover {
 }
 
 /*
+ * The one numbered list on the page: four reasons the project exists.
+ *
+ * Hanging indent rather than markers inside the text column, so the numbers sit
+ * in the gutter and every line of a point starts at the same left edge as the
+ * prose above it — a list that keeps the measure instead of stepping out of it.
+ */
+.about-list {
+  margin: 0;
+  padding-left: 2.2ch;
+  list-style: decimal;
+}
+
+.about-item {
+  padding-left: 0.4ch;
+}
+
+/* Numbers in the display face, so the list reads as part of this page rather
+   than as browser furniture dropped into it. */
+.about-item::marker {
+  font-family: "European Teletext", "Press Start 2P", monospace;
+  color: #8f8f8f;
+}
+
+/*
+ * The project's name where the prose introduces it. Brighter rather than
+ * heavier: monospace bold at this size thickens into a smudge, and white
+ * against the body's grey already reads as the emphasis it is.
+ */
+.about-strong {
+  font-weight: normal;
+  color: #fff;
+}
+
+/* Borrowed terms — zeitgeist, pixel art — held at arm's length the way the
+   text holds them. */
+.about-em {
+  font-style: italic;
+}
+
+/*
  * Links leave the site, and there are only two of them.
  *
  * White with an underline rather than a palette colour: the headings already
