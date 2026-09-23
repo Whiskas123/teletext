@@ -2117,7 +2117,10 @@ button.frontpage-watch-kind:focus-visible {
  */
 .yellow-pages-entry-heading {
   display: flex;
+  /* The last line, so a wrapped title keeps its number level with its end —
+     see `.yellow-pages-entry-btn`. */
   align-items: baseline;
+  align-items: last baseline;
   gap: 0.25rem;
 }
 
@@ -2134,7 +2137,9 @@ button.frontpage-watch-kind:focus-visible {
   flex: 0 0 auto;
   font-size: 0.75rem;
   font-weight: 700;
-  opacity: 0.55;
+  /* Faded in the ink rather than with `opacity`, which would fade its paper too
+     and let the leader behind it show through — see `.yellow-pages-title`. */
+  color: rgb(20 16 7 / 55%);
 }
 
 /* The rows under a heading. A plain wrapper so the panel can be addressed by
@@ -2236,7 +2241,10 @@ button.frontpage-watch-kind:focus-visible {
 
 .yellow-pages-entry-btn {
   display: flex;
+  /* The last line, not the first: a title too long for its column wraps, and the
+     number belongs beside where it ends. */
   align-items: baseline;
+  align-items: last baseline;
   gap: 0.25rem;
   width: 100%;
   background: transparent;
@@ -2269,6 +2277,50 @@ button.frontpage-watch-kind:focus-visible {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/*
+ * A directory row's caret, title and count, set as one run of text so a long
+ * title wraps rather than being cut short — see `Title` in `DirectoryList.tsx`.
+ *
+ * The leader is this block's background: a row of dots along its last line,
+ * which the name and count hide under paper of their own wherever they sit. It
+ * therefore starts right after the last word, on whichever line that is.
+ * `content-box` keeps it out of the caret's gutter and off the number.
+ */
+.yellow-pages-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  /* Tighter than the page's 1.5, so a wrapped title's two lines read as one
+     entry; the padding gives single-line rows back the height they had. */
+  line-height: 1.2;
+  padding: 0.15rem 0.15rem 0.15rem 1.1rem;
+  overflow-wrap: anywhere;
+  background: radial-gradient(circle closest-side, #141007 90%, transparent)
+    left 0 bottom 0.2em / 4px 2px repeat-x;
+  background-origin: content-box;
+  background-clip: content-box;
+}
+
+/* Hung in the gutter, so a wrapped title's second line starts under its first
+   word rather than under the arrow. */
+.yellow-pages-title .yellow-pages-caret {
+  display: inline-block;
+  margin: 0 0.25rem 0 -1.1rem;
+}
+
+.yellow-pages-title .yellow-pages-name {
+  white-space: normal;
+  background: #ffcf1f;
+  padding-right: 0.4rem;
+}
+
+.yellow-pages-title .yellow-pages-count {
+  background: #ffcf1f;
+  /* Tucked into the name's trailing space: a count is closer to its title than
+     the leader is. */
+  margin-left: -0.15rem;
+  padding-right: 0.4rem;
 }
 
 .yellow-pages-leader {
@@ -2339,7 +2391,10 @@ button.yellow-pages-number:hover {
  */
 .yellow-pages-entry-heading {
   display: flex;
+  /* The last line, so a wrapped title keeps its number level with its end —
+     see `.yellow-pages-entry-btn`. */
   align-items: baseline;
+  align-items: last baseline;
   gap: 0.25rem;
 }
 
@@ -2372,7 +2427,9 @@ button.yellow-pages-number:hover {
   flex: 0 0 auto;
   font-size: 0.75rem;
   font-weight: 700;
-  opacity: 0.55;
+  /* Faded in the ink rather than with `opacity`, which would fade its paper too
+     and let the leader behind it show through — see `.yellow-pages-title`. */
+  color: rgb(20 16 7 / 55%);
 }
 
 /* The rows under a heading. A plain wrapper so the panel can be addressed by

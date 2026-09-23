@@ -18,6 +18,44 @@ import {
 } from './directoryRows';
 
 /**
+ * A row's title, its count and the dotted leader running on to the number.
+ *
+ * One block of running text rather than a row of flex items, so a title too long
+ * for its column wraps onto a second line and the count and dots follow on from
+ * wherever it ends — the leader is drawn behind the block's last line, and the
+ * name and count cover it where they sit. As flex items, a wrapped title took
+ * the whole width and left the count and dots stranded at the far edge.
+ */
+function Title({
+  caret,
+  name,
+  count,
+}: {
+  /** Omitted on a row with nothing to open. */
+  caret?: string;
+  name: string;
+  count?: number;
+}) {
+  return (
+    <span className="yellow-pages-title">
+      {/* Empty, but present: every row keeps the same gutter so a title's
+          indent means depth rather than whether it happens to have an arrow. */}
+      <span className="yellow-pages-caret" aria-hidden="true">
+        {caret}
+      </span>
+      {/* No whitespace between the name and the count: it would be a gap in
+          their paper for the leader to show through. */}
+      <span className="yellow-pages-name">{name}</span>
+      {count != null && (
+        <span className="yellow-pages-count" aria-hidden="true">
+          {count}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/**
  * One listing row, whose whole width goes to its page.
  *
  * Also how a heading with nothing filed under it renders: it is a page like any
@@ -46,16 +84,7 @@ function Listing({
         className="yellow-pages-entry-btn"
         onClick={() => onPick(node.pageNumber)}
       >
-        {/* Empty, but present: every row keeps the same gutter so a title's
-            indent means depth rather than whether it happens to have an arrow. */}
-        <span className="yellow-pages-caret" aria-hidden="true" />
-        <span className="yellow-pages-name">{titleOf(node)}</span>
-        {count != null && (
-          <span className="yellow-pages-count" aria-hidden="true">
-            {count}
-          </span>
-        )}
-        <span className="yellow-pages-leader" aria-hidden="true" />
+        <Title name={titleOf(node)} count={count} />
         <span className="yellow-pages-number">
           {formatPageNumber(node.pageNumber)}
         </span>
@@ -106,17 +135,10 @@ function Heading({
         aria-label={`${titleOf(node)}, ${count} page${count === 1 ? '' : 's'}`}
         onClick={onToggle}
       >
-        <span className="yellow-pages-caret" aria-hidden="true">
-          {open ? '▾' : '▸'}
-        </span>
-        <span className="yellow-pages-name">{titleOf(node)}</span>
         {/* The count is the whole affordance for a collapsed section: without it
             a closed heading looks like an ordinary listing that happens to have
             a triangle. */}
-        <span className="yellow-pages-count" aria-hidden="true">
-          {count}
-        </span>
-        <span className="yellow-pages-leader" aria-hidden="true" />
+        <Title caret={open ? '▾' : '▸'} name={titleOf(node)} count={count} />
       </button>
       <button
         type="button"
