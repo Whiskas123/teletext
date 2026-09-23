@@ -26,6 +26,7 @@
 
 import { useCallback } from 'react';
 import { usePageData } from '@playhtml/react';
+import { usePageDataWithBoot } from './bootData';
 
 import {
   MAX_SUBPAGE,
@@ -62,7 +63,7 @@ export interface SubpagesApi {
 }
 
 export function useSubpages(): SubpagesApi {
-  const [counts, setCounts] = usePageData<SubpageCounts>(SUBPAGE_COUNTS_CHANNEL, {});
+  const [counts, setCounts] = usePageDataWithBoot<SubpageCounts>(SUBPAGE_COUNTS_CHANNEL, {});
   const [, setPages] = usePageData<PagesData>(PAGES_CHANNEL, {});
 
   const countOf = useCallback(

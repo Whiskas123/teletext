@@ -32,6 +32,7 @@
 
 import { useCallback, useMemo } from 'react';
 import { usePageData } from '@playhtml/react';
+import { usePageDataWithBoot } from './bootData';
 import {
   inPageRange,
   nextPageWithContent,
@@ -150,7 +151,7 @@ export function useRoomSync(): RoomSyncApi {
   const [sync, setSync] = usePageData<RoomSyncData>(roomSyncChannel(roomId), {
     displayedPageNumber: DEFAULT_DISPLAYED_PAGE,
   });
-  const [pages] = usePageData<PagesData>(PAGES_CHANNEL, {});
+  const [pages] = usePageDataWithBoot<PagesData>(PAGES_CHANNEL, {});
   const { countOf } = useSubpages();
 
   // Guard against a malformed/absent sync value (e.g. before first sync), so the

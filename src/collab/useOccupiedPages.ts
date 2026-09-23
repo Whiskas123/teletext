@@ -28,7 +28,7 @@
  */
 
 import { useMemo } from 'react';
-import { usePageData } from '@playhtml/react';
+import { usePageDataWithBoot } from './bootData';
 
 import { isNonEmptyPage } from '../domain/pageOps';
 import { pageToArray } from '../domain/pageEncoding';
@@ -40,9 +40,9 @@ import type { PagesData, TitlesData } from './types';
 
 /** Ascending page numbers that hold content, a title, or a heading role. */
 export function useOccupiedPages(): number[] {
-  const [pages] = usePageData<PagesData>(PAGES_CHANNEL, {});
-  const [titles] = usePageData<TitlesData>(TITLES_CHANNEL, {});
-  const [kinds] = usePageData<PageKinds>(PAGE_KINDS_CHANNEL, {});
+  const [pages] = usePageDataWithBoot<PagesData>(PAGES_CHANNEL, {});
+  const [titles] = usePageDataWithBoot<TitlesData>(TITLES_CHANNEL, {});
+  const [kinds] = usePageDataWithBoot<PageKinds>(PAGE_KINDS_CHANNEL, {});
 
   return useMemo(() => {
     const occupied = new Set<number>();

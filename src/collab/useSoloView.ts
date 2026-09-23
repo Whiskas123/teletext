@@ -15,7 +15,7 @@
  */
 
 import { useCallback, useMemo, useState } from 'react';
-import { usePageData } from '@playhtml/react';
+import { usePageDataWithBoot } from './bootData';
 
 import {
   inPageRange,
@@ -91,7 +91,7 @@ export function useSoloView(
   const [requestedSubpage, setRequestedSubpage] = useState(() =>
     normalizeSubpage(initialSubpage),
   );
-  const [pages] = usePageData<PagesData>(PAGES_CHANNEL, {});
+  const [pages] = usePageDataWithBoot<PagesData>(PAGES_CHANNEL, {});
   const { countOf } = useSubpages();
 
   /*

@@ -111,7 +111,7 @@ export function normalizePage(raw: unknown): TeletextPage {
 }
 
 /** Whether a single cell equals the default empty cell (per the glossary). */
-function isEmptyCell(cell: Cell): boolean {
+export function isEmptyCell(cell: Cell): boolean {
   return (
     cell.char === ' ' &&
     cell.fg === 'white' &&

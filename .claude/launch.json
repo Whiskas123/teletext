@@ -6,6 +6,12 @@
       "runtimeExecutable": "bash",
       "runtimeArgs": ["-lc", "PATH=$HOME/.nvm/versions/node/v24.14.1/bin:$PATH npx vite --port 5199 --strictPort"],
       "port": 5199
+    },
+    {
+      "name": "vite-preview",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-lc", "PATH=$HOME/.nvm/versions/node/v24.14.1/bin:$PATH npx vite preview --port 5299 --strictPort"],
+      "port": 5299
     }
   ]
 }

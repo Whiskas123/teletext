@@ -37,7 +37,7 @@
  */
 
 import { useCallback, useMemo } from 'react';
-import { usePageData } from '@playhtml/react';
+import { usePageDataWithBoot } from './bootData';
 
 import { guideEntries, type GuideEntry } from '../domain/guide';
 import { readTitle, validateTitle } from '../domain/titles';
@@ -106,7 +106,7 @@ const DEFAULT_PAGES_DATA: PagesData = {};
  * `pages` channel at all.
  */
 export function usePageTitles(): Pick<GuideApi, 'title' | 'setTitle'> {
-  const [titles, setTitles] = usePageData<TitlesData>(
+  const [titles, setTitles] = usePageDataWithBoot<TitlesData>(
     TITLES_CHANNEL,
     DEFAULT_TITLES_DATA,
   );
@@ -138,8 +138,8 @@ export function usePageTitles(): Pick<GuideApi, 'title' | 'setTitle'> {
 }
 
 export function useGuide(): GuideApi {
-  const [titles] = usePageData<TitlesData>(TITLES_CHANNEL, DEFAULT_TITLES_DATA);
-  const [pages] = usePageData<PagesData>(PAGES_CHANNEL, DEFAULT_PAGES_DATA);
+  const [titles] = usePageDataWithBoot<TitlesData>(TITLES_CHANNEL, DEFAULT_TITLES_DATA);
+  const [pages] = usePageDataWithBoot<PagesData>(PAGES_CHANNEL, DEFAULT_PAGES_DATA);
   const { title, setTitle } = usePageTitles();
 
   // The qualifying, ascending-ordered listing (Req 9.7, 9.11, 9.13).

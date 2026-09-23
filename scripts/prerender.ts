@@ -64,8 +64,12 @@ import { fileURLToPath } from 'node:url';
 
 import { isConfigured, db } from '../api/_lib/db';
 import { LANGUAGES, type Language } from '../src/domain/landing';
+import { BOOT_DATA_PATH, bootPage, type BootData } from '../src/domain/bootData';
+import { isPageKind } from '../src/domain/directory';
 import { applyMenu, type MenuItem } from '../src/domain/menu';
 import { pageToArray } from '../src/domain/pageEncoding';
+import { pageKey } from '../src/domain/subpages';
+import type { TeletextPage } from '../src/types/teletext';
 import { pageRows } from '../src/domain/pageSearch';
 import { shiftPageDown } from '../src/domain/pageTransform';
 import { localizePath } from '../src/domain/routes';
@@ -110,6 +114,11 @@ interface SourcePage {
   title: string;
   description: string;
   rows: readonly string[];
+  cells: TeletextPage;
+  /** The directory role, which only the live backup records. */
+  kind?: string;
+  /** How many screens the page holds, which only the live backup records. */
+  subpageCount?: number;
 }
 
 async function loadPages(): Promise<{ pages: SourcePage[]; backupAge: number | null }> {
@@ -149,19 +158,25 @@ async function loadPages(): Promise<{ pages: SourcePage[]; backupAge: number | n
       title: row.title ?? '',
       description: row.description ?? '',
       rows: pageRows(page),
+      cells: page,
     });
   }
 
   const live = await sql`
-    select page_number, subpage, title, description, cells from live_pages
+    select page_number, subpage, subpage_count, title, kind, description, cells
+    from live_pages
   `;
   for (const row of live) {
+    const cells = pageToArray(row.cells);
     byKey.set(`${row.page_number}.${row.subpage}`, {
       pageNumber: row.page_number,
       subpage: row.subpage,
       title: row.title ?? '',
       description: row.description ?? '',
-      rows: pageRows(row.cells),
+      rows: pageRows(cells),
+      cells,
+      kind: row.kind ?? undefined,
+      subpageCount: row.subpage_count ?? undefined,
     });
   }
 
@@ -176,6 +191,45 @@ async function loadPages(): Promise<{ pages: SourcePage[]; backupAge: number | n
     ),
     backupAge: age == null ? null : Number(age),
   };
+}
+
+/**
+ * Every page, as one file the viewers draw from until playhtml has synced.
+ *
+ * See `src/domain/bootData.ts` for why. It is written from the same pages as
+ * the prerendered HTML, so it is exactly as fresh — the backup age printed at
+ * the end of the build is this file's age too.
+ *
+ * Titles, kinds and subpage counts go with the cells because the viewer needs
+ * them to be usable rather than just visible: the Yellow Pages, the search, and
+ * the `‹ 1/3 ›` of a carousel all read them.
+ */
+async function writeBootData(pages: readonly SourcePage[]): Promise<void> {
+  const data: BootData = { pages: {}, 'subpage-counts': {}, titles: {}, 'page-kinds': {} };
+
+  for (const page of pages) {
+    data.pages[String(pageKey(page.pageNumber, page.subpage))] = bootPage(page.cells);
+
+    // A page's own count where the backup has one; otherwise the highest
+    // screen published, which is what the carousel was built to hold.
+    const counts = data['subpage-counts'];
+    const count = page.subpageCount ?? page.subpage;
+    counts[page.pageNumber] = Math.max(counts[page.pageNumber] ?? 1, count);
+
+    if (page.subpage === 1) {
+      if (page.title !== '') data.titles[page.pageNumber] = page.title;
+      if (isPageKind(page.kind)) data['page-kinds'][page.pageNumber] = page.kind;
+    }
+  }
+
+  const json = JSON.stringify(data);
+  const file = join(dist, BOOT_DATA_PATH);
+  await mkdir(dirname(file), { recursive: true });
+  await writeFile(file, json);
+  console.log(
+    `  ${pages.length} pages written to dist${BOOT_DATA_PATH} — ` +
+      `${(json.length / 1024).toFixed(0)} KB before compression`,
+  );
 }
 
 /**
@@ -330,6 +384,25 @@ function showcaseHead(entries: readonly ShowcaseBootEntry[]): string {
   );
 }
 
+/**
+ * Whether an address opens on the television, and so wants the pages file.
+ *
+ * Only those: the front page does not draw pages, and a preload the page never
+ * uses is a download the browser warns about.
+ */
+function isWatchPath(path: string): boolean {
+  return path === '/watch' || path.startsWith('/watch/');
+}
+
+/**
+ * Starts the pages file from `<head>`, so it downloads alongside the bundle
+ * rather than after it. `crossorigin` is what a plain `fetch()` asks with, and
+ * without it the browser fetches the file twice.
+ */
+function bootDataHead(): string {
+  return `\n    <link rel="preload" as="fetch" crossorigin="anonymous" href="${BOOT_DATA_PATH}" />`;
+}
+
 /** Both languages' URLs for one path, which is what `hreflang` needs. */
 function alternates(path: string): Record<Language, string> {
   return Object.fromEntries(
@@ -392,6 +465,7 @@ async function main(): Promise<void> {
 
   const { pages, backupAge } = await loadPages();
   const showcase = await writeShowcase();
+  if (pages.length > 0) await writeBootData(pages);
 
   const targets: Target[] = [
     ...STATIC_PATHS.map((path) => ({
@@ -435,7 +509,8 @@ async function main(): Promise<void> {
         // and the list to draw them from. See {@link showcaseHead}.
         .replace(
           '</head>',
-          `${target.path === '/' ? showcaseHead(showcase) : ''}\n  </head>`,
+          `${target.path === '/' ? showcaseHead(showcase) : ''}` +
+            `${pages.length > 0 && isWatchPath(target.path) ? bootDataHead() : ''}\n  </head>`,
         )
         // The note at the top of `index.html` explains the file to whoever
         // edits it. It is build-time documentation and there is no reason to

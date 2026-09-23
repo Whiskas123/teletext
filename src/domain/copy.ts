@@ -39,7 +39,11 @@ export interface Copy {
     room: string;
     panels: string;
   };
-  /** The one thing the connection indicator ever has to say. */
+  /**
+   * The one thing the connection indicator ever has to say. It shows until the
+   * live document's first sync — playhtml reports nothing after that — so it
+   * is a set warming up, not a lost line, and says so.
+   */
   connection: {
     disconnected: string;
   };
@@ -280,7 +284,7 @@ export const COPY: Record<Language, Copy> = {
       panels: 'Painéis da sala',
     },
     connection: {
-      disconnected: 'Sem ligação — a reconectar…',
+      disconnected: 'A sintonizar…',
     },
     presence: {
       region: 'Quem está a ver',
@@ -474,7 +478,7 @@ export const COPY: Record<Language, Copy> = {
       panels: 'Room panels',
     },
     connection: {
-      disconnected: 'Disconnected — reconnecting…',
+      disconnected: 'Tuning in…',
     },
     presence: {
       region: 'Viewers present',

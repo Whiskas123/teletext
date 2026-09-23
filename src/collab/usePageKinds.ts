@@ -18,7 +18,7 @@
  */
 
 import { useCallback } from 'react';
-import { usePageData } from '@playhtml/react';
+import { usePageDataWithBoot } from './bootData';
 
 import {
   isPageKind,
@@ -40,7 +40,7 @@ export interface PageKindsApi {
 }
 
 export function usePageKinds(): PageKindsApi {
-  const [kinds, setKinds] = usePageData<PageKinds>(PAGE_KINDS_CHANNEL, {});
+  const [kinds, setKinds] = usePageDataWithBoot<PageKinds>(PAGE_KINDS_CHANNEL, {});
 
   const kindOf = useCallback(
     (pageNumber: number): PageKind => kindAt(kinds, pageNumber),

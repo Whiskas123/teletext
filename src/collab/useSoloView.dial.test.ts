@@ -26,6 +26,8 @@ vi.mock('@playhtml/react', () => ({
     channels[channel] ?? fallback,
     vi.fn(),
   ],
+  // Already synced, so the build's copy of the pages never stands in.
+  usePlayContext: () => ({ isLoading: false }),
 }));
 
 const { useSoloView } = await import('./useSoloView');
