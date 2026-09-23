@@ -12,6 +12,7 @@ import { useCallback, useMemo, useState } from 'react';
 
 import type {
   ArchiveAdminApi,
+  CaptureFilters,
   CaptureSummary,
   PublishedEntry,
   PublishTransforms,
@@ -141,7 +142,46 @@ function initialState(seed: FakeSeed): State {
   return state;
 }
 
-export function useFakeManageDeps(seed: FakeSeed): ManageDeps & { captures: CaptureSummary[] } {
+/** The captures a query would return, filtered the way `api/captures` does. */
+function queryCaptures(
+  all: readonly CaptureSummary[],
+  published: readonly PublishedEntry[],
+  filters: CaptureFilters,
+): CaptureSummary[] {
+  const slot = (c: CaptureSummary) => `${c.source}.${c.original_page}.${c.sub_index}.${c.topic}`;
+  const versions = new Map<string, CaptureSummary[]>();
+  for (const capture of all) versions.set(slot(capture), [...(versions.get(slot(capture)) ?? []), capture]);
+  const term = filters.q?.toLowerCase();
+  let rows = all
+    .filter((c) => !filters.source || c.source === filters.source)
+    .filter((c) => !filters.topicGroup || c.topic_group === filters.topicGroup)
+    .filter((c) => !filters.page || c.original_page === filters.page)
+    .filter((c) => !term || (c.manifest_title ?? '').toLowerCase().includes(term))
+    .map((c) => ({
+      ...c,
+      versions: versions.get(slot(c))!.length,
+      story_size: new Set(
+        all.filter((o) => o.source === c.source && o.original_page === c.original_page && o.first_seen === c.first_seen).map((o) => o.sub_index),
+      ).size,
+      published_to: published
+        .filter((entry) => entry.capture_id === c.id)
+        .map((entry) => `${entry.page_number}/${entry.subpage ?? 1}`),
+    }));
+  if (filters.latest) {
+    // The newest day of each slot, ties to the higher id — as the query does.
+    const newest = (a: CaptureSummary, b: CaptureSummary) =>
+      (b.last_seen ?? '') > (a.last_seen ?? '') || ((b.last_seen ?? '') === (a.last_seen ?? '') && b.id > a.id) ? b : a;
+    rows = rows.filter((c) => versions.get(slot(c))!.reduce(newest).id === c.id);
+  }
+  if (filters.unpublished) rows = rows.filter((c) => c.published_to.length === 0);
+  if (filters.sort === 'newest') rows.sort((a, b) => (b.last_seen ?? '').localeCompare(a.last_seen ?? ''));
+  return rows;
+}
+
+export function useFakeManageDeps(
+  seed: FakeSeed,
+  filters: CaptureFilters = {},
+): ManageDeps & { captures: CaptureSummary[] } {
   const [state, setState] = useState<State>(() => initialState(seed));
   const latency = seed.latency ?? 0;
   const wait = useCallback(
@@ -311,9 +351,11 @@ export function useFakeManageDeps(seed: FakeSeed): ManageDeps & { captures: Capt
     [wait],
   );
 
+  const captures = queryCaptures(allCaptures, state.published, filters);
+
   const data: ArchiveAdminApi = {
-    captures: allCaptures,
-    total: allCaptures.length,
+    captures,
+    total: captures.length,
     published: state.published,
     publishedByPage: new Map(
       [...state.published].reverse().map((entry) => [entry.page_number, entry] as const),
@@ -350,6 +392,13 @@ export function useFakeManageDeps(seed: FakeSeed): ManageDeps & { captures: Capt
     pageSize: 60,
     retryCaptures: () => undefined,
     reloadPublished: () => undefined,
+    loadStory: async (id) => {
+      const target = allCaptures.find((c) => c.id === id);
+      if (target == null) return [];
+      return allCaptures
+        .filter((c) => c.source === target.source && c.original_page === target.original_page && c.first_seen === target.first_seen)
+        .sort((a, b) => (a.sub_index ?? 0) - (b.sub_index ?? 0));
+    },
     loadPage: async (id) => fakePage(allCaptures.find((c) => c.id === id)?.manifest_title ?? `Capture ${id}`, id),
     livePage,
     transform,

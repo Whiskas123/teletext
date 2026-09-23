@@ -31,6 +31,7 @@ import { useParams } from 'react-router-dom';
 
 import { useSoloView } from '../../collab/useSoloView';
 import { useMediaQuery } from '../../utils/useMediaQuery';
+import { useTuning } from '../../collab/bootData';
 import { TeletextGrid } from '../TeletextGrid/TeletextGrid';
 import CrtTelevision from './CrtTelevision';
 import ExhibitScreen from './ExhibitScreen';
@@ -70,6 +71,8 @@ export function SoloViewer({ pageNumber: pageNumberProp }: SoloViewerProps) {
     pageNumberProp ?? (Number.isFinite(parsedParam) ? parsedParam : undefined);
 
   const parsedSubpage = params.subpage ? parseInt(params.subpage, 10) : NaN;
+  // Snow on the tube until the pages are in. See `useTuning`.
+  const tuning = useTuning();
 
   const {
     displayedPageNumber,
@@ -205,6 +208,7 @@ export function SoloViewer({ pageNumber: pageNumberProp }: SoloViewerProps) {
           onSubpageStep={stepSubpageBy}
           onFastext={handleSelectPage}
           compact={phone}
+          tuning={tuning}
         >
           <TeletextGrid
             page={shownPage}

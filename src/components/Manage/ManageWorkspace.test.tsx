@@ -45,6 +45,7 @@ const SEED: FakeSeed = {
   ],
   pages: [
     { pageNumber: 100, title: 'Index', kind: 'category', captureIds: [1] },
+    { pageNumber: 150 },
     { pageNumber: 200, title: 'News', kind: 'category', captureIds: [2] },
     { pageNumber: 201, title: 'Story one', captureIds: [3] },
     { pageNumber: 202, title: 'Story two', captureIds: [4, 5], screens: 2 },
@@ -55,7 +56,17 @@ const SEED: FakeSeed = {
   captures: [
     fakeCapture(9001, 220, 'Lisboa'),
     fakeCapture(9002, 221, 'Porto'),
-    fakeCapture(9003, 222, 'Faro'),
+    { ...fakeCapture(9003, 222, 'Faro'), source: 'rtp' as const },
+    // Page 222 again, a year later: the same slot, folded behind the newer one.
+    { ...fakeCapture(9004, 222, 'Faro again'), source: 'rtp' as const, first_seen: '2004-05-10', last_seen: '2004-06-02' },
+    // A three-screen SIC story: no titles in the manifest, as with all of SIC.
+    ...[1, 2, 3].map((sub) => ({
+      ...fakeCapture(9100 + sub, 571, ''),
+      source: 'sic' as const,
+      sub: `000${sub}`,
+      sub_index: sub,
+      manifest_title: null,
+    })),
   ],
 };
 
@@ -69,9 +80,9 @@ function LocationProbe() {
 }
 
 function Harness() {
-  const deps = useFakeManageDeps(SEED);
   const tab = useManageTab();
   const query = useArchiveQuery(tab.initialArchive);
+  const deps = useFakeManageDeps(SEED, query.queryFilters);
   return <ManageWorkspace deps={deps} tab={tab} query={query} />;
 }
 
@@ -107,8 +118,8 @@ describe('the page list', () => {
   it('lists pages in number order with the free numbers between them', () => {
     renderWorkspace();
     const numbers = [...document.querySelectorAll<HTMLElement>('[data-page]')].map((el) => el.dataset.page);
-    expect(numbers).toEqual(['100', '200', '201', '202', '203', '300', '710']);
-    expect(screen.getByText('101–199')).toBeInTheDocument();
+    expect(numbers).toEqual(['100', '150', '200', '201', '202', '203', '300', '710']);
+    expect(screen.getByText('101–149')).toBeInTheDocument();
     expect(screen.getByText('204–299')).toBeInTheDocument();
     // Headings are marked, archive pages name their source, hand-made ones say so.
     expect(within(row(200)).getByText('Category')).toBeInTheDocument();
@@ -122,7 +133,7 @@ describe('the page list', () => {
     const numbers = [...document.querySelectorAll<HTMLElement>('[data-page]')].map((el) => el.dataset.page);
     expect(numbers).toEqual(['201', '202', '203']);
     expect(screen.queryByText('204–299')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Clear · 3 of 7/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Clear · 3 of 8/ })).toBeInTheDocument();
   });
 
   it('selects one row on click, a range on Shift-click, and toggles on Cmd-click', async () => {
@@ -149,7 +160,7 @@ describe('the details pane', () => {
     const { user } = renderWorkspace();
     await user.click(row(201));
     const pane = screen.getByRole('complementary', { name: 'Page 201' });
-    const title = within(pane).getByRole('textbox', { name: /Title/ });
+    const title = within(pane).getByRole('textbox', { name: 'Title' });
 
     await user.clear(title);
     await user.type(title, 'Renamed');
@@ -319,6 +330,95 @@ describe('adding from the archive', () => {
     renderWorkspace('/manage?tab=archive');
     expect(screen.getByRole('complementary', { name: 'Archive' })).toBeInTheDocument();
     expect(location).toBe('/manage?tab=pages');
+  });
+});
+
+describe('working through the archive', () => {
+  it('hides what is already published, so the list is what is left to do', async () => {
+    const { user } = renderWorkspace();
+    await user.click(row(203));
+    await user.click(screen.getByRole('button', { name: '+ Add from archive' }));
+    const pane = screen.getByRole('complementary', { name: 'Archive' });
+    expect(within(pane).getByRole('checkbox', { name: 'Hide published' })).toBeChecked();
+
+    await user.click(within(pane).getByRole('button', { name: 'Pick RTP 220' }));
+    await user.click(within(pane).getByRole('button', { name: 'Add 1 page' }));
+    await waitFor(() => expect(titleAt(204)).toBe('Lisboa'));
+    expect(within(pane).queryByRole('button', { name: 'Pick RTP 220' })).toBeNull();
+
+    // Shown again, with where it went, once published captures are let back in.
+    await user.click(within(pane).getByRole('checkbox', { name: 'Hide published' }));
+    expect(within(pane).getByText('On 204')).toBeInTheDocument();
+    // And the next add would go straight after the last one.
+    await user.click(within(pane).getByRole('button', { name: 'Pick RTP 221' }));
+    expect(within(pane).getByRole('textbox', { name: 'Starting at' })).toHaveValue('205');
+  });
+
+  it('picks a whole story and adds it as one page of screens, titled from its text', async () => {
+    const { user } = renderWorkspace();
+    await user.click(row(203));
+    await user.click(screen.getByRole('button', { name: '+ Add from archive' }));
+    const pane = screen.getByRole('complementary', { name: 'Archive' });
+
+    const tile = within(pane).getByRole('button', { name: 'Pick SIC 571-0002' }).closest('li')!;
+    await user.click(within(tile).getByRole('button', { name: /Whole story · 3/ }));
+    expect(within(pane).getByRole('radio', { name: 'One page, as screens' })).toBeChecked();
+    expect(within(pane).getByText(/Adds page 204 with 3 screens, in the order picked\./)).toBeInTheDocument();
+
+    await user.click(within(pane).getByRole('button', { name: 'Add 1 page with 3 screens' }));
+    await waitFor(() => expect(titleAt(204)).toBe('Capture 9101'));
+    expect(within(row(204)).getByRole('button', { name: /Show the 3 screens of page 204/ })).toBeInTheDocument();
+  });
+
+  it('finds untitled pages and titles them from their own text', async () => {
+    const { user } = renderWorkspace();
+    await user.click(screen.getByRole('button', { name: 'Untitled · 1' }));
+    const numbers = [...document.querySelectorAll<HTMLElement>('[data-page]')].map((el) => el.dataset.page);
+    expect(numbers).toEqual(['150']);
+
+    await user.click(row(150));
+    const pane = screen.getByRole('complementary', { name: 'Page 150' });
+    await user.click(within(pane).getByRole('button', { name: 'Suggest' }));
+    const title = within(pane).getByRole('textbox', { name: 'Title' });
+    expect(title).toHaveFocus();
+    expect((title as HTMLInputElement).value).toMatch(/^lorem ipsum/);
+    await user.keyboard('{Enter}');
+    // Titled, it leaves the untitled view — which is the point of the view.
+    await waitFor(() => expect(row(150)).toBeNull());
+    await user.click(screen.getByRole('button', { name: 'Untitled · 0' }));
+    expect(titleAt(150)).toMatch(/^lorem ipsum/);
+  });
+
+  it('fills every missing title in a selection at once, leaving titled pages alone', async () => {
+    const { user } = renderWorkspace();
+    await user.click(row(100));
+    await user.keyboard('{Shift>}');
+    await user.click(row(200));
+    await user.keyboard('{/Shift}');
+    const pane = screen.getByRole('complementary', { name: '3 pages selected' });
+    expect(within(pane).getByText('1 of these has no title.')).toBeInTheDocument();
+    await user.click(within(pane).getByRole('button', { name: 'Fill in from page text' }));
+    await waitFor(() => expect(titleAt(150)).toMatch(/^lorem ipsum/));
+    expect(titleAt(100)).toBe('Index');
+    expect(screen.getByText('1 page given a title from its own text.')).toBeInTheDocument();
+  });
+});
+
+describe('one capture per page', () => {
+  it('folds other days of a page behind the newest, one click from showing them', async () => {
+    const { user } = renderWorkspace();
+    // The toolbar's button; the empty details pane offers the same one.
+    await user.click(screen.getAllByRole('button', { name: '+ Add from archive' })[0]);
+    const pane = screen.getByRole('complementary', { name: 'Archive' });
+    expect(within(pane).queryByText('Faro')).toBeNull();
+    const tile = within(pane).getByText('Faro again').closest('li')!;
+
+    await user.click(within(tile).getByRole('button', { name: '+1 other day' }));
+    expect(within(pane).getByRole('checkbox', { name: 'One per page' })).not.toBeChecked();
+    expect(within(pane).getByText('Faro')).toBeInTheDocument();
+    expect(within(pane).getByText('Faro again')).toBeInTheDocument();
+    // Narrowed to that page, so nothing else is in the way.
+    expect(within(pane).queryByText('Lisboa')).toBeNull();
   });
 });
 

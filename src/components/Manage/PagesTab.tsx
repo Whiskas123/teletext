@@ -134,6 +134,10 @@ export function PagesTab({
     });
 
   const filtering = isFiltering(filter);
+  const untitledCount = useMemo(
+    () => [...rows.values()].filter((row) => row.title.trim() === '').length,
+    [rows],
+  );
   const sections = useMemo<LineupSection[]>(
     () =>
       (['curated', 'playground'] as const).map((group) => {
@@ -295,7 +299,7 @@ export function PagesTab({
 
   const addAsPages = async (captures: readonly CaptureSummary[], target: LineupTarget) => {
     const plan = arrangePlan([], target, captures.length);
-    if (!plan.ok) return;
+    if (!plan.ok) return false;
     const done = await actions.addCaptures({
       mode: 'pages',
       captures: incomingOf(captures),
@@ -309,6 +313,7 @@ export function PagesTab({
       if (plan.placed.length > 1) selection.selectAll(plan.placed);
       unpick(captures);
     }
+    return done;
   };
 
   const addAsScreens = async (captures: readonly CaptureSummary[], pageNumber: number) => {
@@ -432,6 +437,14 @@ export function PagesTab({
       const plan = arrangePlan([], { kind: 'at', pageNumber: Number(destination.at) }, picked.length);
       return { ok: plan.ok, text: describeArrangement(plan, [], picked.length) };
     }
+    if (destination.mode === 'story') {
+      if (destination.at === '') return no('Say which number the page goes on.');
+      if (picked.length > MAX_SUBPAGE) return no(`A page holds at most ${MAX_SUBPAGE} screens.`);
+      const plan = arrangePlan([], { kind: 'at', pageNumber: Number(destination.at) }, 1);
+      if (!plan.ok) return no(plan.reason);
+      const pushed = describeArrangement(plan, [], 1).replace(/^Adds a page at \d+\. /, '');
+      return ok(`Adds page ${plan.placed[0]} with ${picked.length} screens, in the order picked. ${pushed}`);
+    }
     const pageNumber = Number(destination.page);
     if (destination.page === '') return no('Say which page.');
     if (destination.mode === 'screens') return checkScreens(pageNumber, picked.length);
@@ -448,8 +461,29 @@ export function PagesTab({
   const onAdd = async () => {
     if (!checkAdd().ok) return;
     if (destination.mode === 'pages') {
-      await addAsPages(picked, { kind: 'at', pageNumber: Number(destination.at) });
-      setDestination({ mode: 'pages', at: '' });
+      const at = Number(destination.at);
+      const count = picked.length;
+      if (await addAsPages(picked, { kind: 'at', pageNumber: at })) {
+        // Ready for the next batch, straight after this one.
+        setDestination({ mode: 'pages', at: String(at + count) });
+      }
+    } else if (destination.mode === 'story') {
+      const plan = arrangePlan([], { kind: 'at', pageNumber: Number(destination.at) }, 1);
+      if (!plan.ok) return;
+      const pageNumber = plan.placed[0];
+      const done = await actions.addCaptures({
+        mode: 'story',
+        captures: incomingOf(picked),
+        moves: plan.moves,
+        pageNumber,
+        transforms,
+        kind: settings.kind,
+      });
+      if (done) {
+        selection.selectOnly(pageNumber);
+        unpick(picked);
+        setDestination({ mode: 'pages', at: String(pageNumber + 1) });
+      }
     } else if (destination.mode === 'screens') {
       await addAsScreens(picked, Number(destination.page));
     } else {
@@ -468,6 +502,21 @@ export function PagesTab({
         setPicked([]);
       }
     }
+  };
+
+  /**
+   * Pick every screen of a capture's story, in screen order, after whatever is
+   * already picked — and switch to adding them as one page, since that is what
+   * a whole story is for.
+   */
+  const pickStory = async (capture: CaptureSummary) => {
+    const story = await data.loadStory(capture.id);
+    if (story.length === 0) return;
+    setPicked((current) => {
+      const have = new Set(current.map((c) => c.id));
+      return [...current, ...story.filter((c) => !have.has(c.id))];
+    });
+    if (destination.mode === 'pages') setDestination({ mode: 'story', at: destination.at });
   };
 
   /* --- the details pane ---------------------------------------------------- */
@@ -494,6 +543,7 @@ export function PagesTab({
         menus={data.menus}
         checkAdd={checkAdd}
         onAdd={() => void onAdd()}
+        onPickStory={(capture) => void pickStory(capture)}
         loadPage={data.loadPage}
         transform={data.transform}
         locked={locked}
@@ -512,6 +562,7 @@ export function PagesTab({
           void actions.applyTransforms(selectedPages, { shiftDown, menuId: 'keep' })
         }
         onMove={() => setMoving(selectedPages)}
+        onFillTitles={() => actions.fillTitles(selectedPages)}
         onMerge={() => askMerge(selectedPages[0], selectedPages.slice(1))}
         onDelete={() => askDelete(selectedPages)}
         onClear={selection.clear}
@@ -624,6 +675,17 @@ export function PagesTab({
               </option>
             ))}
           </select>
+          {(untitledCount > 0 || filter.untitled) && (
+            <button
+              type="button"
+              className={`mg-btn mg-btn-small${filter.untitled ? ' mg-btn-on' : ' mg-btn-ghost'}`}
+              aria-pressed={filter.untitled}
+              title="Show only pages with no title"
+              onClick={() => setFilter({ ...filter, untitled: !filter.untitled })}
+            >
+              Untitled · {untitledCount}
+            </button>
+          )}
           {filtering && (
             <button type="button" className="mg-btn mg-btn-small mg-btn-ghost" onClick={() => setFilter(EMPTY_FILTER)}>
               Clear · {shownCount} of {occupied.length}

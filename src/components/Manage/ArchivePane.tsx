@@ -55,6 +55,8 @@ export interface ArchivePaneProps {
   menus: readonly CustomMenu[];
   checkAdd(): DropVerdict;
   onAdd(): void;
+  /** Pick every screen of the story this capture belongs to. */
+  onPickStory(capture: CaptureSummary): void;
   loadPage(captureId: number): Promise<TeletextPage | null>;
   transform(page: TeletextPage, transforms: PublishTransforms): TeletextPage;
   locked: boolean;
@@ -81,6 +83,7 @@ export function ArchivePane({
   menus,
   checkAdd,
   onAdd,
+  onPickStory,
   loadPage,
   transform,
   locked,
@@ -196,6 +199,40 @@ export function ArchivePane({
         </label>
       </div>
 
+      <div className="mg-archive-view">
+        <label className="mg-check mg-check-small">
+          <input
+            type="checkbox"
+            checked={filters.unpublished ?? false}
+            onChange={(event) => change({ unpublished: event.target.checked || undefined })}
+          />
+          Hide published
+        </label>
+        <label
+          className="mg-check mg-check-small"
+          title="One capture per page and screen: the most recent day. Other days of the same page stay one click away."
+        >
+          <input
+            type="checkbox"
+            checked={filters.latest ?? false}
+            onChange={(event) => change({ latest: event.target.checked || undefined })}
+          />
+          One per page
+        </label>
+        <select
+          className="mg-input mg-input-small"
+          aria-label="Sort"
+          value={filters.sort ?? 'page'}
+          onChange={(event) =>
+            change({ sort: event.target.value === 'page' ? undefined : (event.target.value as 'newest' | 'oldest') })
+          }
+        >
+          <option value="page">By page number</option>
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+        </select>
+      </div>
+
       <div className="mg-archive-results">
         {error != null ? (
           <div className="mg-empty" role="alert">
@@ -264,6 +301,35 @@ export function ArchivePane({
                       {describeSpan(capture)}
                     </span>
                     {blocked != null && <span className="mg-bad">{blocked}</span>}
+                    {(capture.published_to?.length ?? 0) > 0 && (
+                      <span className="mg-published" title={`Published on ${capture.published_to!.join(', ')}`}>
+                        On {capture.published_to!.map((at) => at.replace(/\/1$/, '')).join(', ')}
+                      </span>
+                    )}
+                    <span className="mg-capture-actions">
+                      {(capture.story_size ?? 1) > 1 && (
+                        <button
+                          type="button"
+                          className="mg-link"
+                          title="Pick every screen of this page from the same day, in order"
+                          onClick={() => onPickStory(capture)}
+                        >
+                          Whole story · {capture.story_size}
+                        </button>
+                      )}
+                      {filters.latest && (capture.versions ?? 1) > 1 && (
+                        <button
+                          type="button"
+                          className="mg-link"
+                          title="Show every day this page was captured"
+                          onClick={() =>
+                            change({ page: capture.original_page, source: capture.source, latest: undefined })
+                          }
+                        >
+                          +{(capture.versions ?? 1) - 1} other {(capture.versions ?? 1) - 1 === 1 ? 'day' : 'days'}
+                        </button>
+                      )}
+                    </span>
                   </div>
                 </li>
               );
@@ -330,6 +396,7 @@ export function ArchivePane({
               {(
                 [
                   ['pages', count === 1 ? 'New page' : 'New pages'],
+                  ['story', 'One page, as screens'],
                   ['screens', 'Screens of a page'],
                   ['replace', 'Replace a screen'],
                 ] as const
@@ -339,15 +406,23 @@ export function ArchivePane({
                   type="button"
                   role="radio"
                   aria-checked={destination.mode === mode}
-                  disabled={mode === 'replace' && count !== 1}
-                  title={mode === 'replace' && count !== 1 ? 'Pick exactly one capture to replace a screen' : undefined}
+                  disabled={(mode === 'replace' && count !== 1) || (mode === 'story' && count < 2)}
+                  title={
+                    mode === 'replace' && count !== 1
+                      ? 'Pick exactly one capture to replace a screen'
+                      : mode === 'story' && count < 2
+                        ? 'Pick two or more captures to make one page of them'
+                        : undefined
+                  }
                   className={`mg-seg${destination.mode === mode ? ' mg-seg-on' : ''}`}
                   onClick={() => {
                     if (mode === destination.mode) return;
                     const page =
-                      destination.mode === 'pages' ? destination.at : destination.page;
+                      destination.mode === 'pages' || destination.mode === 'story'
+                        ? destination.at
+                        : destination.page;
                     setDestination(
-                      mode === 'pages'
+                      mode === 'pages' || mode === 'story'
                         ? { mode, at: page }
                         : mode === 'screens'
                           ? { mode, page }
@@ -361,15 +436,15 @@ export function ArchivePane({
             </div>
 
             <div className="mg-field-row">
-              {destination.mode === 'pages' ? (
+              {destination.mode === 'pages' || destination.mode === 'story' ? (
                 <label className="mg-field">
-                  <span className="mg-label">Starting at</span>
+                  <span className="mg-label">{destination.mode === 'story' ? 'Page number' : 'Starting at'}</span>
                   <input
                     className="mg-input mg-input-num"
                     inputMode="numeric"
                     value={destination.at}
                     onChange={(event) =>
-                      setDestination({ mode: 'pages', at: event.target.value.replace(/\D/g, '').slice(0, 3) })
+                      setDestination({ mode: destination.mode, at: event.target.value.replace(/\D/g, '').slice(0, 3) })
                     }
                   />
                 </label>
@@ -419,7 +494,7 @@ export function ArchivePane({
                   ))}
                 </select>
               </label>
-              {destination.mode === 'pages' && (
+              {(destination.mode === 'pages' || destination.mode === 'story') && (
                 <label className="mg-field">
                   <span className="mg-label">Role</span>
                   <select
@@ -458,7 +533,9 @@ export function ArchivePane({
             >
               {destination.mode === 'replace'
                 ? 'Replace the screen'
-                : destination.mode === 'screens'
+                : destination.mode === 'story'
+                  ? `Add 1 page with ${count} screens`
+                  : destination.mode === 'screens'
                   ? `Add ${count} ${count === 1 ? 'screen' : 'screens'}`
                   : `Add ${count} ${count === 1 ? 'page' : 'pages'}`}
             </button>

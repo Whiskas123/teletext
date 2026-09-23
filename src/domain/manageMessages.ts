@@ -61,7 +61,6 @@ export function actionLabel(action: PageActionName): string {
   }
 }
 
-/** What a page action says while it is running. */
 /** What a page action says once it has worked. */
 export function actionDone(action: PageActionName): string {
   switch (action) {
@@ -110,19 +109,10 @@ export function roleChanged(pageNumber: number, kind: PageKind): Notice {
   return status(`Page ${pageNumber} is now a ${kind}.`);
 }
 
-/** A whole run of captures published onto consecutive pages. */
-/** New transforms re-applied to a run of pages already on air. */
-/** A publish target outside the curated range. Reuses the domain's own prose. */
-/** A capture that is catalogued but cannot be rendered. */
-/** Make room / close gap, which moves a whole run of pages. */
-/** A block move, which is also how a single-page nudge is carried out. */
 export function textTooLong(field: 'title' | 'description', limit: number): Notice {
   return alert(`The ${field} must be ${limit} characters or fewer. Nothing was saved.`);
 }
 
-/** The selected capture has fallen out of the restored results. */
-/** Name the restrictions in force, for an empty list or a counter. */
-/** No page survived the on-air filter. */
 /** The capture filter values, structurally — kept out of the collab layer. */
 export interface CaptureFilterValues {
   source?: string;
@@ -132,6 +122,8 @@ export interface CaptureFilterValues {
   page?: number;
   q?: string;
   undecoded?: boolean;
+  unpublished?: boolean;
+  latest?: boolean;
 }
 
 /** Name every capture filter in force, so an empty result explains itself. */
@@ -143,6 +135,7 @@ export function describeCaptureFilters(filters: CaptureFilterValues): string {
   if (filters.source) parts.push(`source ${filters.source.toUpperCase()}`);
   if (filters.scheme) parts.push(`era ${filters.scheme}`);
   if (filters.page) parts.push(`original page ${filters.page}`);
+  if (filters.unpublished) parts.push('not yet published');
   parts.push(
     filters.undecoded
       ? 'including captures that cannot be decoded'
@@ -155,12 +148,3 @@ export function describeCaptureFilters(filters: CaptureFilterValues): string {
 export function noCaptureMatch(filters: CaptureFilterValues): string {
   return `No capture matches ${describeCaptureFilters(filters)}.`;
 }
-
-/**
- * What a destructive action takes, spelled out before it is taken.
- *
- * Delete and unpublish differ in what survives — a deleted page loses its
- * directory role, an unpublished one loses its record — and the difference is
- * exactly what the operator needs to know, so the two are written separately
- * rather than sharing one hedge.
- */

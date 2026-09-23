@@ -17,6 +17,7 @@ import type { PageActionName } from '../../domain/inFlight';
 import type { CustomMenu } from '../../domain/menu';
 import { MAX_DESCRIPTION_LENGTH, MAX_TITLE_LENGTH } from '../../domain/publication';
 import { MAX_SUBPAGE } from '../../domain/subpages';
+import { suggestTitle } from '../../domain/suggestTitle';
 import type { TeletextPage } from '../../types/teletext';
 import type { DropVerdict } from './LineupTable';
 import { KIND_NAMES, type PageRow } from './lineupModel';
@@ -126,12 +127,32 @@ export function Inspector({
       </header>
 
       <section className="mg-insp-section">
-        <label className="mg-field">
-          <span className="mg-label">
-            Title <span className="mg-count">{(title ?? row.title).length}/{MAX_TITLE_LENGTH}</span>
+        <div className="mg-field">
+          <span className="mg-label-row">
+            <label className="mg-label" htmlFor={`mg-title-${pageNumber}`}>
+              Title
+            </label>
+            <button
+              type="button"
+              className="mg-link"
+              disabled={locked}
+              title="Read a title off the top of screen 1 — review it, then press Enter"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                const cells = livePage(pageNumber, 1);
+                const suggestion = cells == null ? '' : suggestTitle(cells);
+                if (suggestion === '') return;
+                titleRef.current?.focus();
+                setTitle(suggestion);
+              }}
+            >
+              Suggest
+            </button>
+            <span className="mg-count">{(title ?? row.title).length}/{MAX_TITLE_LENGTH}</span>
           </span>
           <input
             ref={titleRef}
+            id={`mg-title-${pageNumber}`}
             className="mg-input"
             maxLength={MAX_TITLE_LENGTH}
             value={title ?? row.title}
@@ -153,7 +174,7 @@ export function Inspector({
               }
             }}
           />
-        </label>
+        </div>
 
         <label className="mg-field">
           <span className="mg-label">

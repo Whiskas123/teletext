@@ -1334,6 +1334,16 @@ button.frontpage-watch-kind:focus-visible {
   font-size: 0.8em;
 }
 
+/* Snow, while there is no page to draw yet (see `TubeStatic`). */
+.crt-static {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.9;
+  pointer-events: none;
+}
+
 /* Shadow mask lines. Fine enough to read as a tube, not as a filter. */
 .crt-scanlines {
   position: absolute;
@@ -2918,7 +2928,6 @@ button.yellow-pages-number:hover {
 
 .yellow-pages-entry-subcategory .yellow-pages-name {
   font-weight: 700;
-  font-style: italic;
   text-transform: uppercase;
 }
 

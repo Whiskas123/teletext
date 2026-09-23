@@ -45,6 +45,7 @@ import { useRoomSync } from '../../collab/useRoomSync';
 import { useVoting } from '../../collab/useVoting';
 import { useChat } from '../../collab/useChat';
 import { useMediaQuery } from '../../utils/useMediaQuery';
+import { useTuning } from '../../collab/bootData';
 import { TeletextGrid } from '../TeletextGrid/TeletextGrid';
 import CrtTelevision from './CrtTelevision';
 import RoomLayout from './RoomLayout';
@@ -97,6 +98,8 @@ function RoomViewerContent({
     resolveDial,
   } = useRoomSync();
   const { submit, active } = useVoting();
+  // Snow on the tube until the pages are in. See `useTuning`.
+  const tuning = useTuning();
   // Only for the count: the log itself is the chat console's business. A room
   // with the conversation behind a tab still has to be able to say that
   // something arrived while you were looking elsewhere.
@@ -309,6 +312,7 @@ function RoomViewerContent({
           onFastext={propose}
           refusals={refusals}
           compact={phone}
+          tuning={tuning}
           handsetHead={phone ? phoneTabs : undefined}
           handsetInstead={phonePanel}
         >

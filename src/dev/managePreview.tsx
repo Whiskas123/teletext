@@ -49,15 +49,25 @@ const seed: FakeSeed = {
     { pageNumber: 701, title: '' },
     { pageNumber: 745, title: 'Visitor art' },
   ],
-  captures: Array.from({ length: 36 }, (_, i) =>
-    fakeCapture(5000 + i, 200 + (i % 40), `Arquivo ${['Lisboa', 'Porto', 'Benfica', 'Chuva', 'Bolsa', 'RTP1'][i % 6]} ${i + 1}`, ['noticias', 'desporto', 'meteorologia'][i % 3]),
-  ),
+  captures: [
+    ...Array.from({ length: 36 }, (_, i) =>
+      fakeCapture(80000 + i, 200 + (i % 40), `Arquivo ${['Lisboa', 'Porto', 'Benfica', 'Chuva', 'Bolsa', 'RTP1'][i % 6]} ${i + 1}`, ['noticias', 'desporto', 'meteorologia'][i % 3]),
+    ),
+    // A SIC story over four screens, untitled like all of SIC.
+    ...[1, 2, 3, 4].map((sub) => ({
+      ...fakeCapture(90000 + sub, 571, ''),
+      source: 'sic' as const,
+      sub: `000${sub}`,
+      sub_index: sub,
+      manifest_title: null,
+    })),
+  ],
 };
 
 export function Preview() {
-  const deps = useFakeManageDeps(seed);
   const tab = useManageTab();
   const query = useArchiveQuery(tab.initialArchive);
+  const deps = useFakeManageDeps(seed, query.queryFilters);
   return <ManageWorkspace deps={deps} tab={tab} query={query} />;
 }
 

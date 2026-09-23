@@ -87,3 +87,22 @@ export function usePageDataWithBoot<T extends object>(
   const fallback = booted?.[channel] as T | undefined;
   return [synced || fallback == null ? live : fallback, setLive];
 }
+
+/**
+ * Whether the set has nothing to draw yet, for the static on the tube.
+ *
+ * True until the build's copy or the live document arrives, whichever is first.
+ * Once there is a page it is shown clean, even while the live document is still
+ * on its way — the "Tuning in…" banner says that much, and snow over a page that
+ * is there to be read would only get in the way of reading it.
+ */
+export function useTuning(): boolean {
+  const { isLoading } = usePlayContext();
+  const booted = useSyncExternalStore(subscribe, getBoot, getNoBoot);
+
+  useEffect(() => {
+    if (isLoading) loadBootData();
+  }, [isLoading]);
+
+  return isLoading && booted == null;
+}

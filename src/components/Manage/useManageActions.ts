@@ -44,6 +44,7 @@ import {
 } from '../../domain/manageMessages';
 import { MAX_DESCRIPTION_LENGTH, MAX_TITLE_LENGTH } from '../../domain/publication';
 import type { PageMove } from '../../domain/reorder';
+import { suggestTitle } from '../../domain/suggestTitle';
 
 type Outcome = { ok: true } | { ok: false; error: string };
 
@@ -53,13 +54,17 @@ export interface TransformPatch {
   menuId: number | null | 'keep';
 }
 
-/** A capture on its way to a page, with the title it should carry. */
+/**
+ * A capture on its way to a page, with the title it should carry. An empty
+ * title is read off the capture's own text on the way (`suggestTitle`) — all
+ * of SIC arrives untitled, and a blank title is a blank line in the directory.
+ */
 export interface IncomingCapture {
   id: number;
   title: string;
 }
 
-/** Adding captures from the archive, in one of the three ways it can be done. */
+/** Adding captures from the archive, in one of the four ways it can be done. */
 export type AddCapturesRequest =
   | {
       /** As new pages, each on its own number. */
@@ -69,6 +74,16 @@ export type AddCapturesRequest =
       moves: readonly PageMove[];
       /** The numbers the captures land on, in order. */
       placed: readonly number[];
+      transforms: PublishTransforms;
+      kind: PageKind;
+    }
+  | {
+      /** As one new page, the captures its screens in order — a whole story. */
+      mode: 'story';
+      captures: readonly IncomingCapture[];
+      /** Renumberings that make room first (`planArrangement`). */
+      moves: readonly PageMove[];
+      pageNumber: number;
       transforms: PublishTransforms;
       kind: PageKind;
     }
@@ -121,6 +136,8 @@ export interface ManageActionsApi {
   /** Re-publish every archive screen of these pages with new transforms. */
   applyTransforms(pageNumbers: readonly number[], patch: TransformPatch): Promise<boolean>;
   setRole(pageNumbers: readonly number[], kind: PageKind): void;
+  /** Give every untitled page among these a title read off its first screen. */
+  fillTitles(pageNumbers: readonly number[]): void;
 
   saveText(pageNumber: number, title: string, description: string): Promise<boolean>;
   addSubpage(pageNumber: number): void;
@@ -249,6 +266,16 @@ export function useManageActions({
     [],
   );
 
+  /** The capture's own title, or one read off its text when it has none. */
+  const titleFor = useCallback(
+    async (capture: IncomingCapture): Promise<string> => {
+      if (capture.title.trim() !== '') return capture.title;
+      const cells = await data.loadPage(capture.id);
+      return cells == null ? '' : suggestTitle(cells);
+    },
+    [data],
+  );
+
   const arrange = useCallback(
     (moves: readonly PageMove[], summary: string) => {
       if (moves.length === 0) return Promise.resolve(true);
@@ -299,6 +326,33 @@ export function useManageActions({
             );
           }
 
+          if (request.mode === 'story') {
+            if (request.moves.length > 0) {
+              setProgress({ label: 'Making room', done: 0, total: 1 });
+              const made = await data.arrange(request.moves);
+              if (!made.ok) return made;
+            }
+            // The story's title is its first screen's; every screen after it
+            // goes in under the same one, since a title belongs to the page.
+            const title = request.captures.length > 0 ? await titleFor(request.captures[0]) : '';
+            const result = await sequence(
+              'Publishing screens',
+              request.captures,
+              (capture, index) =>
+                data.publish({
+                  pageNumber: request.pageNumber,
+                  subpage: index + 1,
+                  captureId: capture.id,
+                  title,
+                  description: '',
+                  transforms: request.transforms,
+                }),
+              (capture) => `capture ${capture.id}`,
+            );
+            if (result.ok) setKind(request.pageNumber, request.kind);
+            return result;
+          }
+
           // New pages: make room, then publish onto the freed numbers. The
           // room is made first and as one step, so a publish that fails half
           // way leaves a gap rather than a page overwritten.
@@ -315,7 +369,7 @@ export function useManageActions({
               const result = await data.publish({
                 pageNumber,
                 captureId: capture.id,
-                title: capture.title,
+                title: await titleFor(capture),
                 description: '',
                 transforms: request.transforms,
               });
@@ -334,6 +388,11 @@ export function useManageActions({
               `Screen ${request.subpage} of page ${request.pageNumber} replaced.`,
             );
           }
+          if (request.mode === 'story') {
+            return status(
+              `Page ${request.pageNumber} added with ${plural(request.captures.length, 'screen')}.`,
+            );
+          }
           if (request.mode === 'screens') {
             const last = request.firstSubpage + request.captures.length - 1;
             return status(
@@ -346,7 +405,20 @@ export function useManageActions({
           );
         },
       ),
-    [runStructural, data, sequence, setKind],
+    [runStructural, data, sequence, setKind, titleFor],
+  );
+
+  /**
+   * Adding captures, then refreshing the archive's list — which hides what is
+   * published — so what was just placed drops out of the list of what is left.
+   */
+  const addCapturesAndRefresh = useCallback(
+    async (request: AddCapturesRequest) => {
+      const done = await addCaptures(request);
+      data.retryCaptures();
+      return done;
+    },
+    [addCaptures, data],
   );
 
   const deletePages = useCallback(
@@ -448,6 +520,25 @@ export function useManageActions({
     [setKind],
   );
 
+  const fillTitles = useCallback(
+    (pageNumbers: readonly number[]) => {
+      let filled = 0;
+      for (const page of pageNumbers) {
+        if (data.titleOf(page).trim() !== '') continue;
+        const cells = data.livePage(page, 1);
+        const title = cells == null ? '' : suggestTitle(cells);
+        if (title === '') continue;
+        if (data.savePageText(page, title, data.descriptionOf(page)).ok) filled += 1;
+      }
+      setNotice(
+        filled === 0
+          ? status('No untitled page here had a line to use as a title.')
+          : status(`${plural(filled, 'page')} given a title from its own text.`),
+      );
+    },
+    [data],
+  );
+
   const saveText = useCallback(
     (pageNumber: number, title: string, description: string) =>
       runPageAction(pageNumber, 'save-text', async () => {
@@ -529,11 +620,12 @@ export function useManageActions({
     structuralBusy: inFlight.publishBusy,
     progress,
     arrange,
-    addCaptures,
+    addCaptures: addCapturesAndRefresh,
     deletePages,
     mergePages,
     applyTransforms,
     setRole,
+    fillTitles,
     saveText,
     addSubpage,
     removeLastSubpage,

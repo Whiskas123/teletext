@@ -14,3 +14,8 @@ import { afterEach } from 'vitest'
 afterEach(() => {
   cleanup()
 })
+
+// jsdom has no canvas: `getContext` already answers `null`, but logs "Not
+// implemented" as it does. Say the same thing quietly — every caller (the snow
+// on the tube, the page renderer) already copes with a `null` context.
+HTMLCanvasElement.prototype.getContext = (() => null) as typeof HTMLCanvasElement.prototype.getContext

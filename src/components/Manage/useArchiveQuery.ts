@@ -18,6 +18,13 @@ import type { CaptureFilters } from '../../collab/useArchiveAdmin';
 
 const TERM_DEBOUNCE_MS = 300;
 
+/**
+ * Where the pane starts, and where "clear" goes back to: what is left to do,
+ * one capture per page. That is the view for filling the service; everything
+ * else is a click away.
+ */
+export const DEFAULT_CAPTURE_FILTERS: CaptureFilters = { unpublished: true, latest: true };
+
 export interface ArchiveQuery {
   open: boolean;
   setOpen(open: boolean): void;
@@ -36,7 +43,7 @@ export interface ArchiveQuery {
 export function useArchiveQuery(initiallyOpen = false): ArchiveQuery {
   const [open, setOpenState] = useState(initiallyOpen);
   const [visited, setVisited] = useState(initiallyOpen);
-  const [filters, setFilters] = useState<CaptureFilters>({});
+  const [filters, setFilters] = useState<CaptureFilters>(DEFAULT_CAPTURE_FILTERS);
   const [debouncedTerm, setDebouncedTerm] = useState('');
   const [offset, setOffset] = useState(0);
 
@@ -68,7 +75,7 @@ export function useArchiveQuery(initiallyOpen = false): ArchiveQuery {
   );
 
   const clearFilters = useCallback(() => {
-    setFilters({});
+    setFilters(DEFAULT_CAPTURE_FILTERS);
     setDebouncedTerm('');
     setOffset(0);
   }, []);

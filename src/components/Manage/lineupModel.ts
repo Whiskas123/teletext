@@ -130,12 +130,16 @@ export interface LineupFilter {
   source: 'all' | 'archive' | 'hand-made';
   /** A bar id as a string, `own`, or `all`. */
   bar: string;
+  /** Only pages with no title. */
+  untitled: boolean;
 }
 
-export const EMPTY_FILTER: LineupFilter = { text: '', source: 'all', bar: 'all' };
+export const EMPTY_FILTER: LineupFilter = { text: '', source: 'all', bar: 'all', untitled: false };
 
 export function isFiltering(filter: LineupFilter): boolean {
-  return filter.text.trim() !== '' || filter.source !== 'all' || filter.bar !== 'all';
+  return (
+    filter.text.trim() !== '' || filter.source !== 'all' || filter.bar !== 'all' || filter.untitled
+  );
 }
 
 /**
@@ -143,6 +147,7 @@ export function isFiltering(filter: LineupFilter): boolean {
  * as a substring, so `41` finds 410–419 as well as 141.
  */
 export function matchesFilter(row: PageRow, filter: LineupFilter): boolean {
+  if (filter.untitled && row.title.trim() !== '') return false;
   if (filter.source === 'archive' && row.archiveScreens === 0) return false;
   if (filter.source === 'hand-made' && row.archiveScreens > 0) return false;
   if (filter.bar === 'own' && row.bar.kind !== 'own') return false;
@@ -169,6 +174,8 @@ export const KIND_NAMES: Record<PageKind, string> = {
 /** Where picked captures go, with numbers held as typed. */
 export type AddDestination =
   | { mode: 'pages'; at: string }
+  /** One new page, the picked captures its screens in order. */
+  | { mode: 'story'; at: string }
   | { mode: 'screens'; page: string }
   | { mode: 'replace'; page: string; screen: string };
 

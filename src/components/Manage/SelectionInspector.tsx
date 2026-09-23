@@ -21,6 +21,7 @@ export interface SelectionInspectorProps {
   onSetBar(menuId: number | null): void;
   onSetShift(shift: boolean): void;
   onMove(): void;
+  onFillTitles(): void;
   onMerge(): void;
   onDelete(): void;
   onClear(): void;
@@ -40,6 +41,7 @@ export function SelectionInspector({
   onSetBar,
   onSetShift,
   onMove,
+  onFillTitles,
   onMerge,
   onDelete,
   onClear,
@@ -54,6 +56,7 @@ export function SelectionInspector({
   );
   const shift = common(archive.map((row) => row.shift));
   const handMade = rows.length - archive.length;
+  const untitled = rows.filter((row) => row.title.trim() === '').length;
 
   return (
     <aside className="mg-inspector" aria-label={`${rows.length} pages selected`}>
@@ -68,6 +71,22 @@ export function SelectionInspector({
       </header>
 
       <section className="mg-insp-section">
+        {untitled > 0 && (
+          <div className="mg-inline mg-wrap">
+            <span className="mg-note mg-note-warn mg-grow">
+              {untitled} of these {untitled === 1 ? 'has' : 'have'} no title.
+            </span>
+            <button
+              type="button"
+              className="mg-btn mg-btn-small"
+              disabled={locked}
+              title="Read a title off the top of each untitled page. Pages that already have one are left alone."
+              onClick={onFillTitles}
+            >
+              Fill in from page text
+            </button>
+          </div>
+        )}
         <label className="mg-field">
           <span className="mg-label">Directory role</span>
           <select

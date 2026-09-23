@@ -79,6 +79,12 @@ export interface CaptureSummary {
   corpus_file: string;
   /** Whether the archive holds a render for this capture, for the browser. */
   has_image: boolean;
+  /** Where it is published, as `"page/screen"`; empty when it is not. */
+  published_to?: string[];
+  /** Captures of the same page slot and topic, this one included. */
+  versions?: number;
+  /** How many screens its page had when it was captured. */
+  story_size?: number;
 }
 
 /** One published slot, joined with the capture behind it. */
@@ -123,6 +129,11 @@ export interface CaptureFilters {
   page?: number;
   q?: string;
   undecoded?: boolean;
+  /** Hide captures already published somewhere. */
+  unpublished?: boolean;
+  /** One capture per page slot, the most recent. */
+  latest?: boolean;
+  sort?: 'newest' | 'oldest';
 }
 
 /** Saving a page's text refuses before it writes anything. */
@@ -152,6 +163,9 @@ function queryString(filters: CaptureFilters, limit: number, offset: number): st
   if (filters.page) params.set('page', String(filters.page));
   if (filters.q) params.set('q', filters.q);
   if (filters.undecoded) params.set('undecoded', 'true');
+  if (filters.unpublished) params.set('unpublished', 'true');
+  if (filters.latest) params.set('latest', 'true');
+  if (filters.sort) params.set('sort', filters.sort);
   params.set('limit', String(limit));
   params.set('offset', String(offset));
   return params.toString();
@@ -222,6 +236,8 @@ export interface ArchiveAdminApi {
   reloadPublished(): void;
   /** Fetch one capture's cells, for previewing. */
   loadPage(captureId: number): Promise<TeletextPage | null>;
+  /** Every screen of the story a capture belongs to, in screen order. */
+  loadStory(captureId: number): Promise<CaptureSummary[]>;
   /**
    * What is on `pageNumber` right now, read from the live document — not from
    * the database, so it reflects any collaborative edits since publication.
@@ -534,6 +550,15 @@ export function useArchiveAdmin({
       return body.cells == null ? null : pageToArray(body.cells);
     } catch {
       return null;
+    }
+  }, []);
+
+  const loadStory = useCallback(async (captureId: number): Promise<CaptureSummary[]> => {
+    try {
+      const body = await getJson<{ captures: CaptureSummary[] }>(`/api/captures?story=${captureId}`);
+      return body.captures;
+    } catch {
+      return [];
     }
   }, []);
 
@@ -1068,6 +1093,7 @@ export function useArchiveAdmin({
     retryCaptures,
     reloadPublished,
     loadPage,
+    loadStory,
     livePage,
     transform,
     publish,

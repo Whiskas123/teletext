@@ -160,6 +160,74 @@ export interface CrtTelevisionProps {
   handsetHead?: ReactNode;
   /** Shown in place of the handset while {@link handsetHead} has another tab open. */
   handsetInstead?: ReactNode;
+  /**
+   * Snow on the tube while there is no page to draw yet. See {@link TubeStatic}.
+   */
+  tuning?: boolean;
+}
+
+/* ── static ────────────────────────────────────────────────────────────────── */
+
+/** The snow's own resolution: a quarter-size tube, smoothed up to fit it. */
+const STATIC_WIDTH = 320;
+const STATIC_HEIGHT = 240;
+/** PAL's 25 frames a second. Faster reads as a screensaver, slower as a GIF. */
+const STATIC_FRAME_MS = 40;
+
+/**
+ * An untuned set: snow.
+ *
+ * Drawn, not a looping image, because a loop of snow is recognisably a loop
+ * within a second or two. Each frame is a window onto a buffer of noise twice
+ * the size of the tube, at a random offset — which looks every bit as random as
+ * rolling a fresh number per pixel and costs one copy instead of 77,000 calls
+ * to `Math.random`.
+ *
+ * Inside the raster, above the page, so switching the set off collapses the
+ * snow into the line and the dot along with everything else on the tube. Under
+ * `prefers-reduced-motion` it is one frame, held.
+ */
+function TubeStatic({ still }: { still: boolean }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const context = canvasRef.current?.getContext('2d');
+    if (context == null) return;
+
+    const size = STATIC_WIDTH * STATIC_HEIGHT;
+    const noise = new Uint32Array(size * 2);
+    for (let i = 0; i < noise.length; i += 1) {
+      const grey = (Math.random() * 256) | 0;
+      // ABGR in memory on every little-endian machine a browser runs on.
+      noise[i] = 0xff000000 | (grey << 16) | (grey << 8) | grey;
+    }
+    const image = context.createImageData(STATIC_WIDTH, STATIC_HEIGHT);
+    const pixels = new Uint32Array(image.data.buffer);
+
+    let frame = 0;
+    let last = -Infinity;
+    const draw = (now: number) => {
+      if (now - last >= STATIC_FRAME_MS) {
+        last = now;
+        const offset = (Math.random() * size) | 0;
+        pixels.set(noise.subarray(offset, offset + size));
+        context.putImageData(image, 0, 0);
+      }
+      if (!still) frame = requestAnimationFrame(draw);
+    };
+    draw(performance.now());
+    return () => cancelAnimationFrame(frame);
+  }, [still]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="crt-static"
+      width={STATIC_WIDTH}
+      height={STATIC_HEIGHT}
+      aria-hidden="true"
+    />
+  );
 }
 
 /* ── keys ──────────────────────────────────────────────────────────────────── */
@@ -1028,6 +1096,7 @@ export function CrtTelevision({
   compact = false,
   handsetHead,
   handsetInstead,
+  tuning = false,
 }: CrtTelevisionProps) {
   const copy = useCopy();
   const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
@@ -1964,6 +2033,7 @@ export function CrtTelevision({
           <div className="crt-raster">
             {signal.stream != null && <SignalPicture stream={signal.stream} />}
             {children}
+            {tuning && <TubeStatic still={reduceMotion} />}
           </div>
           <div className="crt-beam" />
           <div className="crt-dot" />
