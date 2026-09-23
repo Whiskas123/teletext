@@ -51,8 +51,8 @@ describe('tabParam and parseTabKey', () => {
   });
 
   it('rejects a differently-cased key', () => {
-    expect(parseTabKey('Archive')).toBeNull();
-    expect(parseTabKey('ON-AIR')).toBeNull();
+    expect(parseTabKey('Pages')).toBeNull();
+    expect(parseTabKey('BARS')).toBeNull();
   });
 });
 
@@ -64,6 +64,7 @@ describe('resolveTabParam', () => {
           tab,
           canonical: true,
           present: true,
+          archive: false,
         });
       }),
     );
@@ -75,6 +76,7 @@ describe('resolveTabParam', () => {
       tab: DEFAULT_TAB,
       canonical: true,
       present: false,
+      archive: false,
     });
   });
 
@@ -82,10 +84,12 @@ describe('resolveTabParam', () => {
     fc.assert(
       fc.property(fc.string({ maxLength: 2048 }), (raw) => {
         fc.pre(!TAB_KEYS.some((key) => key === raw));
+        fc.pre(!['on-air', 'archive', 'showcase'].includes(raw));
         expect(resolveTabParam([raw])).toEqual({
           tab: DEFAULT_TAB,
           canonical: false,
           present: true,
+          archive: false,
         });
       }),
     );
@@ -100,6 +104,7 @@ describe('resolveTabParam', () => {
             tab: DEFAULT_TAB,
             canonical: false,
             present: true,
+            archive: false,
           });
         },
       ),
@@ -117,6 +122,29 @@ describe('resolveTabParam', () => {
         expect(second.canonical).toBe(true);
       }),
     );
+  });
+});
+
+describe('links saved before the tabs were renamed', () => {
+  it('still open the screen they meant, and ask to be rewritten', () => {
+    expect(resolveTabParam(['on-air'])).toEqual({
+      tab: 'pages',
+      canonical: false,
+      present: true,
+      archive: false,
+    });
+    expect(resolveTabParam(['archive'])).toEqual({
+      tab: 'pages',
+      canonical: false,
+      present: true,
+      archive: true,
+    });
+    expect(resolveTabParam(['showcase']).tab).toBe('front');
+  });
+
+  it('does not treat inherited object keys as legacy names', () => {
+    expect(resolveTabParam(['constructor']).tab).toBe(DEFAULT_TAB);
+    expect(resolveTabParam(['__proto__']).tab).toBe(DEFAULT_TAB);
   });
 });
 

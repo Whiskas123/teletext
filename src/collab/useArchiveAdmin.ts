@@ -33,7 +33,7 @@ import { hasVisibleContent } from '../domain/pageOps';
 import { shiftPageDown } from '../domain/pageTransform';
 import { MAX_DESCRIPTION_LENGTH } from '../domain/publication';
 import { validateTitle } from '../domain/titles';
-import type { ReorderPlan } from '../domain/reorder';
+import type { PageMove, ReorderPlan } from '../domain/reorder';
 import { usePageTitles } from './useGuide';
 import { useImportPages } from './useImportPages';
 import { PAGES_CHANNEL } from './useEditPage';
@@ -264,6 +264,12 @@ export interface ArchiveAdminApi {
     blockEnd: number,
     destination: number,
   ): Promise<{ ok: true } | { ok: false; error: string }>;
+  /**
+   * Renumber an explicit set of pages at once, each to the number given —
+   * what a drag in the page list works out (see `domain/lineup.ts`). The
+   * server checks nothing lands on a page that is staying put.
+   */
+  arrange(moves: readonly PageMove[]): Promise<{ ok: true } | { ok: false; error: string }>;
   /**
    * Remove a page entirely: its content, title, heading role and description,
    * plus its publication record when it has one.
@@ -876,6 +882,11 @@ export function useArchiveAdmin({
     [reorder],
   );
 
+  const arrange = useCallback<ArchiveAdminApi['arrange']>(
+    (moves) => reorder({ action: 'arrange', moves }),
+    [reorder],
+  );
+
   const titleOf = useCallback(
     (pageNumber: number): string => {
       const value = liveTitles?.[pageNumber];
@@ -1065,6 +1076,7 @@ export function useArchiveAdmin({
     deleteMenu,
     shiftPages,
     moveBlock,
+    arrange,
     deletePage,
     titleOf,
     descriptionOf,

@@ -239,6 +239,55 @@ export function planMove(
 }
 
 /**
+ * Renumber an explicit set of pages, each to a number the caller chose.
+ *
+ * `planShift` and `planMoveBlock` each encode one idea of where things go. The
+ * page list on `/manage` is dragged, and where a drop should land depends on
+ * the gaps around it (see `domain/lineup.ts`), so the client works out the
+ * whole mapping and this only checks that it is safe: every source holds
+ * something, no two pages claim one number, and no destination is a page that
+ * is staying where it is.
+ *
+ * Every source is lifted and dropped rather than moved in place, so a mapping
+ * with cycles in it — two pages swapping numbers — needs no ordering at all.
+ */
+export function planArrange(
+  occupied: readonly number[],
+  mapping: readonly PageMove[],
+): PlanResult {
+  const moves = mapping.filter(({ from, to }) => from !== to);
+  if (moves.some(({ from, to }) => !inRange(from) || !inRange(to))) {
+    return { ok: false, reason: 'invalid-range' };
+  }
+  if (moves.length === 0) return { ok: false, reason: 'nothing-to-move' };
+
+  const all = new Set(normalizeOccupied(occupied));
+  const sources = new Set(moves.map(({ from }) => from));
+  const destinations = new Set(moves.map(({ to }) => to));
+  // A page listed twice would be dropped at two numbers, and two pages sent to
+  // one number would leave only the second.
+  if (sources.size !== moves.length || destinations.size !== moves.length) {
+    return { ok: false, reason: 'invalid-range' };
+  }
+  if (moves.some(({ from }) => !all.has(from))) {
+    return { ok: false, reason: 'nothing-to-move' };
+  }
+
+  const blocking = moves
+    .map(({ to }) => to)
+    .filter((to) => all.has(to) && !sources.has(to))
+    .sort((a, b) => a - b);
+  if (blocking.length > 0) return { ok: false, reason: 'blocked', blocking };
+
+  return {
+    ok: true,
+    lifts: moves.map(({ from }) => from).sort((a, b) => a - b),
+    moves: [],
+    drops: [...moves].sort((a, b) => a.to - b.to),
+  };
+}
+
+/**
  * Apply a plan to a set of page numbers, for previewing or asserting.
  * Mirrors what replaying it against a store does.
  */

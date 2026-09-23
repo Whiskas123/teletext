@@ -1,0 +1,21 @@
+<!doctype html>
+<!--
+  Dev-only: `/manage` mounted on an in-memory backend, so the screen can be
+  looked at and clicked through without signing in and without writing to the
+  live document. Vite serves it at /manage-preview.html; `vite build` only
+  builds index.html, so it never ships.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>Manage preview</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/dev/managePreview.tsx"></script>
+  </body>
+</html>

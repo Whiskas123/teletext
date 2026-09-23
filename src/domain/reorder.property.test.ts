@@ -19,6 +19,7 @@ import {
   affectedPages,
   applyPlan,
   describeReorderRejection,
+  planArrange,
   planMove,
   planMoveBlock,
   planShift,
@@ -238,5 +239,48 @@ describe('describeReorderRejection', () => {
 
   it('names the pages that are in the way', () => {
     expect(describeReorderRejection('blocked', [200, 201])).toContain('200, 201');
+  });
+});
+
+describe('planArrange', () => {
+  it('swaps two pages without an intermediate number', () => {
+    const plan = planArrange([204, 210], [
+      { from: 204, to: 210 },
+      { from: 210, to: 204 },
+    ]);
+    expect(plan.ok).toBe(true);
+    if (plan.ok) expect([...replay([204, 210], plan)].sort()).toEqual([204, 210]);
+  });
+
+  it('refuses a destination held by a page that is staying put', () => {
+    expect(planArrange([204, 205], [{ from: 204, to: 205 }])).toEqual({
+      ok: false,
+      reason: 'blocked',
+      blocking: [205],
+    });
+  });
+
+  it('refuses two pages sent to one number, and a source with nothing on it', () => {
+    expect(
+      planArrange([204, 206], [
+        { from: 204, to: 300 },
+        { from: 206, to: 300 },
+      ]).ok,
+    ).toBe(false);
+    expect(planArrange([204], [{ from: 205, to: 300 }]).ok).toBe(false);
+  });
+
+  it('whatever it accepts, replays without clobbering anything', () => {
+    fc.assert(
+      fc.property(
+        fc.uniqueArray(fc.integer({ min: 100, max: 999 }), { minLength: 1, maxLength: 30 }),
+        fc.array(fc.record({ from: fc.integer({ min: 100, max: 999 }), to: fc.integer({ min: 100, max: 999 }) }), { maxLength: 8 }),
+        (occupied, moves) => {
+          const plan = planArrange(occupied, moves);
+          if (!plan.ok) return;
+          expect(replay(occupied, plan).size).toBe(new Set(occupied).size);
+        },
+      ),
+    );
   });
 });

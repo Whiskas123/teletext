@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "vite",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-lc", "PATH=$HOME/.nvm/versions/node/v24.14.1/bin:$PATH npx vite --port 5199 --strictPort"],
+      "port": 5199
+    }
+  ]
+}

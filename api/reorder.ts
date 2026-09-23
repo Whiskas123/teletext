@@ -1,13 +1,16 @@
 /**
  * `POST /api/reorder` — renumber published pages in bulk.
  *
- * Two operations, both from `src/domain/reorder.ts`:
+ * Three operations, all from `src/domain/reorder.ts`:
  *
  * - `{ action: 'shift', fromPage, delta }` — make room. Pushes every occupied
  *   page at or above `fromPage` by `delta`, so a run of new pages can be
  *   slotted in without touching any of them by hand.
  * - `{ action: 'move', blockStart, blockEnd, destination }` — move a run of
  *   pages elsewhere, sliding what it passes over to close the gap behind it.
+ * - `{ action: 'arrange', moves: [{ from, to }] }` — an explicit renumbering,
+ *   worked out by the page list on `/manage` when something is dragged. Every
+ *   source is lifted and dropped, so swaps and rotations need no ordering.
  *
  * ## Occupancy comes from both stores
  *
@@ -54,6 +57,7 @@ import { toInteger } from '../src/domain/coerce';
 import {
   PLAYGROUND_MIN_PAGE,
   describeReorderRejection,
+  planArrange,
   planMoveBlock,
   planShift,
   type PlanResult,
@@ -98,8 +102,19 @@ export default async function handler(
         toInteger(body.blockEnd) ?? NaN,
         toInteger(body.destination) ?? NaN,
       );
+    } else if (body.action === 'arrange') {
+      // An explicit mapping worked out by the page list (`domain/lineup.ts`).
+      // Checked here as if nothing about it were trusted: `planArrange`
+      // refuses a destination that is a page staying put, and the stray check
+      // below still keeps archive pages out of the playground.
+      const raw: unknown[] = Array.isArray(body.moves) ? body.moves : [];
+      const moves = raw.map((item) => {
+        const move = (item ?? {}) as { from?: unknown; to?: unknown };
+        return { from: toInteger(move.from) ?? NaN, to: toInteger(move.to) ?? NaN };
+      });
+      plan = planArrange(occupied, moves);
     } else {
-      fail(res, 400, "action must be 'shift' or 'move'.");
+      fail(res, 400, "action must be 'shift', 'move' or 'arrange'.");
       return;
     }
 

@@ -11,13 +11,17 @@ import type { CaptureSummary } from '../../collab/useArchiveAdmin';
 /** Longest free-text term the capture search accepts. */
 export const MAX_CAPTURE_QUERY = 100;
 
-/** A short, human description of when a capture was on air. */
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * When the page was last on air, as the archive saw it: the last day it was
+ * captured. Falls back to the first day for a capture with only one.
+ */
 export function describeSpan(capture: CaptureSummary): string {
-  const first = capture.first_seen?.slice(0, 10);
-  const last = capture.last_seen?.slice(0, 10);
-  if (first == null) return 'undated';
-  if (last == null || last === first) return first;
-  return `${first} → ${last}`;
+  const iso = (capture.last_seen ?? capture.first_seen)?.slice(0, 10);
+  if (iso == null) return 'Date unknown';
+  const [year, month, date] = iso.split('-').map(Number);
+  return `${date} ${MONTHS[month - 1] ?? '?'} ${year}`;
 }
 
 /**

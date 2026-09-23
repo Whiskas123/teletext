@@ -35,7 +35,7 @@ import './styles/console.css';
 const ImportArchivePage = lazy(() => import('./components/Room/ImportArchivePage'));
 
 // Lazy for the same reason: an admin-only screen no visitor ever opens.
-const ManageArchivePage = lazy(() => import('./components/Room/ManageArchivePage'));
+const ManageArchivePage = lazy(() => import('./components/Manage/ManageArchivePage'));
 
 /**
  * Marks the screen inside it as one search engines should not list.
