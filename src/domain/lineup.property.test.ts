@@ -16,10 +16,12 @@ import { describe, expect, it } from 'vitest';
 
 import {
   describeArrangement,
+  describeCloseGap,
   describeRange,
   firstFreeRun,
   lineupItems,
   planArrangement,
+  planCloseGap,
   planSwap,
   remapPages,
   type LineupTarget,
@@ -219,6 +221,45 @@ describe('planSwap', () => {
       placed: [210],
     });
     if (plan.ok) expect(planArrange([204, 210], plan.moves).ok).toBe(true);
+  });
+});
+
+describe('planCloseGap', () => {
+  it('moves everything after the gap up by its size, and keeps later gaps', () => {
+    const plan = planCloseGap([100, 110, 111, 120, 700], { from: 101, to: 109 });
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.moves).toEqual([
+      { from: 110, to: 101 },
+      { from: 111, to: 102 },
+      { from: 120, to: 111 },
+    ]);
+    // The playground stays where it is.
+    expect(plan.moves.some(({ from }) => from === 700)).toBe(false);
+    expect(describeCloseGap(plan)).toBe('3 pages, 110–120, each move up by 9, to 101–111.');
+  });
+
+  it('always makes a plan the server accepts, and never leaves the range', () => {
+    fc.assert(
+      fc.property(arbOccupied, (occupied) => {
+        for (const group of ['curated', 'playground'] as const) {
+          for (const item of lineupItems(occupied, group)) {
+            if (item.type !== 'gap') continue;
+            const plan = planCloseGap(occupied, item);
+            if (!plan.ok) continue;
+            expect(planArrange(occupied, plan.moves).ok).toBe(true);
+            for (const { from, to } of plan.moves) {
+              expect(to).toBeGreaterThanOrEqual(item.from);
+              expect(from >= 700).toBe(to >= 700);
+            }
+          }
+        }
+      }),
+    );
+  });
+
+  it('has nothing to do at the end of a range', () => {
+    expect(planCloseGap([100, 101], { from: 102, to: 699 }).ok).toBe(false);
   });
 });
 

@@ -16,11 +16,13 @@ import { PLAYGROUND_MIN_PAGE } from '../../domain/access';
 import type { PageKind } from '../../domain/directory';
 import {
   describeArrangement,
+  describeCloseGap,
   describeRange,
   firstFreeRun,
   lineupGroupOf,
   lineupItems,
   planArrangement,
+  planCloseGap,
   planSwap,
   type LineupGroup,
   type LineupTarget,
@@ -382,6 +384,31 @@ export function PagesTab({
     );
   };
 
+  /**
+   * Close a stretch of free numbers. Asked first: it can renumber every page to
+   * the end of the range, and a renumbering has no undo here.
+   */
+  const askCloseGap = (gap: { from: number; to: number }) => {
+    const plan = planCloseGap(occupied, gap);
+    if (!plan.ok) {
+      actions.setNotice({ tone: 'alert', text: plan.reason });
+      return;
+    }
+    const size = gap.to - gap.from + 1;
+    const summary = describeCloseGap(plan);
+    confirm({
+      title: size === 1 ? `Close the gap at ${gap.from}?` : `Close the gap at ${gap.from}–${gap.to}?`,
+      confirmLabel: `Move ${plan.moves.length === 1 ? 'page' : `${plan.moves.length} pages`} up`,
+      body: (
+        <p>
+          {summary} Their content, screens, titles and roles go with them. Gaps further down keep
+          their size.
+        </p>
+      ),
+      onConfirm: () => void runArrange(plan, `Gap closed. ${summary}`),
+    });
+  };
+
   const askDelete = (pages: readonly number[]) => {
     const titled = pages.map((page) => ({ page, title: rowOf(page).title }));
     confirm({
@@ -733,6 +760,7 @@ export function PagesTab({
             requestAnimationFrame(() => titleRef.current?.focus());
           }}
           onAddAt={(from) => openArchive({ mode: 'pages', at: String(from) })}
+          onCloseGap={askCloseGap}
           emptyMessage={emptyMessage}
         />
 

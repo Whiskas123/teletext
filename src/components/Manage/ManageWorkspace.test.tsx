@@ -285,6 +285,21 @@ describe('moving pages', () => {
     expect(within(row(201)).getByRole('button', { name: /Show the 2 screens of page 201/ })).toBeInTheDocument();
   });
 
+  it('closes a gap by moving every later page up, after asking', async () => {
+    const { user } = renderWorkspace();
+    await user.click(screen.getByRole('button', { name: 'Close the gap at 204–299' }));
+    const dialog = screen.getByRole('dialog', { name: 'Close the gap at 204–299?' });
+    expect(dialog).toHaveTextContent('Page 300 becomes 204.');
+
+    await user.click(within(dialog).getByRole('button', { name: 'Move page up' }));
+    await waitFor(() => expect(titleAt(204)).toBe('Sport'));
+    expect(row(300)).toBeNull();
+    // The playground is its own range and stays put.
+    expect(titleAt(710)).toBe('Visitor page');
+    // Nothing after the last page of a range to close.
+    expect(screen.queryByRole('button', { name: /Close the gap at 205–699/ })).toBeNull();
+  });
+
   it('refuses to drag an archive page into the playground', () => {
     renderWorkspace();
     drag(row(201), row(710), AFTER);

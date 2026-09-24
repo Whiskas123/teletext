@@ -68,6 +68,8 @@ export interface LineupTableProps {
   onRename(pageNumber: number): void;
   /** Open the archive pane aimed at this stretch of free numbers. */
   onAddAt(from: number): void;
+  /** Move every page after this stretch up to close it. */
+  onCloseGap(gap: { from: number; to: number }): void;
   emptyMessage: string | null;
 }
 
@@ -94,6 +96,7 @@ export function LineupTable({
   onDelete,
   onRename,
   onAddAt,
+  onCloseGap,
   emptyMessage,
 }: LineupTableProps) {
   const tableRef = useRef<HTMLDivElement>(null);
@@ -311,8 +314,10 @@ export function LineupTable({
             </div>
 
             {!isCollapsed &&
-              section.items.map((item) => {
+              section.items.map((item, index) => {
                 if (item.type === 'gap') {
+                  // A gap at the end of a range has nothing after it to close up.
+                  const closable = index < section.items.length - 1;
                   const gapSpot: DropSpot = { kind: 'gap', from: item.from, to: item.to };
                   const over = sameSpot(spot, gapSpot);
                   const size = item.to - item.from + 1;
@@ -330,17 +335,31 @@ export function LineupTable({
                           {size === 1 ? 'free' : `${size} free`}
                         </span>
                       </span>
-                      {section.group === 'curated' && (
-                        <button
-                          type="button"
-                          className="mg-gap-add"
-                          disabled={locked}
-                          onClick={() => onAddAt(item.from)}
-                          aria-label={`Add archive pages at ${item.from}`}
-                        >
-                          + Add here
-                        </button>
-                      )}
+                      <span className="mg-gap-actions">
+                        {closable && (
+                          <button
+                            type="button"
+                            className="mg-gap-add"
+                            disabled={locked}
+                            onClick={() => onCloseGap(item)}
+                            aria-label={`Close the gap at ${size === 1 ? item.from : `${item.from}–${item.to}`}`}
+                            title="Move every page after this gap up, so the numbers run on"
+                          >
+                            ↑ Close gap
+                          </button>
+                        )}
+                        {section.group === 'curated' && (
+                          <button
+                            type="button"
+                            className="mg-gap-add"
+                            disabled={locked}
+                            onClick={() => onAddAt(item.from)}
+                            aria-label={`Add archive pages at ${item.from}`}
+                          >
+                            + Add here
+                          </button>
+                        )}
+                      </span>
                     </div>
                   );
                 }

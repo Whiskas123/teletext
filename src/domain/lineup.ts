@@ -204,6 +204,41 @@ export function planSwap(
 }
 
 /**
+ * Close a stretch of free numbers by moving every page after it up by the
+ * stretch's size, to the end of its range.
+ *
+ * Bounded by the range on purpose: closing a gap in 100–699 must not pull the
+ * playground down into the curated numbers, where visitors' pages would become
+ * moderator-only. Order is kept, and so are the gaps further on — each one
+ * moves up with the pages around it.
+ */
+export function planCloseGap(
+  occupied: readonly number[],
+  gap: { from: number; to: number },
+): ArrangePlan {
+  const size = gap.to - gap.from + 1;
+  const { max } = GROUP_BOUNDS[lineupGroupOf(gap.from)];
+  const moving = sortedUnique(occupied).filter((page) => page > gap.to && page <= max);
+  if (size < 1 || moving.length === 0) {
+    return { ok: false, reason: 'Nothing comes after this gap.' };
+  }
+  const moves = moving.map((from) => ({ from, to: from - size }));
+  return { ok: true, moves, placed: moves.map(({ to }) => to) };
+}
+
+/** What closing a gap does, in a sentence. */
+export function describeCloseGap(plan: ArrangePlan): string {
+  if (!plan.ok) return plan.reason;
+  const count = plan.moves.length;
+  const first = plan.moves[0];
+  const last = plan.moves[count - 1];
+  const by = first.from - first.to;
+  return count === 1
+    ? `Page ${first.from} becomes ${first.to}.`
+    : `${count} pages, ${first.from}–${last.from}, each move up by ${by}, to ${first.to}–${last.to}.`;
+}
+
+/**
  * The numbers `count` new pages would take if added at the end of a range —
  * the first free stretch after its last page, which is where "add" defaults.
  */

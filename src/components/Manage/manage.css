@@ -461,8 +461,8 @@
 }
 .mg-gap-label { font-family: var(--mg-mono); }
 .mg-gap-free { margin-left: 8px; font-family: system-ui, sans-serif; }
+.mg-gap-actions { margin-left: auto; display: flex; gap: 4px; }
 .mg-gap-add {
-  margin-left: auto;
   padding: 0 8px;
   min-height: 20px;
   border: 0;
@@ -473,7 +473,7 @@
   opacity: 0;
   cursor: pointer;
 }
-.mg-gap:hover .mg-gap-add, .mg-gap-add:focus-visible { opacity: 1; }
+.mg-gap:hover .mg-gap-add, .mg-gap:focus-within .mg-gap-add { opacity: 1; }
 .mg-gap-add:hover { background: var(--mg-accent-bg); }
 
 /* Drop indicators: a line for between, an outline for onto. */
