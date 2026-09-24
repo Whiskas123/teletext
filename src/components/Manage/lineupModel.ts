@@ -8,7 +8,8 @@
  */
 
 import type { PublishedEntry } from '../../collab/useArchiveAdmin';
-import type { PageKind } from '../../domain/directory';
+import { headingLevel, type PageKind } from '../../domain/directory';
+import { lineupGroupOf } from '../../domain/lineup';
 
 /** What a page's bottom row is, across every archive screen it has. */
 export type BarState =
@@ -194,3 +195,32 @@ export const DEFAULT_ADD_SETTINGS: AddSettings = {
   kind: 'page',
 };
 
+
+/**
+ * The pages each heading owns, by the Yellow Pages' own rule: everything after
+ * it until the next heading at the same level or above (`domain/directory.ts`).
+ * A heading never reaches across the 700 boundary into the other range.
+ *
+ * Only headings that own something are in the map — an empty heading has
+ * nothing to collapse.
+ */
+export function headingSpans(
+  pages: readonly number[],
+  kindOf: (pageNumber: number) => PageKind,
+): Map<number, number[]> {
+  const sorted = [...pages].sort((a, b) => a - b);
+  const spans = new Map<number, number[]>();
+  sorted.forEach((heading, index) => {
+    const level = headingLevel(kindOf(heading));
+    if (level == null) return;
+    const owned: number[] = [];
+    for (const page of sorted.slice(index + 1)) {
+      if (lineupGroupOf(page) !== lineupGroupOf(heading)) break;
+      const other = headingLevel(kindOf(page));
+      if (other != null && other <= level) break;
+      owned.push(page);
+    }
+    if (owned.length > 0) spans.set(heading, owned);
+  });
+  return spans;
+}

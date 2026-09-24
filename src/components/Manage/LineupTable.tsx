@@ -70,6 +70,11 @@ export interface LineupTableProps {
   onAddAt(from: number): void;
   /** Move every page after this stretch up to close it. */
   onCloseGap(gap: { from: number; to: number }): void;
+  /** For a heading that owns pages: how many, and whether they are hidden. */
+  collapseOf(pageNumber: number): { owned: number; collapsed: boolean } | null;
+  onToggleCollapse(pageNumber: number): void;
+  /** What dragging this row carries: a collapsed heading brings its section. */
+  dragPagesOf(pageNumber: number): number[];
   emptyMessage: string | null;
 }
 
@@ -97,6 +102,9 @@ export function LineupTable({
   onRename,
   onAddAt,
   onCloseGap,
+  collapseOf,
+  onToggleCollapse,
+  dragPagesOf,
   emptyMessage,
 }: LineupTableProps) {
   const tableRef = useRef<HTMLDivElement>(null);
@@ -202,13 +210,22 @@ export function LineupTable({
         if (active != null) onRename(active);
         return;
       case 'ArrowRight':
-      case 'ArrowLeft':
-        if (active == null || rowOf(active).screens < 2) return;
+      case 'ArrowLeft': {
+        if (active == null) return;
+        // A heading opens and closes its section; any other page, its screens.
+        const collapse = collapseOf(active);
+        if (collapse != null) {
+          event.preventDefault();
+          if (collapse.collapsed === (event.key === 'ArrowRight')) onToggleCollapse(active);
+          return;
+        }
+        if (rowOf(active).screens < 2) return;
         event.preventDefault();
         if (selection.expanded.has(active) !== (event.key === 'ArrowRight')) {
           selection.toggleExpanded(active);
         }
         return;
+      }
       case 'Delete':
       case 'Backspace': {
         event.preventDefault();
@@ -379,6 +396,8 @@ export function LineupTable({
                         ? { kind: spot.kind, ok: verdict?.ok ?? false }
                         : null
                     }
+                    collapse={collapseOf(item.pageNumber)}
+                    onToggleCollapse={() => onToggleCollapse(item.pageNumber)}
                     busy={pageBusy(item.pageNumber)}
                     outcome={outcomes.get(item.pageNumber) ?? null}
                     livePage={livePage}
@@ -398,9 +417,8 @@ export function LineupTable({
                       selection.setScreen(screen);
                     }}
                     onDragStart={(event) => {
-                      const pages = selected.has(item.pageNumber)
-                        ? [...selected].sort((a, b) => a - b)
-                        : [item.pageNumber];
+                      const rows = selected.has(item.pageNumber) ? [...selected] : [item.pageNumber];
+                      const pages = [...new Set(rows.flatMap(dragPagesOf))].sort((a, b) => a - b);
                       if (!selected.has(item.pageNumber)) selection.selectOnly(item.pageNumber);
                       beginDrag(
                         event,
@@ -439,6 +457,8 @@ interface PageRowViewProps {
   expanded: boolean;
   dragging: boolean;
   dropZone: { kind: 'before' | 'after' | 'into'; ok: boolean } | null;
+  collapse: { owned: number; collapsed: boolean } | null;
+  onToggleCollapse(): void;
   busy: PageActionName | null;
   outcome: Notice | null;
   livePage(pageNumber: number, subpage?: number): TeletextPage | null;
@@ -462,6 +482,8 @@ function PageRowView({
   expanded,
   dragging,
   dropZone,
+  collapse,
+  onToggleCollapse,
   busy,
   outcome,
   livePage,
@@ -527,7 +549,28 @@ function PageRowView({
           <PageThumb page={page} pageNumber={pageNumber} scale={0.2} />
         </span>
         <span role="gridcell" className="mg-col-title">
-          <span className="mg-title">{row.title || <em className="mg-muted">Untitled</em>}</span>
+          <span className="mg-title-line">
+            {collapse != null && (
+              <button
+                type="button"
+                className="mg-collapse"
+                aria-expanded={!collapse.collapsed}
+                aria-label={`${collapse.collapsed ? 'Show' : 'Hide'} the ${collapse.owned} pages under ${pageNumber}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onToggleCollapse();
+                }}
+              >
+                {collapse.collapsed ? '▸' : '▾'}
+              </button>
+            )}
+            <span className="mg-title">{row.title || <em className="mg-muted">Untitled</em>}</span>
+            {collapse?.collapsed && (
+              <span className="mg-collapsed-count">
+                {collapse.owned} {collapse.owned === 1 ? 'page' : 'pages'}
+              </span>
+            )}
+          </span>
           {row.description !== '' && <span className="mg-desc">{row.description}</span>}
           {!row.hasContent && <span className="mg-warn">Draws nothing — readers skip it</span>}
         </span>

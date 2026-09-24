@@ -5,7 +5,7 @@
 // confirmation, adding archive captures, and the tabs and their old URLs.
 
 import { useEffect } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router-dom';
@@ -96,6 +96,9 @@ function renderWorkspace(url = '/manage') {
   );
   return { user, table: screen.getByRole('grid', { name: 'Pages' }) };
 }
+
+// Collapsed headings are remembered in the browser; each test starts expanded.
+beforeEach(() => localStorage.clear());
 
 const row = (page: number) => document.querySelector<HTMLElement>(`[data-page="${page}"]`)!;
 const titleAt = (page: number) => row(page)?.querySelector('.mg-title')?.textContent;
@@ -416,6 +419,47 @@ describe('working through the archive', () => {
     await waitFor(() => expect(titleAt(150)).toMatch(/^lorem ipsum/));
     expect(titleAt(100)).toBe('Index');
     expect(screen.getByText('1 page given a title from its own text.')).toBeInTheDocument();
+  });
+});
+
+describe('collapsing sections', () => {
+  const shown = () => [...document.querySelectorAll<HTMLElement>('[data-page]')].map((el) => Number(el.dataset.page));
+
+  it('hides the pages a heading owns, and says how many', async () => {
+    const { user } = renderWorkspace();
+    await user.click(screen.getByRole('button', { name: 'Hide the 3 pages under 200' }));
+    expect(shown()).toEqual([100, 150, 200, 300, 710]);
+    expect(within(row(200)).getByText('3 pages')).toBeInTheDocument();
+    // The free numbers inside the section go with it; the gap after it stays.
+    expect(screen.getByText('204–299')).toBeInTheDocument();
+
+    // → opens it again from the keyboard.
+    await user.click(row(200));
+    fireEvent.keyDown(row(200), { key: 'ArrowRight' });
+    expect(shown()).toContain(201);
+  });
+
+  it('drags a collapsed heading as its whole section, and keeps it collapsed', async () => {
+    const { user } = renderWorkspace();
+    await user.click(screen.getByRole('button', { name: 'Hide the 3 pages under 200' }));
+    drag(row(200), row(300), AFTER);
+    await waitFor(() => expect(titleAt(301)).toBe('News'));
+    expect(shown()).toEqual([100, 150, 300, 301, 710]);
+    expect(within(row(301)).getByText('3 pages')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Show the 3 pages under 301' }));
+    expect(titleAt(302)).toBe('Story one');
+    expect(titleAt(304)).toBe('Story three');
+  });
+
+  it('collapses and expands everything at once, and shows everything while filtering', async () => {
+    const { user } = renderWorkspace();
+    await user.click(screen.getByRole('button', { name: 'Collapse all' }));
+    expect(shown()).toEqual([100, 200, 300, 710]);
+    await user.type(screen.getByRole('searchbox', { name: 'Filter pages' }), 'story');
+    expect(shown()).toEqual([201, 202, 203]);
+    await user.clear(screen.getByRole('searchbox', { name: 'Filter pages' }));
+    await user.click(screen.getByRole('button', { name: 'Expand all' }));
+    expect(shown()).toContain(150);
   });
 });
 

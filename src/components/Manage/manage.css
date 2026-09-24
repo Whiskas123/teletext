@@ -368,6 +368,30 @@
 .mg-row:hover .mg-grip { opacity: 1; }
 .mg-col-title { display: flex; flex-direction: column; min-width: 0; }
 .mg-title, .mg-desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mg-title-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.mg-collapse {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--mg-muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.mg-collapse:hover { background: var(--mg-hover); color: var(--mg-text); }
+.mg-collapsed-count {
+  flex: 0 0 auto;
+  padding: 0 7px;
+  border-radius: 9px;
+  background: var(--mg-raised);
+  color: var(--mg-muted);
+  font-size: 11px;
+  line-height: 18px;
+}
 .mg-desc { font-size: 12px; color: var(--mg-muted); }
 .mg-warn { font-size: 11px; color: var(--mg-warn); }
 .mg-col-source, .mg-col-bar { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }

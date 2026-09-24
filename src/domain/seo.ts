@@ -59,16 +59,14 @@ export const LOCALE: Record<Language, string> = {
  */
 export const SITE_META: Record<Language, { title: string; description: string }> = {
   pt: {
-    title: `${SITE_NAME} — arquivo vivo de teletexto português`,
+    title: `${SITE_NAME}, arquivo vivo de teletexto português`,
     description:
-      'Um arquivo vivo do teletexto português. Vê páginas sozinho ou numa ' +
-      'sala com outras pessoas, e cria as tuas próprias.',
+      'Um arquivo vivo do teletexto português.',
   },
   en: {
-    title: `${SITE_NAME} — a living archive of Portuguese teletext`,
+    title: `${SITE_NAME}, a living archive of Portuguese teletext`,
     description:
-      'A living archive of Portuguese teletext. Watch pages on your own or ' +
-      'in a room with other people, and make your own.',
+      'A living archive of Portuguese teletext.',
   },
 };
 

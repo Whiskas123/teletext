@@ -4,7 +4,15 @@
 import { describe, expect, it } from 'vitest';
 
 import type { PublishedEntry } from '../../collab/useArchiveAdmin';
-import { barOf, buildRow, matchesFilter, recordsByPage, shiftOf, EMPTY_FILTER } from './lineupModel';
+import {
+  barOf,
+  buildRow,
+  headingSpans,
+  matchesFilter,
+  recordsByPage,
+  shiftOf,
+  EMPTY_FILTER,
+} from './lineupModel';
 
 function record(page: number, subpage: number, menu: number | null, shift = true): PublishedEntry {
   return {
@@ -69,5 +77,30 @@ describe('a row', () => {
     expect(matchesFilter(row, { ...EMPTY_FILTER, source: 'hand-made' })).toBe(false);
     expect(matchesFilter(row, { ...EMPTY_FILTER, bar: '3' })).toBe(true);
     expect(matchesFilter(row, { ...EMPTY_FILTER, bar: 'own' })).toBe(false);
+  });
+});
+
+describe('what a heading owns', () => {
+  const kinds: Record<number, 'category' | 'subcategory' | 'page'> = {
+    101: 'category',
+    102: 'subcategory',
+    119: 'subcategory',
+    130: 'category',
+    699: 'category',
+  };
+  const kindOf = (page: number) => kinds[page] ?? 'page';
+  const pages = [100, 101, 102, 103, 104, 119, 120, 130, 131, 699, 700];
+
+  it('runs to the next heading at the same level or above', () => {
+    const spans = headingSpans(pages, kindOf);
+    expect(spans.get(101)).toEqual([102, 103, 104, 119, 120]);
+    expect(spans.get(102)).toEqual([103, 104]);
+    expect(spans.get(119)).toEqual([120]);
+    expect(spans.get(130)).toEqual([131]);
+  });
+
+  it('never reaches into the playground, and leaves out empty headings', () => {
+    const spans = headingSpans(pages, kindOf);
+    expect(spans.has(699)).toBe(false);
   });
 });

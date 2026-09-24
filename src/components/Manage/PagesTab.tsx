@@ -22,6 +22,7 @@ import {
   lineupGroupOf,
   lineupItems,
   planArrangement,
+  remapPages,
   planCloseGap,
   planSwap,
   type LineupGroup,
@@ -44,6 +45,7 @@ import {
   DEFAULT_ADD_SETTINGS,
   EMPTY_FILTER,
   buildRow,
+  headingSpans,
   isFiltering,
   matchesFilter,
   recordsByPage,
@@ -91,6 +93,11 @@ export function PagesTab({
   const [destination, setDestination] = useState<AddDestination>({ mode: 'pages', at: '' });
   const [settings, setSettings] = useState<AddSettings>(DEFAULT_ADD_SETTINGS);
   const [moving, setMoving] = useState<number[] | null>(null);
+  const [collapsed, setCollapsedState] = useState<ReadonlySet<number>>(readCollapsed);
+  const setCollapsed = (next: ReadonlySet<number>) => {
+    setCollapsedState(next);
+    writeCollapsed(next);
+  };
   const searchRef = useRef<HTMLInputElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
 
@@ -136,6 +143,23 @@ export function PagesTab({
     });
 
   const filtering = isFiltering(filter);
+  const spans = useMemo(() => headingSpans(occupied, kindOf), [occupied, kindOf]);
+
+  /**
+   * The numbers hidden under collapsed headings, as `(heading, last owned]`.
+   * Ignored while filtering: a search result tucked inside a closed section
+   * would be a match nobody can see.
+   */
+  const hiddenRanges = useMemo(
+    () =>
+      filtering
+        ? []
+        : [...collapsed].flatMap((heading) => {
+            const owned = spans.get(heading);
+            return owned == null ? [] : [{ after: heading, end: owned[owned.length - 1] }];
+          }),
+    [filtering, collapsed, spans],
+  );
   const untitledCount = useMemo(
     () => [...rows.values()].filter((row) => row.title.trim() === '').length,
     [rows],
@@ -144,19 +168,23 @@ export function PagesTab({
     () =>
       (['curated', 'playground'] as const).map((group) => {
         const all = lineupItems(occupied, group);
+        const isHidden = (from: number) =>
+          hiddenRanges.some(({ after, end }) => from > after && from <= end);
         const items = filtering
           ? all.filter(
               (item) => item.type === 'page' && matchesFilter(rows.get(item.pageNumber)!, filter),
             )
-          : all;
+          : all.filter((item) => !isHidden(item.type === 'page' ? item.pageNumber : item.from));
         return {
           group,
           ...SECTION_COPY[group],
           items,
-          pageCount: items.filter((item) => item.type === 'page').length,
+          pageCount: filtering
+            ? items.length
+            : all.filter((item) => item.type === 'page').length,
         };
       }),
-    [occupied, filtering, filter, rows],
+    [occupied, filtering, filter, rows, hiddenRanges],
   );
 
   const order = useMemo(
@@ -268,10 +296,20 @@ export function PagesTab({
     );
   };
 
+  /** The last page a row stands for: a collapsed heading stands for its section. */
+  const lastShown = (pageNumber: number) => {
+    const owned = collapsed.has(pageNumber) && !filtering ? spans.get(pageNumber) : undefined;
+    return owned == null ? pageNumber : owned[owned.length - 1];
+  };
+
   const targetOf = (spot: DropSpot): LineupTarget =>
     spot.kind === 'gap'
       ? { kind: 'at', pageNumber: spot.from }
-      : { kind: spot.kind === 'into' ? 'after' : spot.kind, pageNumber: spot.pageNumber };
+      : spot.kind === 'after'
+        ? // Dropping below a closed section puts it after the section, not
+          // inside it, straight under the heading.
+          { kind: 'after', pageNumber: lastShown(spot.pageNumber) }
+        : { kind: spot.kind === 'into' ? 'after' : spot.kind, pageNumber: spot.pageNumber };
 
   const judgeDrop = (spot: DropSpot): DropVerdict => {
     const drag = currentDrag();
@@ -296,7 +334,10 @@ export function PagesTab({
 
   const runArrange = async (plan: ReturnType<typeof arrangePlan>, summary: string) => {
     if (!plan.ok) return;
-    if (await actions.arrange(plan.moves, summary)) selection.remap(plan.moves);
+    if (await actions.arrange(plan.moves, summary)) {
+      selection.remap(plan.moves);
+      if (collapsed.size > 0) setCollapsed(new Set(remapPages(collapsed, plan.moves)));
+    }
   };
 
   const addAsPages = async (captures: readonly CaptureSummary[], target: LineupTarget) => {
@@ -719,6 +760,23 @@ export function PagesTab({
             </button>
           )}
           <span className="mg-grow" />
+          {spans.size > 0 && !filtering && (
+            <button
+              type="button"
+              className="mg-btn mg-btn-small mg-btn-ghost"
+              onClick={() =>
+                setCollapsed(
+                  [...spans.keys()].every((heading) => collapsed.has(heading))
+                    ? new Set()
+                    : new Set(spans.keys()),
+                )
+              }
+            >
+              {[...spans.keys()].every((heading) => collapsed.has(heading))
+                ? 'Expand all'
+                : 'Collapse all'}
+            </button>
+          )}
           <button
             type="button"
             className={`mg-btn${query.open ? ' mg-btn-on' : ' mg-btn-primary'}`}
@@ -761,6 +819,20 @@ export function PagesTab({
           }}
           onAddAt={(from) => openArchive({ mode: 'pages', at: String(from) })}
           onCloseGap={askCloseGap}
+          collapseOf={(page) => {
+            const owned = spans.get(page);
+            return owned == null || filtering
+              ? null
+              : { owned: owned.length, collapsed: collapsed.has(page) };
+          }}
+          onToggleCollapse={(page) => {
+            const next = new Set(collapsed);
+            if (!next.delete(page)) next.add(page);
+            setCollapsed(next);
+          }}
+          dragPagesOf={(page) =>
+            collapsed.has(page) && !filtering ? [page, ...(spans.get(page) ?? [])] : [page]
+          }
           emptyMessage={emptyMessage}
         />
 
@@ -931,4 +1003,29 @@ function Overview({
       </dl>
     </aside>
   );
+}
+
+/**
+ * Which headings are collapsed, remembered in this browser only — a view
+ * preference, not something the service needs to know. Storage can be
+ * missing or refuse (a private window), and then the list simply opens
+ * expanded.
+ */
+const COLLAPSED_KEY = 'manage.collapsed-headings';
+
+function readCollapsed(): ReadonlySet<number> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? '[]') as unknown;
+    return new Set(Array.isArray(raw) ? raw.filter((n): n is number => Number.isInteger(n)) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeCollapsed(headings: ReadonlySet<number>): void {
+  try {
+    localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...headings]));
+  } catch {
+    // Not remembered; nothing else depends on it.
+  }
 }
