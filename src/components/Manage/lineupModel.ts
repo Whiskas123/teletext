@@ -41,6 +41,8 @@ export interface PageRow {
   showcased: boolean;
   /** Whether any screen draws anything. */
   hasContent: boolean;
+  /** Whether any archive screen was edited by hand since it was published. */
+  edited: boolean;
 }
 
 export interface RowSources {
@@ -50,6 +52,8 @@ export interface RowSources {
   subpageCountOfPage(pageNumber: number): number;
   isShowcased(pageNumber: number, subpage: number): boolean;
   hasContent(pageNumber: number): boolean;
+  /** Whether any archive screen of the page was edited since publishing. */
+  isEdited?(pageNumber: number): boolean;
 }
 
 /** Records grouped by page, each group in screen order. */
@@ -122,6 +126,7 @@ export function buildRow(
     shift: shiftOf(records),
     showcased,
     hasContent: sources.hasContent(pageNumber),
+    edited: sources.isEdited?.(pageNumber) ?? false,
   };
 }
 
@@ -133,13 +138,25 @@ export interface LineupFilter {
   bar: string;
   /** Only pages with no title. */
   untitled: boolean;
+  /** Only archive pages edited by hand since publishing. */
+  edited: boolean;
 }
 
-export const EMPTY_FILTER: LineupFilter = { text: '', source: 'all', bar: 'all', untitled: false };
+export const EMPTY_FILTER: LineupFilter = {
+  text: '',
+  source: 'all',
+  bar: 'all',
+  untitled: false,
+  edited: false,
+};
 
 export function isFiltering(filter: LineupFilter): boolean {
   return (
-    filter.text.trim() !== '' || filter.source !== 'all' || filter.bar !== 'all' || filter.untitled
+    filter.text.trim() !== '' ||
+    filter.source !== 'all' ||
+    filter.bar !== 'all' ||
+    filter.untitled ||
+    filter.edited
   );
 }
 
@@ -149,6 +166,7 @@ export function isFiltering(filter: LineupFilter): boolean {
  */
 export function matchesFilter(row: PageRow, filter: LineupFilter): boolean {
   if (filter.untitled && row.title.trim() !== '') return false;
+  if (filter.edited && !row.edited) return false;
   if (filter.source === 'archive' && row.archiveScreens === 0) return false;
   if (filter.source === 'hand-made' && row.archiveScreens > 0) return false;
   if (filter.bar === 'own' && row.bar.kind !== 'own') return false;

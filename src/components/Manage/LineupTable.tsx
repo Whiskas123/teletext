@@ -590,6 +590,12 @@ function PageRowView({
         <span role="gridcell" className={`mg-col-bar mg-bar-${row.bar.kind}`}>
           {describeBar(row.bar)}
           {row.shift === false && <span className="mg-muted" title="Not shifted down"> · ⇧</span>}
+          {row.edited && (
+            <span className="mg-edited" title="Edited by hand since it was published from the archive">
+              {' '}
+              · edited
+            </span>
+          )}
         </span>
         <span role="gridcell" className="mg-col-screens">
           {row.screens > 1 ? (

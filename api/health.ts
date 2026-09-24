@@ -27,7 +27,7 @@ export default async function handler(
     const rows = await db()`
       select
         (select count(*) from archive_captures) as captures,
-        (select count(*) from published_pages)  as published,
+        (select count(*) from live_pages where source is not null) as published,
         (select count(*) from live_pages)       as live,
         (select count(*) from learned_glyphs)   as glyphs
     `;

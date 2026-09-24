@@ -18,7 +18,7 @@ import type {
   PublishTransforms,
 } from '../../../collab/useArchiveAdmin';
 import type { ShowcaseApi, ShowcaseEntry } from '../../../collab/useShowcase';
-import type { SnapshotApi } from '../../../collab/useSnapshot';
+import type { MirrorApi } from '../../../collab/liveMirror';
 import { DEFAULT_PAGE_KIND, type PageKind } from '../../../domain/directory';
 import { applyMenu, type CustomMenu } from '../../../domain/menu';
 import { shiftPageDown } from '../../../domain/pageTransform';
@@ -29,7 +29,23 @@ import type { ManageDeps } from '../ManageWorkspace';
 type Result = { ok: true } | { ok: false; error: string };
 
 export interface FakeSeed {
-  pages: { pageNumber: number; title?: string; kind?: PageKind; screens?: number; captureIds?: number[]; menuId?: number | null }[];
+  pages: {
+    pageNumber: number;
+    title?: string;
+    kind?: PageKind;
+    screens?: number;
+    captureIds?: number[];
+    menuId?: number | null;
+    /**
+     * An old-table record whose screen is empty: cleared by hand after
+     * publishing, before sources moved into the live pages.
+     */
+    stranded?: boolean;
+    /** An old-table record whose screen is on air, not yet moved in. */
+    legacy?: boolean;
+    /** Screen 1 was edited by hand since it was published. */
+    edited?: boolean;
+  }[];
   captures?: CaptureSummary[];
   menus?: CustomMenu[];
   /** Milliseconds each network-ish call takes, to show busy states. */
@@ -90,7 +106,12 @@ interface State {
   descriptions: Map<number, string>;
   kinds: Map<number, PageKind>;
   counts: Map<number, number>;
+  /** The `page-sources` channel, as entries. */
   published: PublishedEntry[];
+  /** The old publication table's unresolved records. */
+  legacy: PublishedEntry[];
+  /** Screens edited by hand since they were published. */
+  edited: Set<string>;
   menus: CustomMenu[];
   showcase: ShowcaseEntry[];
 }
@@ -105,17 +126,22 @@ function initialState(seed: FakeSeed): State {
     kinds: new Map(),
     counts: new Map(),
     published: [],
+    legacy: [],
+    edited: new Set(),
     menus: seed.menus ?? [],
     showcase: [],
   };
   for (const [index, spec] of seed.pages.entries()) {
     const screens = spec.screens ?? 1;
     for (let screen = 1; screen <= screens; screen += 1) {
-      state.cells.set(key(spec.pageNumber, screen), fakePage(`${spec.pageNumber} ${spec.title ?? ''}`.trim(), index + screen));
+      if (!spec.stranded) {
+        state.cells.set(key(spec.pageNumber, screen), fakePage(`${spec.pageNumber} ${spec.title ?? ''}`.trim(), index + screen));
+      }
       const captureId = spec.captureIds?.[screen - 1];
       if (captureId != null) {
         const menu = state.menus.find((m) => m.id === spec.menuId);
-        state.published.push({
+        const list = spec.stranded || spec.legacy ? state.legacy : state.published;
+        list.push({
           page_number: spec.pageNumber,
           subpage: screen,
           capture_id: captureId,
@@ -136,6 +162,8 @@ function initialState(seed: FakeSeed): State {
       }
     }
     state.counts.set(spec.pageNumber, screens);
+    if (spec.edited) state.edited.add(key(spec.pageNumber, 1));
+    if (spec.stranded) continue;
     if (spec.title) state.titles.set(spec.pageNumber, spec.title);
     if (spec.kind) state.kinds.set(spec.pageNumber, spec.kind);
   }
@@ -190,12 +218,22 @@ export function useFakeManageDeps(
   );
   const allCaptures = useMemo(() => seed.captures ?? [], [seed.captures]);
 
-  const occupiedPages = useMemo(() => {
+  // As `useOccupiedPages` sees the live document: screen 1 cells, a title, a heading.
+  const liveOccupied = useMemo(() => {
     const pages = new Set<number>();
-    for (const [k] of state.cells) pages.add(Number(k.split('.')[0]));
+    for (const [k] of state.cells) if (!k.includes('.')) pages.add(Number(k));
+    for (const [page, title] of state.titles) if (title.trim() !== '') pages.add(page);
     for (const [page, kind] of state.kinds) if (kind !== 'page') pages.add(page);
-    return [...pages].sort((a, b) => a - b);
+    return pages;
   }, [state]);
+
+  // As `useArchiveAdmin` reports it: the live document is the one store.
+  const occupiedPages = useMemo(() => [...liveOccupied].sort((a, b) => a - b), [liveOccupied]);
+  // Sources describe only screens on a claimed page.
+  const published = useMemo(
+    () => state.published.filter((entry) => liveOccupied.has(entry.page_number)),
+    [state.published, liveOccupied],
+  );
 
   const countOf = useCallback((page: number) => state.counts.get(page) ?? 1, [state.counts]);
 
@@ -232,6 +270,8 @@ export function useFakeManageDeps(
     kinds: new Map(s.kinds),
     counts: new Map(s.counts),
     published: [...s.published],
+    legacy: [...s.legacy],
+    edited: new Set(s.edited),
     menus: [...s.menus],
     showcase: [...s.showcase],
   });
@@ -248,6 +288,8 @@ export function useFakeManageDeps(
         draft.counts.set(pageNumber, Math.max(draft.counts.get(pageNumber) ?? 1, subpage));
         draft.titles.set(pageNumber, title);
         draft.descriptions.set(pageNumber, description);
+        // Published again: the screen matches its capture once more.
+        draft.edited.delete(key(pageNumber, subpage));
         draft.published = draft.published.filter(
           (entry) => !(entry.page_number === pageNumber && (entry.subpage ?? 1) === subpage),
         );
@@ -351,17 +393,44 @@ export function useFakeManageDeps(
     [wait],
   );
 
-  const captures = queryCaptures(allCaptures, state.published, filters);
+  const captures = queryCaptures(allCaptures, published, filters);
+
+  const render: ArchiveAdminApi['render'] = async (captureId, transforms) => {
+    await wait();
+    const capture = allCaptures.find((c) => c.id === captureId);
+    const cells = transform(fakePage(capture?.manifest_title ?? `Capture ${captureId}`, captureId), transforms);
+    const menu = state.menus.find((m) => m.id === transforms.menuId);
+    return {
+      cells: Object.fromEntries(cells.map((cell, index) => [index, cell])),
+      source: {
+        captureId,
+        source: capture?.source ?? 'rtp',
+        originalPage: capture?.original_page ?? 0,
+        sub: capture?.sub ?? '',
+        topic: capture?.topic ?? null,
+        scheme: capture?.scheme ?? null,
+        firstSeen: capture?.first_seen ?? null,
+        manifestTitle: capture?.manifest_title ?? null,
+        shiftDown: transforms.shiftDown,
+        menuId: menu?.id ?? null,
+        menuName: menu?.name ?? null,
+        publishedAt: new Date().toISOString(),
+      },
+    };
+  };
+
+  const onAir = (record: PublishedEntry) =>
+    liveOccupied.has(record.page_number) && state.cells.has(key(record.page_number, record.subpage ?? 1));
 
   const data: ArchiveAdminApi = {
     captures,
     total: captures.length,
-    published: state.published,
-    publishedByPage: new Map(
-      [...state.published].reverse().map((entry) => [entry.page_number, entry] as const),
-    ),
+    published,
+    publishedByPage: new Map([...published].reverse().map((entry) => [entry.page_number, entry] as const)),
     publicationAt: (page, screen) =>
-      state.published.find((e) => e.page_number === page && (e.subpage ?? 1) === screen) ?? null,
+      published.find((e) => e.page_number === page && (e.subpage ?? 1) === screen) ?? null,
+    isEdited: (page, screen) => state.edited.has(key(page, screen)),
+    render,
     subpageCountOfPage: countOf,
     addSubpage: (page) => {
       const next = countOf(page) + 1;
@@ -388,10 +457,8 @@ export function useFakeManageDeps(
     menus: state.menus,
     loading: false,
     error: null,
-    publishedError: null,
     pageSize: 60,
     retryCaptures: () => undefined,
-    reloadPublished: () => undefined,
     loadStory: async (id) => {
       const target = allCaptures.find((c) => c.id === id);
       if (target == null) return [];
@@ -403,7 +470,6 @@ export function useFakeManageDeps(
     livePage,
     transform,
     publish,
-    unpublish: async (page) => deletePage(page),
     saveMenu: async (draft): Promise<Result> => {
       await wait();
       if (draft.name.trim() === '') return { ok: false, error: 'Give the bar a name.' };
@@ -425,8 +491,6 @@ export function useFakeManageDeps(
       });
       return { ok: true };
     },
-    shiftPages: async () => ({ ok: false, error: 'Not in the fake.' }),
-    moveBlock: async () => ({ ok: false, error: 'Not in the fake.' }),
     arrange,
     deletePage,
     titleOf: (page) => state.titles.get(page) ?? '',
@@ -442,7 +506,30 @@ export function useFakeManageDeps(
       return { ok: true };
     },
     occupiedPages,
-    handMadePages: occupiedPages.filter((page) => !state.published.some((e) => e.page_number === page)),
+    handMadePages: occupiedPages.filter((page) => !published.some((e) => e.page_number === page)),
+    legacy: {
+      adoptable: state.legacy.filter(onAir),
+      stranded: state.legacy.filter((record) => !onAir(record)),
+      loading: false,
+      error: null,
+      reload: () => undefined,
+      adopt: (record) =>
+        setState((current) => {
+          const draft = clone(current);
+          // The record's own details: the fake archive may not hold its capture.
+          draft.published.push({ ...record });
+          return draft;
+        }),
+      resolve: async (records) => {
+        const done = new Set(records.map((r) => key(r.page_number, r.subpage ?? 1)));
+        setState((current) => {
+          const draft = clone(current);
+          draft.legacy = current.legacy.filter((r) => !done.has(key(r.page_number, r.subpage ?? 1)));
+          return draft;
+        });
+        return { ok: true };
+      },
+    },
   };
 
   const showcase: ShowcaseApi = {
@@ -473,13 +560,16 @@ export function useFakeManageDeps(
     },
   };
 
-  const snapshot: SnapshotApi = {
-    snapshot: async () => null,
-    saving: false,
+  const mirror: MirrorApi = {
+    phase: 'synced',
+    pending: 0,
+    held: [],
+    lastSynced: Date.now(),
     error: null,
-    lastResult: null,
-    pageCount: occupiedPages.length,
-    progress: null,
+    host: 'localhost',
+    daily: null,
+    resync: () => undefined,
+    confirmHeld: () => undefined,
   };
 
   return {
@@ -492,7 +582,7 @@ export function useFakeManageDeps(
         draft.kinds.set(page, kind);
         return draft;
       }),
-    snapshot,
+    mirror,
     connected: true,
     captures: allCaptures,
   };

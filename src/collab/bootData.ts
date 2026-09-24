@@ -29,6 +29,7 @@ import { usePageData, usePlayContext } from '@playhtml/react';
 
 import {
   BOOT_DATA_PATH,
+  BOOT_LIVE_PATH,
   parseBootData,
   type BootChannel,
   type BootData,
@@ -47,13 +48,21 @@ const listeners = new Set<() => void>();
 export function loadBootData(): void {
   if (requested || typeof fetch !== 'function') return;
   requested = true;
-  fetch(BOOT_DATA_PATH)
-    .then((response) => (response.ok ? response.json() : null))
-    .then((json: unknown) => {
-      boot = parseBootData(json);
+
+  const load = (path: string): Promise<BootData | null> =>
+    fetch(path)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((json: unknown) => parseBootData(json))
+      .catch(() => null);
+
+  // The database's copy first, being minutes old at most; the build's file if
+  // that fails (a local dev server has no API, and it answers with HTML).
+  void load(BOOT_LIVE_PATH)
+    .then((live) => live ?? load(BOOT_DATA_PATH))
+    .then((data) => {
+      boot = data;
       if (boot != null) listeners.forEach((listener) => listener());
-    })
-    .catch(() => {});
+    });
 }
 
 function subscribe(listener: () => void): () => void {

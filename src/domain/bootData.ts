@@ -17,8 +17,10 @@
  *
  * ## Only ever read
  *
- * The file is as fresh as the last deploy and the last backup, so it is a
- * picture of the pages rather than the pages. Nothing writes it back: the hooks
+ * It is fetched from the database's copy (`BOOT_LIVE_PATH`), which the live
+ * mirror keeps a few seconds behind playhtml and the edge caches for a minute,
+ * and from the build's file only if that fails — so it is a picture of the
+ * pages at most a minute or so old, rather than as old as the last deploy. Nothing writes it back: the hooks
  * that write (the editor, publishing, the backup itself) keep reading the live
  * document and nothing else.
  */
@@ -29,8 +31,15 @@ import { isEmptyCell, normalizePage } from './pageOps';
 import type { PageCellMap } from './pageEncoding';
 import type { SubpageCounts } from './subpages';
 
-/** Where the build writes the file, and where the app fetches it from. */
+/** Where the build writes the file: the fallback's fallback. */
 export const BOOT_DATA_PATH = '/boot/pages.json';
+
+/**
+ * Where the app fetches the pages from first: the database's copy, kept
+ * current by the live mirror and cached at the edge for a minute
+ * (`api/snapshot.ts`). The build's file is used only if this fails.
+ */
+export const BOOT_LIVE_PATH = '/api/snapshot?boot=1';
 
 /**
  * The channels the file carries, in the shape each one has in playhtml, keyed

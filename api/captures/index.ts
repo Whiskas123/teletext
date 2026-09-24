@@ -22,7 +22,10 @@
  * Three more parameters, for working through the corpus rather than browsing it:
  *
  * - `unpublished=true` hides captures already on a page, so the list is what
- *   is left to do. Each row carries `published_to` either way (`"205/1"`).
+ *   is left to do. Each row carries `published_to` either way (`"205/1"`),
+ *   read from the live mirror's copy (`live_pages.source`) — a few seconds
+ *   behind playhtml, which is why `/manage` also hides what it knows it just
+ *   placed.
  * - `latest=true` shows one capture per page slot — its most recent day — with
  *   `versions` saying how many days were folded behind it.
  * - `sort=newest|oldest` for when era matters more than page number.
@@ -129,9 +132,10 @@ export default async function handler(
       shown as (
         select g.*,
           coalesce(
-            (select array_agg(p.page_number::text || '/' || p.subpage::text
-                              order by p.page_number, p.subpage)
-             from published_pages p where p.capture_id = g.id),
+            (select array_agg(l.page_number::text || '/' || l.subpage::text
+                              order by l.page_number, l.subpage)
+             from live_pages l
+             where (l.source ->> 'captureId')::bigint = g.id),
             '{}'
           ) as published_to
         from grouped g

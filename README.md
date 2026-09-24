@@ -123,8 +123,8 @@ just been added is empty and would count as absent, and playhtml's draft is a
 Proxy with no `deleteProperty` trap — so removing a subpage can only blank its
 cells, never take the key away, and a derived count could rise and never fall.
 
-`published_pages` and `live_pages` are keyed by `(page_number, subpage)`
-([008](db/migrations/008_subpages.sql)). The backup one is not optional: without
+`live_pages` is keyed by `(page_number, subpage)`
+([008](db/migrations/008_subpages.sql)). That is not optional: without
 it a snapshot would store screen 1 of every carousel, report success, and drop
 the rest — a restore that looks fine and is quietly short.
 
@@ -149,9 +149,13 @@ Two stores, with different jobs.
 
 **[playhtml](https://playhtml.fun) is the live layer.** A single document (Yjs CRDTs over playhtml's hosted server), mounted once in `GlobalProvider` as the room `teletext-house`. Everything a visitor reads or edits lives here, and every concurrent edit is merged per-cell by the CRDT. Nothing about live editing goes through a server round trip — that is the whole reason this project moved off Redis, where two simultaneous edits meant one whole-page write landing on top of the other.
 
-**Neon Postgres is the system of record.** Everything the CRDT is the wrong tool for: ~3,150 archive captures nobody is currently editing, which capture is published to which page number, admin authentication, and a durable backup of the live document. See [`.kiro/specs/archive-database/design.md`](.kiro/specs/archive-database/design.md).
+**Neon Postgres holds what the CRDT is the wrong tool for:** ~3,150 archive captures nobody is currently editing, the saved bottom bars, admin authentication, and a copy of the live document that follows it (see [Backups](#backups)). See [`.kiro/specs/archive-database/design.md`](.kiro/specs/archive-database/design.md).
 
-Publishing crosses between them: `/manage` records the decision in the database, gets the cells back, and writes them into playhtml. Backups cross the other way. Reading never touches the database.
+**The live service is described in one store.** Everything about what is on air — cells, titles, roles, screen counts, and which archive capture each screen came from (`page-sources`, see [`src/domain/pageSource.ts`](src/domain/pageSource.ts)) — lives in playhtml. Publishing asks the server only to *render* a capture with its shift and bottom bar (`PUT /api/published`, which records nothing); the browser writes the cells and their source together. Renumbering, merging and deleting are writes to that one document, made in the same moment, so nothing can finish half way.
+
+That was not always so. Which capture sat on which number used to be a table of its own, `published_pages`, renumbered in step with playhtml by hand; any step that did not finish left the two disagreeing, and the page list showed free numbers the server then refused to use. The table is now history: `/manage` offers once to move its records in beside their pages, and to restore or set aside any that point at empty screens.
+
+Changes flow from playhtml to the database, never the other way except as a deliberate restore. Reading never touches the database.
 
 The playhtml channels:
 
@@ -259,19 +263,27 @@ Page numbers are positions, not names — 200 is where the news starts because t
 - **Move pages a–b so they start at c** relocates a whole run, sliding whatever it passes over to close the gap behind it. The destination does not need to be free: the block's span of numbers travels, and the pages it crosses move the other way by exactly that span — the same set of numbers, reordered.
 - **← →** on a card nudge one page along. A block of one.
 
-All of them renumber the records *and* carry the content.
+All of them carry everything a page has: its screens, where each came from, its title, description, role and screen count.
 
-Each card also has **Edit** (title and description, for any page — not only archive ones) and **Delete**, which takes the content, title, heading role, description and publication record with it and asks first.
+**Occupancy is every page the live document claims** — seeded pages, pages people made by hand, the playground — not only archive ones: a hand-made page at 201 is still a page, and a shift that did not know about it would overwrite it. Archive pages are refused entry to the playground (700+), where anyone could edit them.
 
-**Occupancy is every page, not every published page.** The plan is made against the union of the archive publications in Postgres and everything in the live playhtml document — seeded pages, pages people made by hand, the playground. Planning from the publication records alone was a real bug: a hand-made page at 201 is invisible there, so shifting 200 up silently overwrote it. Only a connected browser can see the live document, so the client sends those page numbers with the request. Archive pages are still refused entry to the playground (700+), where anyone could edit them.
-
-Ordering is the whole difficulty: moving 200→201 while 201 exists destroys 201. [`src/domain/reorder.ts`](src/domain/reorder.ts) emits an ordered plan in which every destination is free when written, and where that is impossible — a rotation, where every destination is occupied and nothing can go first — it lifts content out, slides the rest, and puts it back. The identical plan is replayed against both stores, which is why it is a pure, property-tested module rather than a query. Its tests simulate a store and fail the moment a step would clobber a page.
+Ordering is the whole difficulty: moving 200→201 while 201 exists destroys 201. [`src/domain/reorder.ts`](src/domain/reorder.ts) checks a plan in which every destination is free when written, and where that is impossible — a rotation, where every destination is occupied and nothing can go first — lifts content out, slides the rest, and puts it back. [`src/domain/lineup.ts`](src/domain/lineup.ts) works out where a drag lands. Both are pure and property-tested; the tests simulate a store and fail the moment a step would clobber a page. The plan is replayed on every playhtml channel in one moment, and there is no server in between any more.
 
 ### Backups
 
-`live_pages` holds a copy of the playhtml document, which otherwise exists only on playhtml's hosted server with no export. Press **Back up live pages now** on `/manage`, or let the daily Vercel cron hit `/api/snapshot`.
+`live_pages` holds a copy of the playhtml document, which otherwise exists only on playhtml's hosted server with no export. It follows the live pages by itself: any browser signed in as moderator, on any page of the site, sends each change a few seconds after it settles ([`src/collab/liveMirror.ts`](src/collab/liveMirror.ts)). The `/manage` header shows where it stands — *Backed up 15:37*, *Backing up…*, or *Backup behind* with the reason.
 
-Only a connected browser can read the Yjs document, so the cron alone cannot refresh the backup — it reports freshness; the button does the work. Restore with `bun run db:restore --out restore.json`, then load that file from `/import`. Rehearse it once: an untested backup is not a backup.
+Changes flow one way only, playhtml → database. The rules, in [`src/domain/liveMirror.ts`](src/domain/liveMirror.ts):
+
+- **Only what changed is sent.** Each screen has a fingerprint (its cells, title, role, description and screen count), stored with it in `live_pages.digest` ([010](db/migrations/010_live_pages_digest.sql)); the browser compares against `GET /api/snapshot?index` and posts the difference.
+- **Deletions are mirrored too.** A page removed from the service leaves the copy, and a carousel that got shorter loses its extra screens. They are named explicitly (`removed`, `truncate`); a post never deletes by leaving something out.
+- **Only on the live site's address.** Every hostname has its own playhtml document but they all share the database, so a preview link or localhost mirroring would overwrite the real backup with another site's pages. Elsewhere, `/manage` says so in a banner and the mirror stays off.
+- **Only after playhtml has synced**, because an empty document looks exactly like one whose pages were all deleted — and **deleting more than ten pages at once is held** until someone confirms it from the header, since that looks more like a broken load than an edit.
+- **Page sources travel with the pages** (`live_pages.source`, [011](db/migrations/011_live_pages_source.sql)), so the copy knows which screens came from the archive.
+
+**The daily cron reads the live document itself**, so the playground's edits are copied even when no moderator is online. There is no HTTP API for a playhtml document, so [`api/_lib/liveDocument.ts`](api/_lib/liveDocument.ts) connects the way a browser does — read-only, with no presence, disconnecting as soon as the document has arrived (about 2 s) — and the job writes what the copy lacks or has out of date. It **never deletes**: a page missing from a read could be a partial read as easily as a deletion, so deletions stay with the moderator mirror. It leans on playhtml internals (the room name, the `play.__page__` layout, a `room-reset` handshake on first connect) that can change without notice, so every run is recorded in `backup_runs` ([012](db/migrations/012_backup_runs.sql)) and `/manage` says *Daily read failed* or *Daily read stopped* when it did. `bun run backup:read` does the same read by hand, writing nothing, and compares it with the copy. Restore with `bun run db:restore --out restore.json`, then load that file from `/import`. Rehearse it once: an untested backup is not a backup.
+
+The same copy is what visitors see while playhtml loads: `GET /api/snapshot?boot` serves it compressed and cached at the edge for a minute, so the fallback is at most about a minute old rather than as old as the last deploy. The build's `/boot/pages.json` is used only if that request fails.
 
 #### It is sent in batches, because it has to be
 
@@ -280,7 +292,7 @@ configurable. A teletext page is 960 cells and serialises to about **68 KB**, so
 the document crosses that at roughly 66 pages — and the backup used to post all
 of it in one request.
 
-**This is how the backup stopped working.** Once the document passed the limit
+**This is how the backup once stopped working.** Once the document passed the limit
 every attempt answered `413`, the button showed "Backup failed (413)", and
 `live_pages` kept whatever it held from the last time the document was small
 enough. Nothing else reported it. A backup that fails as the thing it protects
@@ -293,9 +305,9 @@ by serialised size — not by page count, since a dense mosaic page and a
 near-blank one differ by an order of magnitude — into requests of at most 3 MB.
 Those same documents become 2, 7 and 18 requests, the largest 2.86 MB.
 
-What makes this safe is a property `api/snapshot.ts` already had: **pages are
-upserted and never deleted**, so a client holding only part of the document
-cannot wipe the rest of the backup. Several partial posts therefore compose into
+What makes this safe is a property `api/snapshot.ts` keeps: **pages are
+upserted, and nothing is deleted by being left out** — only by being named — so
+a client holding only part of the document cannot wipe the rest of the backup. Several partial posts therefore compose into
 one complete backup, and a run that dies half way leaves the pages it managed
 rather than a corrupt snapshot — which is why a failure now says how far it got
 and invites a retry. The cost is that a backup is a few seconds wide rather than
@@ -368,15 +380,12 @@ archive page the text of the page itself in the markup.
   nothing per request, and are served *before* the rewrites, so
   `dist/watch/220/index.html` answers `/watch/220` and the SPA catch-all never
   sees it.
-- **Content from two tables, unioned,** because neither is complete: `live_pages`
-  is the backup of the playhtml document (including pages made by hand and never
-  published), and `published_pages` holds anything published since the last
-  backup, whose cells are rebuilt from the capture exactly as `api/published.ts`
-  builds them. `live_pages` wins where both have a page, since it carries
-  collaborative edits made after publication.
-- **The prerendered text is only as fresh as the last backup.** Only a connected
+- **Content from `live_pages`,** the database's copy of the playhtml document,
+  which the live mirror keeps current. It used to be unioned with
+  `published_pages`, which brought back pages that were no longer on the service.
+- **The prerendered text is only as fresh as the copy.** Only a connected
   browser can read the Yjs document, so neither the cron nor this script can
-  refresh it — that is the **Back up live pages now** button on `/manage`. The
+  refresh it — a moderator's browser does, while one is open. The
   age is printed on every build and warned about past a week. A stale backup is
   harmless for search (the rendered app is still correct) but the served text
   lags what visitors see.

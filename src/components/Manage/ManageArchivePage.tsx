@@ -15,7 +15,7 @@ import { useConnection } from '../../collab/useConnection';
 import { useAdminStatus } from '../../collab/useIsModerator';
 import { usePageKinds } from '../../collab/usePageKinds';
 import { useShowcase } from '../../collab/useShowcase';
-import { useSnapshot } from '../../collab/useSnapshot';
+import { useMirrorStatus } from '../../collab/liveMirror';
 import { ManageWorkspace } from './ManageWorkspace';
 import { useArchiveQuery } from './useArchiveQuery';
 import { useManageTab } from './useManageTab';
@@ -71,7 +71,7 @@ function ConnectedWorkspace() {
   // Fresh, not from the edge: this is the screen that changes the strip, and it
   // has to show what the database holds rather than what the CDN was handed.
   const showcase = useShowcase({ fresh: true });
-  const snapshot = useSnapshot();
+  const mirror = useMirrorStatus();
   const { kindOf, setKind } = usePageKinds();
 
   return (
@@ -83,7 +83,7 @@ function ConnectedWorkspace() {
         showcase,
         kindOf,
         setKind,
-        snapshot,
+        mirror,
         connected: connection.status === 'connected',
       }}
     />

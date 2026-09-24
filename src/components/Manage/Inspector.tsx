@@ -438,6 +438,12 @@ export function Inspector({
                 <span className="mg-muted"> — clears the header row, drops the capture’s last row</span>
               </span>
             </label>
+            {row.edited && (
+              <p className="mg-note mg-note-warn">
+                Edited by hand since it was published. Changing the bar or the shift publishes it again from the
+                archive, which undoes those edits.
+              </p>
+            )}
             {row.shift === true && row.bar.kind === 'own' && (
               <p className="mg-note mg-note-warn">
                 Shifted, the capture’s own bottom row falls off the page — so there is no bar. Pick a saved bar,

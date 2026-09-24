@@ -55,7 +55,8 @@ import {
   type PageRow,
 } from './lineupModel';
 import { SelectionInspector } from './SelectionInspector';
-import type { ManageActionsApi } from './useManageActions';
+import { LegacyPanel } from './LegacyPanel';
+import type { ManageActionsApi, TransformPatch } from './useManageActions';
 import type { ArchiveQuery } from './useArchiveQuery';
 import { useLineupSelection } from './useLineupSelection';
 
@@ -118,6 +119,13 @@ export function PagesTab({
           kindOf,
           subpageCountOfPage: data.subpageCountOfPage,
           isShowcased,
+          isEdited: (page) => {
+            const count = data.subpageCountOfPage(page);
+            for (let screen = 1; screen <= count; screen += 1) {
+              if (data.isEdited(page, screen)) return true;
+            }
+            return false;
+          },
           hasContent: (page) => {
             const count = data.subpageCountOfPage(page);
             for (let screen = 1; screen <= count; screen += 1) {
@@ -164,6 +172,33 @@ export function PagesTab({
     () => [...rows.values()].filter((row) => row.title.trim() === '').length,
     [rows],
   );
+  const editedCount = useMemo(() => [...rows.values()].filter((row) => row.edited).length, [rows]);
+
+  /**
+   * Change the bottom bar or shift of some pages — which publishes them again
+   * from the archive. Asked first when any was edited by hand since, because
+   * that undoes the edits.
+   */
+  const changeTransforms = (pages: readonly number[], patch: TransformPatch) => {
+    const edited = pages.filter((page) => rowOf(page).edited);
+    if (edited.length === 0) {
+      void actions.applyTransforms(pages, patch);
+      return;
+    }
+    confirm({
+      title: edited.length === 1 ? `Page ${edited[0]} was edited by hand` : `${edited.length} pages were edited by hand`,
+      danger: true,
+      confirmLabel: 'Publish again from the archive',
+      body: (
+        <p>
+          {edited.length === 1 ? 'It has' : `${describeRange(edited)} have`} been changed since {edited.length === 1 ? 'it was' : 'they were'}{' '}
+          published. Changing the bar or the shift publishes from the archive capture again, and those changes are
+          lost.
+        </p>
+      ),
+      onConfirm: () => void actions.applyTransforms(pages, patch),
+    });
+  };
   const sections = useMemo<LineupSection[]>(
     () =>
       (['curated', 'playground'] as const).map((group) => {
@@ -587,6 +622,20 @@ export function PagesTab({
     if (destination.mode === 'pages') setDestination({ mode: 'story', at: destination.at });
   };
 
+  /**
+   * The archive's results, less what is on air right now. The server's
+   * "hide published" reads the database copy, which trails playhtml by a few
+   * seconds; the live sources say it at once, so a capture just added leaves
+   * the list the moment it lands rather than after the next backup.
+   */
+  const onAirCaptures = useMemo(
+    () => new Set(data.published.map((entry) => entry.capture_id)),
+    [data.published],
+  );
+  const shownCaptures = query.filters.unpublished
+    ? data.captures.filter((capture) => !onAirCaptures.has(capture.id))
+    : data.captures;
+
   /* --- the details pane ---------------------------------------------------- */
 
   const selectedRows = selectedPages.map(rowOf);
@@ -596,7 +645,7 @@ export function PagesTab({
     side = (
       <ArchivePane
         query={query}
-        captures={data.captures}
+        captures={shownCaptures}
         total={data.total}
         pageSize={data.pageSize}
         loading={data.loading}
@@ -625,10 +674,8 @@ export function PagesTab({
         menus={data.menus}
         locked={locked}
         onSetRole={(kind) => actions.setRole(selectedPages, kind)}
-        onSetBar={(menuId) => void actions.applyTransforms(selectedPages, { shiftDown: null, menuId })}
-        onSetShift={(shiftDown) =>
-          void actions.applyTransforms(selectedPages, { shiftDown, menuId: 'keep' })
-        }
+        onSetBar={(menuId) => changeTransforms(selectedPages, { shiftDown: null, menuId })}
+        onSetShift={(shiftDown) => changeTransforms(selectedPages, { shiftDown, menuId: 'keep' })}
         onMove={() => setMoving(selectedPages)}
         onFillTitles={() => actions.fillTitles(selectedPages)}
         onMerge={() => askMerge(selectedPages[0], selectedPages.slice(1))}
@@ -666,8 +713,8 @@ export function PagesTab({
         }}
         onSaveText={(title, description) => void actions.saveText(active, title, description)}
         onSetRole={(kind) => actions.setRole([active], kind)}
-        onSetBar={(menuId) => void actions.applyTransforms([active], { shiftDown: null, menuId })}
-        onSetShift={(shiftDown) => void actions.applyTransforms([active], { shiftDown, menuId: 'keep' })}
+        onSetBar={(menuId) => changeTransforms([active], { shiftDown: null, menuId })}
+        onSetShift={(shiftDown) => changeTransforms([active], { shiftDown, menuId: 'keep' })}
         onAddEmptyScreen={() => {
           actions.addSubpage(active);
           selection.setScreen(row.screens + 1);
@@ -743,6 +790,17 @@ export function PagesTab({
               </option>
             ))}
           </select>
+          {(editedCount > 0 || filter.edited) && (
+            <button
+              type="button"
+              className={`mg-btn mg-btn-small${filter.edited ? ' mg-btn-on' : ' mg-btn-ghost'}`}
+              aria-pressed={filter.edited}
+              title="Archive pages changed by hand since they were published"
+              onClick={() => setFilter({ ...filter, edited: !filter.edited })}
+            >
+              Edited · {editedCount}
+            </button>
+          )}
           {(untitledCount > 0 || filter.untitled) && (
             <button
               type="button"
@@ -789,14 +847,7 @@ export function PagesTab({
           </button>
         </div>
 
-        {data.publishedError != null && (
-          <div className="mg-banner" role="alert">
-            Could not load which pages came from the archive: {data.publishedError}{' '}
-            <button type="button" className="mg-btn mg-btn-small" onClick={data.reloadPublished}>
-              Retry
-            </button>
-          </div>
-        )}
+        <LegacyPanel data={data} actions={actions} locked={locked} confirm={confirm} />
 
         <LineupTable
           sections={connected ? sections : []}

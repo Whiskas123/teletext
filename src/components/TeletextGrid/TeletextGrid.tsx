@@ -14,31 +14,35 @@ import { formatSubpageIndicator } from '../../domain/subpages';
 import { INDEX_LINE_RANGES, type IndexLineItem } from '../../domain/indexLine';
 import { startBlinkClock } from '../../utils/blinkClock';
 
-const VALID_PAGE_NUMBERS = new Set([100, 200, 300, 400, 500, 600, 700, 800, 900]);
+const isDigit = (c: string | undefined) => c != null && /^\d$/.test(c);
 
-/** Find all runs of 3 digits (100–999) in the page; return Map of cell index -> target page (100,200,...,900). */
+/**
+ * Find every standalone three-digit number (100–999) on the page and map each of
+ * its cells to that page number. A run of four or more digits — a year, a phone
+ * number — is not a page reference, so none of it links.
+ */
 function getPageLinkMap(page: TeletextPage): Map<number, number> {
   const map = new Map<number, number>();
   for (let row = 0; row < ROWS; row++) {
+    const charAt = (col: number) =>
+      col >= 0 && col < COLS ? page[row * COLS + col].char : undefined;
     let col = 0;
-    while (col <= COLS - 3) {
-      const c0 = page[row * COLS + col].char;
-      const c1 = page[row * COLS + col + 1].char;
-      const c2 = page[row * COLS + col + 2].char;
-      if (/\d/.test(c0) && /\d/.test(c1) && /\d/.test(c2)) {
-        const n = parseInt(c0 + c1 + c2, 10);
+    while (col < COLS) {
+      if (!isDigit(charAt(col))) {
+        col += 1;
+        continue;
+      }
+      let end = col;
+      while (isDigit(charAt(end))) end += 1;
+      if (end - col === 3) {
+        const n = parseInt(charAt(col)! + charAt(col + 1)! + charAt(col + 2)!, 10);
         if (n >= 100 && n <= 999) {
-          const target = Math.round(n / 100) * 100;
-          if (VALID_PAGE_NUMBERS.has(target)) {
-            map.set(row * COLS + col, target);
-            map.set(row * COLS + col + 1, target);
-            map.set(row * COLS + col + 2, target);
-            col += 3;
-            continue;
-          }
+          map.set(row * COLS + col, n);
+          map.set(row * COLS + col + 1, n);
+          map.set(row * COLS + col + 2, n);
         }
       }
-      col += 1;
+      col = end;
     }
   }
   return map;

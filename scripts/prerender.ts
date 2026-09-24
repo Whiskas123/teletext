@@ -28,23 +28,20 @@
  *
  * ## Where the content comes from, and what that means
  *
- * Two tables, unioned, because neither is complete on its own:
+ * One table: `live_pages`, the database's copy of the playhtml document —
+ * what visitors actually see, hand-made pages and archive pages alike, with
+ * where each archive screen came from alongside it.
  *
- * - `live_pages` is the backup of the playhtml document — what visitors
- *   actually see, including pages people made by hand that were never
- *   published from the archive.
- * - `published_pages` is the record of which capture went to which number.
- *   Anything published since the last backup exists only here, so its cells are
- *   rebuilt from the capture the way `api/published.ts` builds them: the
- *   capture, optionally shifted down a row, optionally with a menu written over
- *   the last row.
+ * It used to be unioned with `published_pages`, rebuilding cells from the
+ * capture for anything published since the last manual backup. That table was
+ * a second map of the service, and it drifted: records whose pages had been
+ * emptied or moved came back here as pages that were not on the service. The
+ * copy is now kept current by the live mirror (`src/collab/liveMirror.ts`), so
+ * it is the only source needed.
  *
- * `live_pages` wins where both have a page, because it includes collaborative
- * edits made since publication and is therefore closer to what is on screen.
- *
- * **The backup is only as fresh as the last time someone pressed "Back up live
- * pages now" on `/manage`** — only a connected browser can read the Yjs
- * document, so neither the cron nor this script can refresh it. A stale backup
+ * **The copy is only as fresh as the last moderator browser that was open** —
+ * only a connected browser can read the Yjs document, so neither the cron nor
+ * this script can refresh it. A stale copy
  * means the prerendered text lags what the page says. That is harmless for
  * search (the rendered app is still correct, and a crawler that renders sees
  * it) but it is worth knowing, so the age is printed on every build and warned
@@ -64,14 +61,12 @@ import { fileURLToPath } from 'node:url';
 
 import { isConfigured, db } from '../api/_lib/db';
 import { LANGUAGES, type Language } from '../src/domain/landing';
-import { BOOT_DATA_PATH, bootPage, type BootData } from '../src/domain/bootData';
+import { BOOT_DATA_PATH, BOOT_LIVE_PATH, bootPage, type BootData } from '../src/domain/bootData';
 import { isPageKind } from '../src/domain/directory';
-import { applyMenu, type MenuItem } from '../src/domain/menu';
 import { pageToArray } from '../src/domain/pageEncoding';
 import { pageKey } from '../src/domain/subpages';
 import type { TeletextPage } from '../src/types/teletext';
 import { pageRows } from '../src/domain/pageSearch';
-import { shiftPageDown } from '../src/domain/pageTransform';
 import { localizePath } from '../src/domain/routes';
 import {
   SHOWCASE_BOOT_ID,
@@ -132,35 +127,6 @@ async function loadPages(): Promise<{ pages: SourcePage[]; backupAge: number | n
 
   const sql = db();
   const byKey = new Map<string, SourcePage>();
-
-  // Published first, so the live backup can overwrite it below.
-  const published = await sql`
-    select p.page_number, p.subpage, p.title, p.description,
-           p.shift_down, p.menu_id, c.cells
-    from published_pages p
-    join archive_captures c on c.id = p.capture_id
-    where c.cells is not null
-  `;
-  const menus = await sql`select id, items from custom_menus`;
-  const menuById = new Map(menus.map((m) => [String(m.id), m.items as MenuItem[]]));
-
-  for (const row of published) {
-    // The same derivation `api/published.ts` performs when publishing: the
-    // capture, then the transforms that were recorded with it.
-    let page = pageToArray(row.cells);
-    if (row.shift_down) page = shiftPageDown(page);
-    const items = row.menu_id == null ? undefined : menuById.get(String(row.menu_id));
-    if (items) page = applyMenu(page, { items });
-
-    byKey.set(`${row.page_number}.${row.subpage}`, {
-      pageNumber: row.page_number,
-      subpage: row.subpage,
-      title: row.title ?? '',
-      description: row.description ?? '',
-      rows: pageRows(page),
-      cells: page,
-    });
-  }
 
   const live = await sql`
     select page_number, subpage, subpage_count, title, kind, description, cells
@@ -396,11 +362,12 @@ function isWatchPath(path: string): boolean {
 
 /**
  * Starts the pages file from `<head>`, so it downloads alongside the bundle
- * rather than after it. `crossorigin` is what a plain `fetch()` asks with, and
+ * rather than after it. The live copy, which the app asks for first; the
+ * build's own file is fetched only if that fails, so it is not preloaded. `crossorigin` is what a plain `fetch()` asks with, and
  * without it the browser fetches the file twice.
  */
 function bootDataHead(): string {
-  return `\n    <link rel="preload" as="fetch" crossorigin="anonymous" href="${BOOT_DATA_PATH}" />`;
+  return `\n    <link rel="preload" as="fetch" crossorigin="anonymous" href="${BOOT_LIVE_PATH}" />`;
 }
 
 /** Both languages' URLs for one path, which is what `hreflang` needs. */

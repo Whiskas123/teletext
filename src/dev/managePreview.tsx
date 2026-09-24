@@ -45,6 +45,11 @@ const seed: FakeSeed = {
       ];
     }),
     { pageNumber: 118, title: 'Continued story' },
+    // Old-table records: one whose page was emptied, one still to move in.
+    { pageNumber: 150, title: 'Capital Europeia da Cultura', captureIds: [1400], stranded: true },
+    { pageNumber: 160, title: 'Logos Operação Triunfo', captureIds: [1600], legacy: true },
+    // Published, then retouched by hand in the editor.
+    { pageNumber: 170, title: 'Toques monofónicos', captureIds: [1700], edited: true },
     { pageNumber: 700, title: 'Playground hello' },
     { pageNumber: 701, title: '' },
     { pageNumber: 745, title: 'Visitor art' },

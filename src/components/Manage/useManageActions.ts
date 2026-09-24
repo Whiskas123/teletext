@@ -20,7 +20,11 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 
-import type { ArchiveAdminApi, PublishTransforms } from '../../collab/useArchiveAdmin';
+import type {
+  ArchiveAdminApi,
+  PublishedEntry,
+  PublishTransforms,
+} from '../../collab/useArchiveAdmin';
 import type { ShowcaseApi } from '../../collab/useShowcase';
 import type { PageKind } from '../../domain/directory';
 import {
@@ -138,6 +142,17 @@ export interface ManageActionsApi {
   setRole(pageNumbers: readonly number[], kind: PageKind): void;
   /** Give every untitled page among these a title read off its first screen. */
   fillTitles(pageNumbers: readonly number[]): void;
+
+  /**
+   * Move old publication records into playhtml, beside the screens they
+   * describe. Each capture is rendered with its recorded transforms, so a
+   * screen edited by hand since shows as edited.
+   */
+  moveInLegacy(records: readonly PublishedEntry[]): Promise<boolean>;
+  /** Publish old records whose screens are empty back onto them. */
+  restoreLegacy(records: readonly PublishedEntry[]): Promise<boolean>;
+  /** Stop offering old records, leaving the service as it is. */
+  discardLegacy(records: readonly PublishedEntry[]): Promise<boolean>;
 
   saveText(pageNumber: number, title: string, description: string): Promise<boolean>;
   addSubpage(pageNumber: number): void;
@@ -539,6 +554,82 @@ export function useManageActions({
     [data],
   );
 
+  const moveInLegacy = useCallback(
+    (records: readonly PublishedEntry[]) =>
+      runStructural(
+        async () => {
+          const moved: PublishedEntry[] = [];
+          const result = await sequence(
+            'Moving records in',
+            records,
+            async (record) => {
+              const rendered = await data.render(record.capture_id, {
+                shiftDown: record.shift_down,
+                menuId: record.menu_id,
+              });
+              if (rendered == null) return { ok: false, error: 'The capture could not be rendered.' };
+              data.legacy.adopt(record, rendered);
+              moved.push(record);
+              return { ok: true };
+            },
+            (record) => `${record.page_number}/${record.subpage ?? 1}`,
+          );
+          const resolved = await data.legacy.resolve(moved);
+          return resolved.ok ? result : resolved;
+        },
+        (outcome) =>
+          outcome.ok
+            ? status(`${plural(records.length, 'record')} moved into the live pages.`)
+            : alert(outcome.error),
+      ),
+    [runStructural, sequence, data],
+  );
+
+  const restoreLegacy = useCallback(
+    (records: readonly PublishedEntry[]) =>
+      runStructural(
+        async () => {
+          const restored: PublishedEntry[] = [];
+          const result = await sequence(
+            'Restoring',
+            records,
+            async (record) => {
+              const outcome = await data.publish({
+                pageNumber: record.page_number,
+                subpage: record.subpage ?? 1,
+                captureId: record.capture_id,
+                title: data.titleOf(record.page_number) || record.title,
+                description: data.descriptionOf(record.page_number) || record.description,
+                transforms: { shiftDown: record.shift_down, menuId: record.menu_id },
+              });
+              if (outcome.ok) restored.push(record);
+              return outcome;
+            },
+            (record) => `${record.page_number}/${record.subpage ?? 1}`,
+          );
+          const resolved = await data.legacy.resolve(restored);
+          return resolved.ok ? result : resolved;
+        },
+        (outcome) =>
+          outcome.ok
+            ? status(`${plural(records.length, 'screen')} restored from the archive.`)
+            : alert(outcome.error),
+      ),
+    [runStructural, sequence, data],
+  );
+
+  const discardLegacy = useCallback(
+    (records: readonly PublishedEntry[]) =>
+      runStructural(
+        () => data.legacy.resolve(records),
+        (outcome) =>
+          outcome.ok
+            ? status(`${plural(records.length, 'old record')} set aside. The live pages are unchanged.`)
+            : alert(outcome.error),
+      ),
+    [runStructural, data],
+  );
+
   const saveText = useCallback(
     (pageNumber: number, title: string, description: string) =>
       runPageAction(pageNumber, 'save-text', async () => {
@@ -626,6 +717,9 @@ export function useManageActions({
     applyTransforms,
     setRole,
     fillTitles,
+    moveInLegacy,
+    restoreLegacy,
+    discardLegacy,
     saveText,
     addSubpage,
     removeLastSubpage,

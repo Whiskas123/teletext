@@ -8,6 +8,8 @@ import {
 } from 'react-router-dom';
 import { Analytics } from '@vercel/analytics/react';
 import { GlobalProvider } from './collab/GlobalProvider';
+import { LiveMirror } from './collab/liveMirror';
+import { useIsModerator } from './collab/useIsModerator';
 import { RoomContext } from './collab/RoomContext';
 import { AboutPage } from './components/Room/AboutPage';
 import { GuestbookPage } from './components/Room/GuestbookPage';
@@ -164,12 +166,22 @@ function LanguageRoutes() {
   );
 }
 
+/**
+ * A moderator's browser keeps the database's copy of the pages current, on
+ * whichever page of the site it is open — the editor included, where most
+ * changes are made. See `collab/liveMirror.ts`.
+ */
+function ModeratorMirror() {
+  return useIsModerator() ? <LiveMirror /> : null;
+}
+
 function App() {
   return (
     <BrowserRouter>
       {/* One global playhtml document for the whole app (pages/titles are
           global; room coordination is keyed by Room_ID inside it). */}
       <GlobalProvider>
+        <ModeratorMirror />
         {/*
           * One tree, mounted twice: English under `/en`, Portuguese bare.
           *

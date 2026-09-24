@@ -12,7 +12,7 @@ import { Link } from 'react-router-dom';
 
 import type { ArchiveAdminApi } from '../../collab/useArchiveAdmin';
 import type { ShowcaseApi } from '../../collab/useShowcase';
-import type { SnapshotApi } from '../../collab/useSnapshot';
+import { LIVE_HOST, type MirrorApi } from '../../collab/liveMirror';
 import type { PageKind } from '../../domain/directory';
 import { TAB_KEYS, tabForKey, type TabKey, type TabNavKey } from '../../domain/manageTabs';
 import { BarsTab } from './BarsTab';
@@ -30,7 +30,8 @@ export interface ManageDeps {
   showcase: ShowcaseApi;
   kindOf(pageNumber: number): PageKind;
   setKind(pageNumber: number, kind: PageKind): void;
-  snapshot: SnapshotApi;
+  /** The live mirror keeping the database's copy of the pages current. */
+  mirror: MirrorApi;
   /** Whether the live document has synced. */
   connected: boolean;
 }
@@ -50,7 +51,7 @@ const TAB_NAMES: Record<TabKey, string> = {
 const NAV_KEYS: readonly string[] = ['ArrowRight', 'ArrowLeft', 'Home', 'End'];
 
 export function ManageWorkspace({ deps, tab, query }: ManageWorkspaceProps) {
-  const { data, showcase, kindOf, setKind, snapshot, connected } = deps;
+  const { data, showcase, kindOf, setKind, mirror, connected } = deps;
   const actions = useManageActions({ data, showcase, setKind });
   const [confirming, setConfirming] = useState<ConfirmSpec | null>(null);
   const tabRefs = useRef(new Map<TabKey, HTMLButtonElement | null>());
@@ -107,27 +108,28 @@ export function ManageWorkspace({ deps, tab, query }: ManageWorkspaceProps) {
         <span className={`mg-live${connected ? ' mg-live-on' : ''}`} role="status">
           {connected ? 'Live' : 'Connecting…'}
         </span>
-        <button
-          type="button"
-          className="mg-btn mg-btn-small mg-btn-ghost"
-          disabled={snapshot.saving || snapshot.pageCount === 0}
-          title={
-            snapshot.error ??
-            (snapshot.lastResult != null
-              ? `Last backup stored ${snapshot.lastResult.stored} pages`
-              : 'Copy every live page into the database')
-          }
-          onClick={() => void snapshot.snapshot()}
-        >
-          {snapshot.saving
-            ? snapshot.progress != null && snapshot.progress.total > 1
-              ? `Backing up ${snapshot.progress.done}/${snapshot.progress.total}…`
-              : 'Backing up…'
-            : snapshot.lastResult != null
-              ? `Backed up ${snapshot.lastResult.stored} ✓`
-              : 'Back up now'}
-        </button>
+        <MirrorBadge mirror={mirror} onConfirmHeld={() => setConfirming({
+          title: `Remove ${mirror.held.length} pages from the backup?`,
+          danger: true,
+          confirmLabel: `Remove ${mirror.held.length} from the backup`,
+          body: (
+            <p>
+              These pages are no longer on the live service, but so many disappearing at once looks more like a
+              loading problem than an edit, so the backup kept them: {mirror.held.slice(0, 20).join(', ')}
+              {mirror.held.length > 20 ? '…' : ''}. Remove them only if you deleted them.
+            </p>
+          ),
+          onConfirm: mirror.confirmHeld,
+        })} />
       </header>
+
+      {mirror.phase === 'wrong-host' && (
+        <div className="mg-banner mg-host-banner" role="alert">
+          This is <strong>{mirror.host}</strong>, not {LIVE_HOST}. Each address has its own live pages but they all
+          share one database: anything published here is recorded for the live site too, but only appears on this
+          address. The backup is not kept current from here.
+        </div>
+      )}
 
       <main id="mg-panel" className="mg-main" role="tabpanel" aria-labelledby={`mg-tab-${tab.selected}`}>
         {tab.selected === 'pages' ? (
@@ -207,5 +209,68 @@ export function ManageWorkspace({ deps, tab, query }: ManageWorkspaceProps) {
 
       {confirming != null && <ConfirmDialog spec={confirming} onClose={() => setConfirming(null)} />}
     </div>
+  );
+}
+
+/**
+ * Where the database's copy of the pages stands, in the header. Replaces the
+ * "Back up now" button: the copy follows the live pages by itself now, and the
+ * button is for checking again rather than for remembering to save.
+ */
+function MirrorBadge({ mirror, onConfirmHeld }: { mirror: MirrorApi; onConfirmHeld(): void }) {
+  const time = (at: number | null) =>
+    at == null ? '' : new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  const [tone, label, title] =
+    mirror.phase === 'synced'
+      ? ['ok', `Backed up ${time(mirror.lastSynced)}`, 'The database copy matches the live pages. Click to check again.']
+      : mirror.phase === 'saving'
+        ? ['busy', mirror.pending > 0 ? `Backing up ${mirror.pending}…` : 'Backing up…', 'Saving the latest changes to the database copy.']
+        : mirror.phase === 'waiting'
+          ? ['busy', 'Loading pages…', 'The backup starts once the live pages have loaded.']
+          : mirror.phase === 'error'
+            ? ['bad', 'Backup behind', `${mirror.error ?? 'The backup could not be reached.'} Click to retry.`]
+            : mirror.phase === 'wrong-host'
+              ? ['warn', 'Not backing up', `Only ${LIVE_HOST} keeps the backup current.`]
+              : ['warn', 'Backup off', 'The backup runs in a signed-in moderator’s browser.'];
+
+  // The daily read copies the playground when no moderator is online. It leans
+  // on playhtml internals, so a failure — or a run that has stopped happening —
+  // is said out loud rather than left to a backup going quietly stale.
+  const daily = mirror.daily;
+  const dailyWarning =
+    daily == null
+      ? null
+      : !daily.ok
+        ? { label: 'Daily read failed', title: daily.detail ?? 'The daily read of the live pages failed.' }
+        : daily.stale
+          ? {
+              label: 'Daily read stopped',
+              title: `The last daily read of the live pages was ${new Date(daily.ranAt).toLocaleString()}.`,
+            }
+          : null;
+
+  return (
+    <span className="mg-mirror">
+      {dailyWarning != null && (
+        <span className="mg-mirror-badge mg-mirror-bad" title={dailyWarning.title} role="status">
+          {dailyWarning.label}
+        </span>
+      )}
+      {mirror.held.length > 0 && (
+        <button type="button" className="mg-btn mg-btn-small mg-btn-warn" onClick={onConfirmHeld}>
+          {mirror.held.length} removals waiting
+        </button>
+      )}
+      <button
+        type="button"
+        className={`mg-mirror-badge mg-mirror-${tone}`}
+        title={title}
+        disabled={mirror.phase === 'wrong-host' || mirror.phase === 'off'}
+        onClick={mirror.resync}
+      >
+        {label}
+      </button>
+    </span>
   );
 }
