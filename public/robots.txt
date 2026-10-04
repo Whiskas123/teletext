@@ -22,6 +22,11 @@ Disallow: /en/moderator
 Disallow: /en/manage
 Disallow: /en/import
 
+# The bare-page screen for a television in a room. A machine's address, and a
+# duplicate of /watch as far as an index is concerned.
+Disallow: /kiosk
+Disallow: /en/kiosk
+
 # The API answers JSON and has nothing to index.
 Disallow: /api/
 

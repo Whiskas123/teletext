@@ -24,6 +24,9 @@
  * it up and Escape takes it down, landing back on the page that was being
  * watched. All of it is {@link useExhibitMode} and {@link ExhibitScreen}; what
  * this file contributes is the three navigation callbacks it already had.
+ *
+ * `/kiosk` is that face and no other: the same component with `kiosk` set, which
+ * holds the exhibition screen up with no way back to the set.
  */
 
 import { useCallback, useState } from 'react';
@@ -56,13 +59,15 @@ export interface SoloViewerProps {
    * (`/watch/:pageNumber`), falling back to page 100.
    */
   pageNumber?: number;
+  /** Show only the exhibition screen, permanently. The `/kiosk` route. */
+  kiosk?: boolean;
 }
 
 /**
  * Render the solo watching screen: the television, centred, and the directory
  * folded against the left edge beside it.
  */
-export function SoloViewer({ pageNumber: pageNumberProp }: SoloViewerProps) {
+export function SoloViewer({ pageNumber: pageNumberProp, kiosk = false }: SoloViewerProps) {
   const params = useParams<{ pageNumber: string; subpage: string }>();
   const parsedParam = params.pageNumber
     ? parseInt(params.pageNumber, 10)
@@ -146,7 +151,9 @@ export function SoloViewer({ pageNumber: pageNumberProp }: SoloViewerProps) {
   // The same three controls the front panel is given, handed to a screen that
   // has no front panel: on the exhibition screen the keyboard is all there is.
   const exhibit = useExhibitMode({
+    locked: kiosk,
     onPageEntry: handleDialPage,
+    onPageSelect: handleSelectPage,
     onPageStep: stepPage,
     onSubpageStep: stepSubpageBy,
   });

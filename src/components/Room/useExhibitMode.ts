@@ -21,6 +21,26 @@
  * Escape leaves, whichever way you came in, and lands back on the page that was
  * being shown.
  *
+ * ## Locked: the kiosk
+ *
+ * `/kiosk` is the same screen with no way out of it (`locked`). The machine
+ * there is a Raspberry Pi with an infrared remote and no keyboard, and a remote
+ * has buttons — BACK, EXIT — that arrive as Escape; on a screen nobody can
+ * type a URL into, leaving would be a dead end with a website on the tube. So
+ * neither the chord nor Escape does anything, and the pointer is never drawn.
+ *
+ * ## What a remote sends
+ *
+ * A receiver handled by the kernel (`ir-keytable`) turns buttons into ordinary
+ * key events, so the digits and arrows already worked. Two more groups are
+ * accepted here, by every name they are likely to arrive under:
+ *
+ * - P+ / P-: `ChannelUp`/`ChannelDown`, or `PageUp`/`PageDown`, step the page.
+ * - The fastext colours: the W3C names (`ColorF0Red`…), which is what a browser
+ *   reports for KEY_RED and friends when it reports them at all, and `F1`–`F4`
+ *   and `r` `g` `y` `b` for a keymap that had to be pointed at something a
+ *   browser under X does deliver.
+ *
  * ## Fullscreen, and Safari
  *
  * True fullscreen is asked for whenever the screen goes up, because a browser
@@ -67,6 +87,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { isDialDigit } from '../../domain/dialling';
+import { INDEX_LINE } from '../../domain/indexLine';
 import { useDialPad } from './useDialPad';
 
 /** The query parameter that opens a watching screen straight into exhibition mode. */
@@ -74,6 +95,17 @@ export const EXHIBIT_PARAM = 'exhibit';
 
 /** The chord that toggles it, with no `Ctrl`/`Cmd`/`Alt` alongside. */
 const TOGGLE_KEY = 'f';
+
+/**
+ * Every key that means one of the four fastext colours, as its position on the
+ * index line. See "What a remote sends" above for why there are three of each.
+ */
+const FASTEXT_KEYS: Record<string, number> = {
+  ColorF0Red: 0, F1: 0, r: 0,
+  ColorF1Green: 1, F2: 1, g: 1,
+  ColorF2Yellow: 2, F3: 2, y: 2,
+  ColorF3Blue: 3, F4: 3, b: 3,
+};
 
 /** How long the pointer must sit still before it is taken off the picture. */
 const CURSOR_IDLE_MS = 3000;
@@ -180,6 +212,13 @@ function isTypingTarget(target: EventTarget | null): boolean {
  * else, which is a legitimate exhibit.
  */
 export interface ExhibitControls {
+  /**
+   * Hold the screen up for good: no chord, no Escape, no pointer. What `/kiosk`
+   * passes, for a set with a remote control and nobody to type a URL.
+   */
+  locked?: boolean;
+  /** Jump straight to a page — what the four fastext colour keys call. */
+  onPageSelect?: (pageNumber: number) => void;
   /** Dial a page — called once three digits name a real one. */
   onPageEntry?: (pageNumber: number) => void;
   /** Step to the next/previous non-empty page. */
@@ -215,7 +254,7 @@ export interface ExhibitMode {
  * is listen for the chord.
  */
 export function useExhibitMode(controls: ExhibitControls = {}): ExhibitMode {
-  const { onPageEntry, onPageStep, onSubpageStep } = controls;
+  const { locked = false, onPageEntry, onPageStep, onPageSelect, onSubpageStep } = controls;
 
   const [searchParams, setSearchParams] = useSearchParams();
   const requested = isExhibitParam(searchParams.get(EXHIBIT_PARAM));
@@ -234,7 +273,7 @@ export function useExhibitMode(controls: ExhibitControls = {}): ExhibitMode {
    * very next render and Escape would look like a key that does nothing.
    */
   const [entered, setEntered] = useState(false);
-  const active = requested || entered;
+  const active = locked || requested || entered;
 
   const [fullscreen, setFullscreen] = useState(false);
   const [cursorIdle, setCursorIdle] = useState(false);
@@ -399,7 +438,7 @@ export function useExhibitMode(controls: ExhibitControls = {}): ExhibitMode {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (isTypingTarget(event.target)) return;
 
-      if (event.shiftKey && event.key.toLowerCase() === TOGGLE_KEY) {
+      if (!locked && event.shiftKey && event.key.toLowerCase() === TOGGLE_KEY) {
         // Held down, a chord would flap in and out of fullscreen many times a
         // second. One press is one toggle.
         if (event.repeat) return;
@@ -417,7 +456,15 @@ export function useExhibitMode(controls: ExhibitControls = {}): ExhibitMode {
 
       if (event.key === 'Escape') {
         event.preventDefault();
-        exit();
+        if (!locked) exit();
+        return;
+      }
+
+      const fastext = FASTEXT_KEYS[event.key];
+      if (fastext != null) {
+        if (event.repeat) return;
+        event.preventDefault();
+        onPageSelect?.(INDEX_LINE[fastext].page);
         return;
       }
 
@@ -432,10 +479,14 @@ export function useExhibitMode(controls: ExhibitControls = {}): ExhibitMode {
 
       switch (event.key) {
         case 'ArrowUp':
+        case 'PageUp':
+        case 'ChannelUp':
           event.preventDefault();
           onPageStep?.(1);
           break;
         case 'ArrowDown':
+        case 'PageDown':
+        case 'ChannelDown':
           event.preventDefault();
           onPageStep?.(-1);
           break;
@@ -454,7 +505,7 @@ export function useExhibitMode(controls: ExhibitControls = {}): ExhibitMode {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [active, enter, exit, press, onPageStep, onSubpageStep]);
+  }, [active, locked, enter, exit, press, onPageStep, onPageSelect, onSubpageStep]);
 
   // Nothing half dialled survives the screen going away, in either direction:
   // the digits belong to the session in front of the television.
@@ -510,7 +561,7 @@ export function useExhibitMode(controls: ExhibitControls = {}): ExhibitMode {
    * reset on exit, so leaving cannot strand a hidden pointer on the ordinary
    * watching screen if the teardown is ever reordered.
    */
-  const idle = active && cursorIdle;
+  const idle = active && (locked || cursorIdle);
 
   return { active, attachScreen, fullscreen, idle, readout, enter, exit };
 }

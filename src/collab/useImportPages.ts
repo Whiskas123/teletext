@@ -10,11 +10,11 @@
  * - **Whole pages, not cells.** An import *replaces* a page, so each page's
  *   cell map is assigned wholesale. A cell the render leaves empty must end up
  *   empty, which merging into the existing map would not achieve.
- * - **One transaction, not 960 per page.** Driving `editCell` in a loop is
+ * - **A few transactions, not 960 per page.** Driving `editCell` in a loop is
  *   960 separate store writes for a single page, and a batch of twenty pages
- *   would be nineteen thousand. Here the entire batch is one mutation, so it
- *   reaches other sessions as one change rather than as a slow trickle of
- *   cells.
+ *   would be nineteen thousand. Here whole pages go out a few at a time: not
+ *   the entire batch at once, because a write over about 1 MiB never reaches
+ *   playhtml's server (see `domain/liveWrites.ts`).
  *
  * Who is allowed to write which page is not decided here — that is
  * `domain/access.ts`, applied by the screen before it calls this.
@@ -24,6 +24,7 @@ import { useCallback, useState } from 'react';
 import { usePageData } from '@playhtml/react';
 
 import { isValidCell } from '../domain/cellEdit';
+import { chunkEntries } from '../domain/liveWrites';
 import { MIN_SUBPAGE, pageKey } from '../domain/subpages';
 import { TOTAL_CELLS, type Cell, type PagesData, type TeletextPage } from './types';
 import { PAGES_CHANNEL } from './useEditPage';
@@ -42,7 +43,7 @@ export interface PageImport {
 
 export interface ImportPagesApi {
   /**
-   * Replace each listed page with the given content, as a single store write.
+   * Replace each listed page with the given content, a few pages per store write.
    *
    * Returns the number of pages actually written. A page whose content is not
    * a full {@link TOTAL_CELLS}-cell array of valid cells is skipped rather
@@ -77,17 +78,20 @@ export function useImportPages(): ImportPagesApi {
       if (writable.length === 0) return 0;
 
       try {
-        setPages((draft) => {
-          for (const { pageNumber, subpage, page } of writable) {
-            // A fresh map per page, replacing whatever was there: an imported
-            // page is the render, not the render merged over the old content.
-            const cellMap: Record<number, Cell> = {};
-            for (let index = 0; index < TOTAL_CELLS; index += 1) {
-              cellMap[index] = { ...page[index] };
-            }
-            draft[pageKey(pageNumber, subpage ?? MIN_SUBPAGE) as number] = cellMap;
+        // A fresh map per page, replacing whatever was there: an imported
+        // page is the render, not the render merged over the old content.
+        const entries = writable.map(({ pageNumber, subpage, page }) => {
+          const cellMap: Record<number, Cell> = {};
+          for (let index = 0; index < TOTAL_CELLS; index += 1) {
+            cellMap[index] = { ...page[index] };
           }
+          return [String(pageKey(pageNumber, subpage ?? MIN_SUBPAGE)), cellMap] as const;
         });
+        for (const write of chunkEntries(entries)) {
+          setPages((draft) => {
+            for (const [key, cellMap] of write) (draft as Record<string, unknown>)[key] = cellMap;
+          });
+        }
         setSaveError(null);
         return writable.length;
       } catch (error) {

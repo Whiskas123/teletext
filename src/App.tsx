@@ -91,6 +91,20 @@ function LanguageRoutes() {
       <Route path="watch/:pageNumber" element={<SoloViewer />} />
       <Route path="watch/:pageNumber/:subpage" element={<SoloViewer />} />
 
+      {/* The page and nothing else, for a real television driven by a remote
+          control. Unlisted: it is a machine's address, not a reader's. */}
+      {['kiosk', 'kiosk/:pageNumber', 'kiosk/:pageNumber/:subpage'].map((path) => (
+        <Route
+          key={path}
+          path={path}
+          element={
+            <NoIndex>
+              <SoloViewer kiosk />
+            </NoIndex>
+          }
+        />
+      ))}
+
       {/* Watch-only co-watching in a room (Req 3–5, 9). */}
       <Route
         path="room/:roomId"

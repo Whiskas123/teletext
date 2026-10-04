@@ -62,6 +62,7 @@ import {
   type SubpageCounts,
 } from '../domain/subpages';
 import { DEFAULT_PAGE_KIND, type PageKinds } from '../domain/directory';
+import { changedEntries, orderedWrites } from '../domain/liveWrites';
 import type { PagesData, TeletextPage, TitlesData } from './types';
 
 /** A capture as the list endpoint returns it — metadata only, no cells. */
@@ -808,6 +809,12 @@ export function useArchiveAdmin({
    * every channel keyed by page number: the cells and their sources per screen,
    * the title, description, role and screen count per page. All of it in this
    * one moment, with nothing awaited in between.
+   *
+   * The screens are replayed on a copy and written in pieces rather than in
+   * one transaction: a screen is about 100 KB to send, and a single write
+   * moving dozens of them is too big for playhtml's server to accept (see
+   * `domain/liveWrites.ts`). Content lands before the screens it left are
+   * emptied, so in between a page can show twice but never go missing.
    */
   const replayPlan = useCallback(
     (plan: ReorderPlan) => {
@@ -841,9 +848,9 @@ export function useArchiveAdmin({
        * composite keys (`"220.2"`), and how many to carry is read from the
        * counts *before* they are themselves replayed.
        */
+      const keysOf = (page: number) =>
+        pageKeys(page, subpageCountOf(liveSubpageCounts, page)).map(String);
       const replayScreens = (draft: Record<string, unknown>) => {
-        const keysOf = (page: number) =>
-          pageKeys(page, subpageCountOf(liveSubpageCounts, page)).map(String);
         const held = new Map<number, unknown[]>();
         for (const page of plan.lifts) {
           const keys = keysOf(page);
@@ -865,15 +872,43 @@ export function useArchiveAdmin({
         }
       };
 
-      setPages((draft) => replayScreens(draft as Record<string, unknown>));
-      setSources((draft) => replayScreens(draft));
+      /** The replay on a copy of the screens it reads; the writes that make it so. */
+      const screenWrites = (live: Readonly<Record<string, unknown>> | undefined) => {
+        const copy: Record<string, unknown> = {};
+        for (const page of [...plan.lifts, ...plan.moves.map(({ from }) => from)]) {
+          for (const key of keysOf(page)) copy[key] = detach(live?.[key]) ?? {};
+        }
+        replayScreens(copy);
+        return orderedWrites(changedEntries(copy, live));
+      };
+
+      for (const write of screenWrites(livePages as Record<string, unknown>)) {
+        setPages((draft) => {
+          for (const [key, value] of write) (draft as Record<string, unknown>)[key] = value;
+        });
+      }
+      for (const write of screenWrites(liveSources)) {
+        setSources((draft) => {
+          for (const [key, value] of write) draft[key] = value;
+        });
+      }
       setTitles((draft) => replayInto(draft, ''));
       setDescriptions((draft) => replayInto(draft, ''));
       // A heading that moves stays a heading; its empty value is the default kind.
       setKinds((draft) => replayInto(draft, DEFAULT_PAGE_KIND));
       setSubpageCounts((draft) => replayInto(draft, MIN_SUBPAGE));
     },
-    [setPages, setSources, setTitles, setKinds, setDescriptions, setSubpageCounts, liveSubpageCounts],
+    [
+      setPages,
+      setSources,
+      setTitles,
+      setKinds,
+      setDescriptions,
+      setSubpageCounts,
+      livePages,
+      liveSources,
+      liveSubpageCounts,
+    ],
   );
 
   /**
@@ -937,7 +972,8 @@ export function useArchiveAdmin({
   /**
    * Fold one page's carousel onto the end of another's: every screen and its
    * source land after the target's last screen, and the source page is
-   * emptied — in one moment, as a move of data inside the live document.
+   * emptied — in one moment, as a move of data inside the live document,
+   * written in pieces small enough to arrive (see `domain/liveWrites.ts`).
    *
    * This used to re-publish each screen through the server one at a time, so a
    * failure half way left a story duplicated across two pages. There is no
@@ -950,24 +986,34 @@ export function useArchiveAdmin({
     async (target, source) => {
       const from = subpageCountOf(liveSubpageCounts, target);
       const moving = subpageCountOf(liveSubpageCounts, source);
-      const carry = (draft: Record<string, unknown>) => {
+      const carry = (live: Readonly<Record<string, unknown>> | undefined) => {
+        const result: Record<string, unknown> = {};
         for (let index = 0; index < moving; index += 1) {
           const fromKey = String(pageKey(source, index + MIN_SUBPAGE));
-          const value = draft[fromKey];
-          draft[String(pageKey(target, from + index + MIN_SUBPAGE))] =
+          const value = live?.[fromKey];
+          result[String(pageKey(target, from + index + MIN_SUBPAGE))] =
             value === undefined ? {} : JSON.parse(JSON.stringify(value));
-          draft[fromKey] = {};
+          result[fromKey] = {};
         }
+        return orderedWrites(changedEntries(result, live));
       };
-      setPages((draft) => carry(draft as Record<string, unknown>));
-      setSources((draft) => carry(draft));
+      for (const write of carry(livePages as Record<string, unknown>)) {
+        setPages((draft) => {
+          for (const [key, value] of write) (draft as Record<string, unknown>)[key] = value;
+        });
+      }
+      for (const write of carry(liveSources)) {
+        setSources((draft) => {
+          for (const [key, value] of write) draft[key] = value;
+        });
+      }
       setSubpageCounts((draft) => {
         draft[target] = from + moving;
       });
       clearPageText(source);
       return { ok: true };
     },
-    [liveSubpageCounts, setPages, setSources, setSubpageCounts, clearPageText],
+    [livePages, liveSources, liveSubpageCounts, setPages, setSources, setSubpageCounts, clearPageText],
   );
 
   /** Remove a page entirely: every screen, where each came from, and its text. */
