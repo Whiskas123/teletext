@@ -192,17 +192,15 @@ export interface Copy {
     doubleHeightHint: string;
     motif: string;
     colours: string;
-    motifColorsHelp: string;
     pickedShape: string;
     fillWholeCell: string;
     /** Drawing: a whole cell at a time, or one sixth of one. */
     size: string;
     sizeCell: string;
     sizePixel: string;
-    /** Paint or erase, for a hand with no Alt key, and what Alt does on a desk. */
+    /** Paint or erase, for a hand with no Alt key. */
     paint: string;
     erase: string;
-    altErases: string;
     /** Blink: put it on, or take it off. */
     blinkOn: string;
     blinkOff: string;
@@ -216,13 +214,6 @@ export interface Copy {
     toolDrawHint: string;
     toolBlink: string;
     toolBlinkHint: string;
-    /** One line under the tool keys: how the tool in hand is used. */
-    helpText: string;
-    helpDrawCell: string;
-    helpDrawPixel: string;
-    helpErase: string;
-    helpBlink: string;
-    helpPick: string;
   };
   /**
    * The guestbook: the book itself, and the form for signing it.
@@ -443,7 +434,6 @@ export const COPY: Record<Language, Copy> = {
         'Os caracteres escritos ficam com o dobro da altura. Não funciona na última linha.',
       motif: 'Motivo',
       colours: 'Cores',
-      motifColorsHelp: 'Escolhe uma parte, depois uma cor.',
       pickedShape: 'Forma copiada',
       fillWholeCell: 'Encher a célula toda',
       size: 'Tamanho',
@@ -451,7 +441,6 @@ export const COPY: Record<Language, Copy> = {
       sizePixel: 'Pixel',
       paint: 'Pintar',
       erase: 'Apagar',
-      altErases: 'Alt+clique também apaga.',
       blinkOn: 'Ligar',
       blinkOff: 'Desligar',
       eyedropper: 'Conta-gotas',
@@ -462,12 +451,6 @@ export const COPY: Record<Language, Copy> = {
       toolDrawHint: 'Pintar mosaicos, célula a célula ou pixel a pixel',
       toolBlink: 'Piscar',
       toolBlinkHint: 'Pôr a piscar, ou deixar de piscar, o que já está na página',
-      helpText: 'Escolhe uma célula na página e escreve.',
-      helpDrawCell: 'Escolhe um motivo e as cores, depois arrasta sobre a página.',
-      helpDrawPixel: 'Pinta um sexto de célula de cada vez. Arrasta para desenhar.',
-      helpErase: 'Arrasta sobre a página para apagar.',
-      helpBlink: 'Arrasta sobre o que já está na página para o pôr a piscar.',
-      helpPick: 'Escolhe uma célula da página para copiar as cores dela. Esc cancela.',
     },
     guestbook: {
       title: 'guestbook',
@@ -649,7 +632,6 @@ export const COPY: Record<Language, Copy> = {
         'Typed characters render at twice the row height. Not available on the last row.',
       motif: 'Motif',
       colours: 'Colours',
-      motifColorsHelp: 'Pick a part, then a colour.',
       pickedShape: 'Picked shape',
       fillWholeCell: 'Fill the whole cell',
       size: 'Size',
@@ -657,7 +639,6 @@ export const COPY: Record<Language, Copy> = {
       sizePixel: 'Pixel',
       paint: 'Paint',
       erase: 'Erase',
-      altErases: 'Alt+click erases too.',
       blinkOn: 'On',
       blinkOff: 'Off',
       eyedropper: 'Eyedropper',
@@ -668,12 +649,6 @@ export const COPY: Record<Language, Copy> = {
       toolDrawHint: 'Paint mosaics, a cell or a pixel at a time',
       toolBlink: 'Blink',
       toolBlinkHint: 'Make what is already on the page blink, or stop blinking',
-      helpText: 'Pick a cell on the page and type.',
-      helpDrawCell: 'Choose a motif and its colours, then drag across the page.',
-      helpDrawPixel: 'Paints one sixth of a cell at a time. Drag to draw.',
-      helpErase: 'Drag across the page to erase.',
-      helpBlink: 'Drag over what is already on the page to make it blink.',
-      helpPick: 'Pick a cell on the page to copy its colours. Esc cancels.',
     },
     guestbook: {
       title: 'guestbook',

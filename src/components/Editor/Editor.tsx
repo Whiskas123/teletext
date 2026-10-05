@@ -1354,25 +1354,6 @@ export function Editor({
     </div>
   );
 
-  /** One line saying how the tool in hand is used — the panel's own manual. */
-  const helpKey: keyof Copy["editor"] = picking
-    ? "helpPick"
-    : tool === "text"
-      ? "helpText"
-      : tool === "blink"
-        ? "helpBlink"
-        : eraseOn
-          ? "helpErase"
-          : drawSize === "cell"
-          ? "helpDrawCell"
-          : "helpDrawPixel";
-  const help = (
-    <p className="rc-help">
-      {toolWord(copy, helpKey)}
-      {!isNarrow && !picking && tool !== "text" ? ` ${copy.editor.altErases}` : ""}
-    </p>
-  );
-
   // The eyedropper is put down with Escape, like anything else held up.
   useEffect(() => {
     if (!picking) return;
@@ -1601,7 +1582,6 @@ export function Editor({
           })}
         </div>
         <div className="rc-motif-palette">
-          {multiSlot && <p className="rc-help">{copy.editor.motifColorsHelp}</p>}
           {palette(
             brushColors[selectedSixelIndex],
             (color) => paintWith(() => setMotifSlotColor(selectedSlot, color))(),
@@ -1949,7 +1929,6 @@ export function Editor({
           */}
         <div className="rc-dock" onMouseDown={keepGridFocus}>
           <div className="rc-dock-options">
-            {help}
             {toolOptions}
           </div>
           {tool === "text" && <div className="rc-dock-keyboard">{textPad}</div>}
@@ -2027,8 +2006,9 @@ export function Editor({
         >
           {historyKeys}
           {exportKey(false)}
-          {clearKey(false)}
         </div>
+        {/* Apart from the rest: the one key on the strip that destroys. */}
+        <div className="rc-strip-group">{clearKey(false)}</div>
       </header>
       {alert}
 
@@ -2041,7 +2021,6 @@ export function Editor({
         >
           <section className="rc-cluster rc-cluster-tools">
             {toolKeys}
-            {help}
           </section>
           {toolOptions}
         </aside>

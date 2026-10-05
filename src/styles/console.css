@@ -653,15 +653,6 @@
 
 /* ── what the panel says for itself ───────────────────────────────────────── */
 
-/* How the tool in hand is used, in one line under its keys. */
-.editor-console .rc-help {
-  margin: 0;
-  font-family: var(--rc-text-font);
-  font-size: 0.78rem;
-  line-height: 1.45;
-  color: #9a9994;
-}
-
 /* Why something was refused, hung under the control that refused it. */
 .editor-console .rc-bubble {
   position: absolute;
