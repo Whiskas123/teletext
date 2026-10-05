@@ -70,15 +70,14 @@
   background: #0d0d0d;
 }
 
-/* One statement of the plastic, wherever a piece of the panel needs it. */
+/* One statement of the plastic, wherever a piece of the panel needs it. Flat:
+   the noise is kept for the bezel, which carries nothing that has to be read. */
 .editor-console .rc-strip,
 .editor-console .rc-remote,
 .editor-console .rc-flyout,
 .editor-console .rc-dock,
 .editor-console .rc-sheet {
-  background-image: var(--rc-mould), var(--rc-grain), var(--rc-cab);
-  background-blend-mode: overlay, soft-light, normal;
-  background-size: 320px 320px, 160px 160px, auto;
+  background-image: var(--rc-cab);
 }
 
 /* ── nameplate ───────────────────────────────────────────────────────────── */
