@@ -141,66 +141,88 @@ export interface Copy {
     cameraRefused: string;
     cameraMissing: string;
   };
-  /** The editor's own panel. */
+  /** The editor: the strip along the top, the remote panel, the page sheet. */
   editor: {
     page: string;
-    subpage: string;
     subpages: string;
     title: string;
     untitled: string;
+    /** The page sheet on a phone, and the key that opens it. */
     pageSetup: string;
     pageSetupHint: string;
+    close: string;
     dialAPage: string;
+    /** What the LED window does when it is clicked, on a desk. */
+    ledHint: string;
+    editingPage(page: number, subpage: number, count: number): string;
     prevPage: string;
     nextPage: string;
-    prevSubpage(subpage: number, count: number): string;
-    nextSubpage(subpage: number, count: number): string;
-    addSubpage: string;
+    subpageN(n: number): string;
     addSubpageHint: string;
-    removeSubpage: string;
     removeSubpageHint(last: number): string;
+    removeSubpageConfirm(last: number): string;
+    removeSubpageYes: string;
     subpageOneIsThePage: string;
     maxSubpages(max: number): string;
+    undo: string;
+    redo: string;
     exportPng: string;
+    exportKey: string;
     clearPage: string;
     clearConfirm: string;
     clearYes: string;
     clearNo: string;
-    backToGrid: string;
-    saving: string;
+    saved: string;
+    savedHint: string;
     notSaving: string;
     notSaved(reason: string): string;
     titleTooLong(max: number): string;
     reservedPages(min: number, max: number): string;
     pagesNumbered(min: number, max: number): string;
-    editingPage(page: number, subpage: number, count: number): string;
+    recent: string;
     recentBrushes: string;
     recentTextStyles: string;
-    recent: string;
     tools: string;
     wholePage: string;
-    console: string;
     grid: string;
     keyboard: string;
     color: string;
     background: string;
     doubleHeight: string;
     doubleHeightHint: string;
+    motif: string;
+    colours: string;
+    motifColorsHelp: string;
     pickedShape: string;
     fillWholeCell: string;
-    pixelColor: string;
-    exportKey: string;
-    /** The five tool keys: what is printed on the cap, and what the cap does. */
+    /** Drawing: a whole cell at a time, or one sixth of one. */
+    size: string;
+    sizeCell: string;
+    sizePixel: string;
+    /** Paint or erase, for a hand with no Alt key, and what Alt does on a desk. */
+    paint: string;
+    erase: string;
+    altErases: string;
+    /** Blink: put it on, or take it off. */
+    blinkOn: string;
+    blinkOff: string;
+    /** The eyedropper beside the colours. */
+    eyedropper: string;
+    eyedropperHint: string;
+    /** The three tool keys: the caption under the cap, and what the cap does. */
     toolText: string;
     toolTextHint: string;
-    toolBlock: string;
-    toolBlockHint: string;
-    toolPixel: string;
-    toolPixelHint: string;
+    toolDraw: string;
+    toolDrawHint: string;
     toolBlink: string;
     toolBlinkHint: string;
-    toolPick: string;
-    toolPickHint: string;
+    /** One line under the tool keys: how the tool in hand is used. */
+    helpText: string;
+    helpDrawCell: string;
+    helpDrawPixel: string;
+    helpErase: string;
+    helpBlink: string;
+    helpPick: string;
   };
   /**
    * The guestbook: the book itself, and the form for signing it.
@@ -373,67 +395,79 @@ export const COPY: Record<Language, Copy> = {
     },
     editor: {
       page: 'Página',
-      subpage: 'Subpágina',
       subpages: 'Subpáginas',
       title: 'Título',
       untitled: 'Página sem título',
-      pageSetup: 'Configuração da página',
-      pageSetupHint: 'Marcar um número, dar nome à página, juntar ou tirar ecrãs',
+      pageSetup: 'Página',
+      pageSetupHint: 'Mudar de página, dar-lhe um título, juntar subpáginas, exportar ou limpar',
+      close: 'Fechar',
       dialAPage: 'Marcar um número de página',
+      ledHint: 'Clica e escreve três dígitos para abrir outra página',
+      editingPage: (page, subpage, count) =>
+        `A editar a página ${page}, subpágina ${subpage} de ${count}`,
       prevPage: 'Página anterior',
       nextPage: 'Página seguinte',
-      prevSubpage: (subpage, count) =>
-        `Subpágina anterior (a editar ${subpage} de ${count})`,
-      nextSubpage: (subpage, count) =>
-        `Subpágina seguinte (a editar ${subpage} de ${count})`,
-      addSubpage: '+ Juntar',
+      subpageN: (n) => `Subpágina ${n}`,
       addSubpageHint: 'Juntar uma subpágina vazia no fim e ir para ela',
-      removeSubpage: '− Tirar a última',
       removeSubpageHint: (last) => `Apagar a subpágina ${last} e o seu conteúdo`,
+      removeSubpageConfirm: (last) => `Apagar a subpágina ${last}?`,
+      removeSubpageYes: 'Apagar',
       subpageOneIsThePage: 'A subpágina 1 é a própria página.',
       maxSubpages: (max) => `Uma página tem no máximo ${max} subpáginas.`,
+      undo: 'Desfazer',
+      redo: 'Refazer',
       exportPng: 'Exportar esta página como PNG',
+      exportKey: 'Exportar PNG',
       clearPage: 'Limpar a página inteira',
       clearConfirm: 'Limpar a página inteira?',
       clearYes: 'Limpar',
       clearNo: 'Cancelar',
-      backToGrid: 'Voltar à grelha',
-      saving: 'A guardar',
-      notSaving: 'Não está a guardar',
+      saved: 'Guardado',
+      savedHint: 'As alterações ficam guardadas à medida que editas',
+      notSaving: 'Não guardado',
       notSaved: (reason) => `Alteração não guardada: ${reason}`,
       titleTooLong: (max) => `O título tem de ter ${max} caracteres ou menos.`,
       reservedPages: (min, max) => `As páginas ${min}–${max} estão reservadas.`,
       pagesNumbered: (min, max) => `As páginas vão de ${min} a ${max}.`,
-      editingPage: (page, subpage, count) =>
-        `A editar a página ${page}, subpágina ${subpage} de ${count}. Escreve três dígitos para abrir outra página.`,
+      recent: 'Recentes',
       recentBrushes: 'Pincéis recentes',
       recentTextStyles: 'Estilos recentes',
-      recent: 'Recentes',
       tools: 'Ferramentas',
       wholePage: 'Página inteira',
-      console: 'Consola',
       grid: 'Grelha de edição de teletexto',
       keyboard: 'Teclado',
-      color: 'Cor',
+      color: 'Letra',
       background: 'Fundo',
       doubleHeight: 'Altura dupla',
       doubleHeightHint:
         'Os caracteres escritos ficam com o dobro da altura. Não funciona na última linha.',
+      motif: 'Motivo',
+      colours: 'Cores',
+      motifColorsHelp: 'Escolhe uma parte, depois uma cor.',
       pickedShape: 'Forma copiada',
       fillWholeCell: 'Encher a célula toda',
-      pixelColor: 'Cor do pixel',
-      exportKey: 'Exportar PNG',
-      toolText: 'Texto',
-      toolTextHint: 'Escrever texto',
-      toolBlock: 'Bloco',
-      toolBlockHint: 'Pintar células de mosaico inteiras com um motivo',
-      toolPixel: 'Pixel',
-      toolPixelHint: 'Pintar um sexto de uma célula. Alt+clique para apagar.',
+      size: 'Tamanho',
+      sizeCell: 'Célula',
+      sizePixel: 'Pixel',
+      paint: 'Pintar',
+      erase: 'Apagar',
+      altErases: 'Alt+clique também apaga.',
+      blinkOn: 'Ligar',
+      blinkOff: 'Desligar',
+      eyedropper: 'Conta-gotas',
+      eyedropperHint: 'Copiar as cores (ou a forma) de uma célula da página',
+      toolText: 'Escrever',
+      toolTextHint: 'Escrever texto na página',
+      toolDraw: 'Desenhar',
+      toolDrawHint: 'Pintar mosaicos, célula a célula ou pixel a pixel',
       toolBlink: 'Piscar',
-      toolBlinkHint: 'Pôr as células a piscar. Alt+clique para tirar.',
-      toolPick: 'Copiar',
-      toolPickHint:
-        'Clica numa célula para copiar o que a fez: as cores se tiver um caractere, a forma e as cores se for um mosaico.',
+      toolBlinkHint: 'Pôr a piscar, ou deixar de piscar, o que já está na página',
+      helpText: 'Escolhe uma célula na página e escreve.',
+      helpDrawCell: 'Escolhe um motivo e as cores, depois arrasta sobre a página.',
+      helpDrawPixel: 'Pinta um sexto de célula de cada vez. Arrasta para desenhar.',
+      helpErase: 'Arrasta sobre a página para apagar.',
+      helpBlink: 'Arrasta sobre o que já está na página para o pôr a piscar.',
+      helpPick: 'Escolhe uma célula da página para copiar as cores dela. Esc cancela.',
     },
     guestbook: {
       title: 'guestbook',
@@ -567,67 +601,79 @@ export const COPY: Record<Language, Copy> = {
     },
     editor: {
       page: 'Page',
-      subpage: 'Subpage',
       subpages: 'Subpages',
       title: 'Title',
       untitled: 'Untitled page',
-      pageSetup: 'Page setup',
-      pageSetupHint: 'Dial a page number, name the page, add or remove screens',
+      pageSetup: 'Page',
+      pageSetupHint: 'Change page, give it a title, add subpages, export or clear',
+      close: 'Close',
       dialAPage: 'Dial a page number',
+      ledHint: 'Click and type three digits to open another page',
+      editingPage: (page, subpage, count) =>
+        `Editing page ${page}, subpage ${subpage} of ${count}`,
       prevPage: 'Previous page',
       nextPage: 'Next page',
-      prevSubpage: (subpage, count) =>
-        `Previous subpage (editing ${subpage} of ${count})`,
-      nextSubpage: (subpage, count) =>
-        `Next subpage (editing ${subpage} of ${count})`,
-      addSubpage: '+ Add',
+      subpageN: (n) => `Subpage ${n}`,
       addSubpageHint: 'Add an empty subpage at the end and go to it',
-      removeSubpage: '− Remove last',
       removeSubpageHint: (last) => `Delete subpage ${last} and its content`,
+      removeSubpageConfirm: (last) => `Delete subpage ${last}?`,
+      removeSubpageYes: 'Delete',
       subpageOneIsThePage: 'Subpage 1 is the page itself.',
       maxSubpages: (max) => `A page holds at most ${max} subpages.`,
+      undo: 'Undo',
+      redo: 'Redo',
       exportPng: 'Export this page as a PNG',
+      exportKey: 'Export PNG',
       clearPage: 'Clear the whole page',
       clearConfirm: 'Clear the whole page?',
       clearYes: 'Clear',
       clearNo: 'Cancel',
-      backToGrid: 'Back to grid',
-      saving: 'Saving',
-      notSaving: 'Not saving',
+      saved: 'Saved',
+      savedHint: 'Changes are saved as you edit',
+      notSaving: 'Not saved',
       notSaved: (reason) => `Change not saved: ${reason}`,
       titleTooLong: (max) => `Title must be ${max} characters or fewer.`,
       reservedPages: (min, max) => `Pages ${min}–${max} are reserved.`,
       pagesNumbered: (min, max) => `Pages are numbered ${min}–${max}.`,
-      editingPage: (page, subpage, count) =>
-        `Editing page ${page}, subpage ${subpage} of ${count}. Type three digits to open another page.`,
+      recent: 'Recent',
       recentBrushes: 'Recent brushes',
       recentTextStyles: 'Recent text styles',
-      recent: 'Recent',
       tools: 'Tools',
       wholePage: 'Whole page',
-      console: 'Console',
       grid: 'Teletext editor grid',
       keyboard: 'Keyboard',
-      color: 'Color',
+      color: 'Text',
       background: 'Background',
       doubleHeight: 'Double height',
       doubleHeightHint:
         'Typed characters render at twice the row height. Not available on the last row.',
+      motif: 'Motif',
+      colours: 'Colours',
+      motifColorsHelp: 'Pick a part, then a colour.',
       pickedShape: 'Picked shape',
       fillWholeCell: 'Fill the whole cell',
-      pixelColor: 'Pixel color',
-      exportKey: 'Export PNG',
-      toolText: 'Text',
-      toolTextHint: 'Type text',
-      toolBlock: 'Block',
-      toolBlockHint: 'Paint whole mosaic cells with a motif',
-      toolPixel: 'Pixel',
-      toolPixelHint: 'Paint a single sixth of a cell. Alt+click to erase it.',
+      size: 'Size',
+      sizeCell: 'Cell',
+      sizePixel: 'Pixel',
+      paint: 'Paint',
+      erase: 'Erase',
+      altErases: 'Alt+click erases too.',
+      blinkOn: 'On',
+      blinkOff: 'Off',
+      eyedropper: 'Eyedropper',
+      eyedropperHint: 'Copy the colours (or the shape) of a cell on the page',
+      toolText: 'Write',
+      toolTextHint: 'Type text on the page',
+      toolDraw: 'Draw',
+      toolDrawHint: 'Paint mosaics, a cell or a pixel at a time',
       toolBlink: 'Blink',
-      toolBlinkHint: 'Paint blink on cells. Alt+click to remove blink.',
-      toolPick: 'Pick',
-      toolPickHint:
-        'Click a cell to copy what made it: its colours if it holds a character, its shape and colours if it is a mosaic.',
+      toolBlinkHint: 'Make what is already on the page blink, or stop blinking',
+      helpText: 'Pick a cell on the page and type.',
+      helpDrawCell: 'Choose a motif and its colours, then drag across the page.',
+      helpDrawPixel: 'Paints one sixth of a cell at a time. Drag to draw.',
+      helpErase: 'Drag across the page to erase.',
+      helpBlink: 'Drag over what is already on the page to make it blink.',
+      helpPick: 'Pick a cell on the page to copy its colours. Esc cancels.',
     },
     guestbook: {
       title: 'guestbook',

@@ -9,25 +9,19 @@
  *
  * ## Choosing a page
  *
- * The same way you choose one on the television: an LED window reports it and a
- * keypad dials it. There is no set on this screen — the picture is a page being
- * drawn, not a page being watched — but the *controls* are the set's, because
- * they are controls for the same thing, and a number typed into a form field
- * next to a teletext page was the one part of this app that looked like a form.
+ * The same way you choose one on the television: an LED window reports it, and
+ * digits dial it. On a desk the window is focusable — click it and type three
+ * digits, or step with the arrows beside it. On a phone the window opens the
+ * page sheet, where the set's own keypad is.
  *
  * Dialling follows the panel's rules exactly (see {@link CrtTelevision}): three
  * digits and it goes, a half-dialled number shows `7--` and is abandoned after
- * {@link DIAL_TIMEOUT_MS}, and a number nobody may edit reads `---` and stays
- * where it was. The window is focusable so the digits can also just be typed.
+ * {@link DIAL_TIMEOUT_MS}, and a number nobody may edit reads `---`, stays
+ * where it was, and says why underneath.
  *
- * Everything else the page needs — its title, its carousel of subpages — sits
- * under the keypad on the same moulded panel, and is handed to {@link Editor} as
- * the two console slots it renders: `display`, which is on screen at all times,
- * and `pageControls`, which travels with the rest of the tools. Which of those
- * two a control belongs in is the whole of the split: the readout and its
- * rockers are how you always know what you are drawing on, so on a desk they
- * ride out on the toolbar, while the keypad, the title and the carousel are
- * things you go and do and are kept behind one key.
+ * Everything else the page needs — its title, its carousel of subpages — is
+ * handed to {@link Editor} as slots, and the editor decides where they sit: on
+ * the strip across the top of a desk, in the page sheet on a phone.
  *
  * The {@link Editor} itself is driven by {@link useEditPage} (injected `page` +
  * an `onEditCell` cell-level writer). Editing is solo — no cursor / presence.
@@ -50,10 +44,11 @@ import {
   MIN_SUBPAGE,
   clampSubpage,
   normalizeSubpage,
-  stepSubpage,
 } from '../../domain/subpages';
-import { Editor } from '../Editor/Editor';
+import { ConfirmKey } from '../Editor/ConfirmKey';
+import { EDITOR_NARROW_QUERY, Editor, type EditorPageSheet } from '../Editor/Editor';
 import { LedWindow } from '../chrome/LedWindow';
+import { useMediaQuery } from '../../utils/useMediaQuery';
 import { useCopy } from './useCopy';
 
 /** Default Page_Number for a moderator when none is provided or invalid. */
@@ -67,6 +62,9 @@ const DIAL_TIMEOUT_MS = 3000;
 
 /** How long `---` shows after a page number this member cannot edit. */
 const DIAL_ERROR_MS = 900;
+
+/** How long the reason a page was refused stays on screen. */
+const PAGE_ERROR_MS = 4000;
 
 /** The keypad, 5×2, in the order the television's own is moulded. */
 const KEYPAD_DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'] as const;
@@ -172,20 +170,27 @@ export function SoloEditor() {
     return () => clearTimeout(timer);
   }, [dialError]);
 
+  useEffect(() => {
+    if (pageError == null) return;
+    const timer = setTimeout(() => setPageError(null), PAGE_ERROR_MS);
+    return () => clearTimeout(timer);
+  }, [pageError]);
+
+  /** Add a digit to the dial; true when that completed a page and opened it. */
   const pressDigit = useCallback(
-    (digit: string) => {
+    (digit: string): boolean => {
       const next = dialRef.current + digit;
       if (next.length < 3) {
         writeDial(next);
         setDialError(false);
-        return;
+        return false;
       }
       writeDial('');
       const target = Number(next);
       if (canEditPage(target, isModerator)) {
         setPageNumber(target);
         setPageError(null);
-        return;
+        return true;
       }
       // Refused, and said so: the window blinks `---` and the reason is spelled
       // out underneath, because "you may not edit the archive" is not something
@@ -196,6 +201,7 @@ export function SoloEditor() {
           ? copy.editor.reservedPages(MIN_PAGE, PLAYGROUND_MIN_PAGE - 1)
           : copy.editor.pagesNumbered(MIN_PAGE, MAX_PAGE),
       );
+      return false;
     },
     [isModerator, writeDial, copy],
   );
@@ -295,110 +301,90 @@ export function SoloEditor() {
     if (remaining != null) setRequestedSubpage(Math.min(subpage, remaining));
   }, [removeLastSubpage, pageNumber, subpage]);
 
-  // Focused when a keypad key is pressed, so the digits that follow can simply
-  // be typed — pressing one key by hand is usually the start of dialling, not
-  // the whole of it.
-  const displayRef = useRef<HTMLDivElement>(null);
+  const isNarrow = useMediaQuery(EDITOR_NARROW_QUERY);
 
-  /*
-   * The display block: what page is open, and the two rockers that change it.
-   *
-   * Handed to the editor on its own, because it is the part of choosing a page
-   * that is never put away. On a desk it sits out on the toolbar; on a handset,
-   * which has no strip to sit on, it heads the page panel and reads out what the
-   * keypad under it is about to change — which is the arrangement the set's own
-   * front panel is in, window first and then the keys that drive it.
-   */
-  const display = (
-    <div
-      className="rc-display-row"
-      ref={displayRef}
-      onKeyDown={handleDisplayKeyDown}
-    >
-      <div
-        className="rc-display"
-        tabIndex={0}
-        role="group"
-        aria-label={copy.editor.editingPage(pageNumber, subpage, subpageCount)}
-      >
-        <LedWindow
-          pageDigits={pageDigits}
-          subDigits={subDigits}
-          label={`Page ${pageDigits}, subpage ${subDigits}`}
-        />
-      </div>
+  /* ── the slots handed to the editor ────────────────────────────────────── */
 
-      <div className="rc-rockers">
-        <div className="rc-rocker">
-          <div className="rc-rocker-keys">
-            <button
-              type="button"
-              className="rc-key rc-key-rocker"
-              aria-label={copy.editor.prevPage}
-              onClick={() => stepPage(-1)}
-              disabled={pageNumber <= lowestEditable}
-            >
-              <span className="rc-glyph" aria-hidden>
-                ◀
-              </span>
-            </button>
-            <button
-              type="button"
-              className="rc-key rc-key-rocker"
-              aria-label={copy.editor.nextPage}
-              onClick={() => stepPage(1)}
-              disabled={pageNumber >= MAX_PAGE}
-            >
-              <span className="rc-glyph" aria-hidden>
-                ▶
-              </span>
-            </button>
-          </div>
-          <span className="rc-cap">{copy.editor.page}</span>
-        </div>
-
-        <div className="rc-rocker">
-          <div className="rc-rocker-keys">
-            <button
-              type="button"
-              className="rc-key rc-key-rocker"
-              aria-label={copy.editor.prevSubpage(subpage, subpageCount)}
-              disabled={subpageCount <= 1}
-              onClick={() =>
-                setRequestedSubpage(stepSubpage(subpage, subpageCount, -1))
-              }
-            >
-              <span className="rc-glyph" aria-hidden>
-                ◀
-              </span>
-            </button>
-            <button
-              type="button"
-              className="rc-key rc-key-rocker"
-              aria-label={copy.editor.nextSubpage(subpage, subpageCount)}
-              disabled={subpageCount <= 1}
-              onClick={() =>
-                setRequestedSubpage(stepSubpage(subpage, subpageCount, 1))
-              }
-            >
-              <span className="rc-glyph" aria-hidden>
-                ▶
-              </span>
-            </button>
-          </div>
-          <span className="rc-cap">{copy.editor.subpage}</span>
-        </div>
-      </div>
-    </div>
+  const led = (
+    <LedWindow
+      pageDigits={pageDigits}
+      subDigits={subDigits}
+      label={copy.editor.editingPage(pageNumber, subpage, subpageCount)}
+    />
   );
 
   /*
-   * Everything else about the page: the keypad that dials it, what it is
-   * called, and how many screens it holds.
+   * The window and the rockers beside it: what page is open, and the way off
+   * it. Always on the strip. On a desk the window takes typed digits; on a
+   * phone, which has no keyboard out, it opens the sheet with the keypad in it.
    */
-  const pageControls = (
+  const pageDisplay = (sheet: EditorPageSheet) => (
+    <div className="rc-display-row" onKeyDown={sheet.narrow ? undefined : handleDisplayKeyDown}>
+      {sheet.narrow ? (
+        <button
+          type="button"
+          className="rc-display rc-display-button"
+          onClick={sheet.open}
+          aria-label={`${copy.editor.editingPage(pageNumber, subpage, subpageCount)}. ${copy.editor.pageSetupHint}`}
+        >
+          {led}
+        </button>
+      ) : (
+        <div
+          className="rc-display"
+          tabIndex={0}
+          role="group"
+          title={copy.editor.ledHint}
+          aria-label={`${copy.editor.editingPage(pageNumber, subpage, subpageCount)}. ${copy.editor.ledHint}`}
+        >
+          {led}
+        </div>
+      )}
+
+      <div className="rc-rocker">
+        <div className="rc-rocker-keys">
+          <button
+            type="button"
+            className="rc-key rc-key-rocker"
+            aria-label={copy.editor.prevPage}
+            title={copy.editor.prevPage}
+            onClick={() => stepPage(-1)}
+            disabled={pageNumber <= lowestEditable}
+          >
+            <span className="rc-glyph" aria-hidden>
+              ◀
+            </span>
+          </button>
+          <button
+            type="button"
+            className="rc-key rc-key-rocker"
+            aria-label={copy.editor.nextPage}
+            title={copy.editor.nextPage}
+            onClick={() => stepPage(1)}
+            disabled={pageNumber >= MAX_PAGE}
+          >
+            <span className="rc-glyph" aria-hidden>
+              ▶
+            </span>
+          </button>
+        </div>
+        <span className="rc-cap">{copy.editor.page}</span>
+      </div>
+
+      {/* Why a number was refused: three dashes cannot say it on their own. */}
+      {!sheet.narrow && pageError != null && (
+        <p className="rc-bubble" role="alert">
+          {pageError}
+        </p>
+      )}
+    </div>
+  );
+
+  /* The set's own keypad, in the page sheet on a phone. A page dialled closes it. */
+  const pageKeypad = (sheet: EditorPageSheet) => (
     <>
-      <section className="rc-cluster" aria-label={copy.editor.page}>
+      <div className="rc-sheet-dial">
+        <div className="rc-display">{led}</div>
         <div className="rc-keypad" role="group" aria-label={copy.editor.dialAPage}>
           {KEYPAD_DIGITS.map((digit) => (
             <button
@@ -407,27 +393,87 @@ export function SoloEditor() {
               className="rc-key rc-key-digit"
               aria-label={copy.tv.dial(digit)}
               onClick={() => {
-                pressDigit(digit);
-                displayRef.current
-                  ?.querySelector<HTMLElement>('.rc-display')
-                  ?.focus();
+                if (pressDigit(digit)) sheet.close();
               }}
             >
               <span className="rc-glyph">{digit}</span>
             </button>
           ))}
         </div>
-        {pageError != null && (
-          <p className="rc-error" role="alert">
-            {pageError}
-          </p>
-        )}
-      </section>
+      </div>
+      {pageError != null && (
+        <p className="rc-error" role="alert">
+          {pageError}
+        </p>
+      )}
+    </>
+  );
 
-      <section className="rc-cluster">
-        <h2 className="rc-legend" id="solo-editor-title-legend">
-          {copy.editor.title}
-        </h2>
+  /*
+   * The carousel, as one key per screen.
+   *
+   * You can see how many there are and go straight to any of them. `−` takes
+   * the *last* screen rather than the one being edited: subpages are numbered
+   * by position, so removing from the middle would renumber everything after
+   * it under the operator's cursor. It asks first — it takes a screen's
+   * drawing with it, and that is not something undo reaches.
+   */
+  const subpageTabs = (
+    <div className="rc-subpages">
+      <div className="rc-subpage-row">
+        {/* Only the numbers scroll: a drawer hanging off `−` inside a
+            scrolling row would be cut off by it. */}
+        <div className="rc-subpage-keys" role="tablist" aria-label={copy.editor.subpages}>
+          {Array.from({ length: subpageCount }, (_, i) => i + 1).map((n) => (
+            <button
+              key={n}
+              type="button"
+              role="tab"
+              aria-selected={n === subpage}
+              className={`rc-key rc-key-sub${n === subpage ? ' rc-key-lit' : ''}`}
+              onClick={() => setRequestedSubpage(n)}
+              aria-label={copy.editor.subpageN(n)}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className="rc-key rc-key-sub"
+          disabled={subpageCount >= MAX_SUBPAGE}
+          onClick={handleAddSubpage}
+          title={
+            subpageCount >= MAX_SUBPAGE
+              ? copy.editor.maxSubpages(MAX_SUBPAGE)
+              : copy.editor.addSubpageHint
+          }
+          aria-label={copy.editor.addSubpageHint}
+        >
+          +
+        </button>
+        {subpageCount > 1 && (
+          <ConfirmKey
+            className="rc-key rc-key-sub"
+            title={copy.editor.removeSubpageHint(subpageCount)}
+            question={copy.editor.removeSubpageConfirm(subpageCount)}
+            yes={copy.editor.removeSubpageYes}
+            no={copy.editor.clearNo}
+            onConfirm={handleRemoveSubpage}
+            inline={isNarrow}
+            align="end"
+          >
+            −
+          </ConfirmKey>
+        )}
+      </div>
+      <span className="rc-cap">{copy.editor.subpages}</span>
+    </div>
+  );
+
+  const pageDetails = (
+    <>
+      <div className="rc-title">
         <input
           id="page-title-input"
           type="text"
@@ -438,77 +484,39 @@ export function SoloEditor() {
           maxLength={TITLE_MAX_LENGTH * 2}
           autoComplete="off"
           spellCheck={false}
-          aria-labelledby="solo-editor-title-legend"
           aria-invalid={titleError != null}
           aria-describedby={titleError != null ? 'page-title-error' : undefined}
         />
+        <label className="rc-cap" htmlFor="page-title-input">
+          {copy.editor.title}
+        </label>
         {titleError != null && (
-          <p id="page-title-error" className="rc-error" role="alert">
+          <p id="page-title-error" className="rc-bubble" role="alert">
             {titleError}
           </p>
         )}
-      </section>
-
-      {/*
-        * The carousel. A page number can hold several screens (see
-        * `domain/subpages.ts`); the rocker above chooses which one is being
-        * drawn on, and these two change how many there are.
-        *
-        * "Remove last" takes the *last* screen rather than the one being
-        * edited: subpages are numbered by position, so removing from the middle
-        * would renumber everything after it under the operator's cursor.
-        */}
-      <section className="rc-cluster">
-        <h2 className="rc-legend">{copy.editor.subpages}</h2>
-        <div className="rc-keyrow">
-          <button
-            type="button"
-            className="rc-key rc-key-wide"
-            disabled={subpageCount >= MAX_SUBPAGE}
-            title={
-              subpageCount >= MAX_SUBPAGE
-                ? copy.editor.maxSubpages(MAX_SUBPAGE)
-                : copy.editor.addSubpageHint
-            }
-            onClick={handleAddSubpage}
-          >
-            <span>{copy.editor.addSubpage}</span>
-          </button>
-          <button
-            type="button"
-            className="rc-key rc-key-wide rc-key-danger"
-            disabled={subpageCount <= 1}
-            title={
-              subpageCount <= 1
-                ? copy.editor.subpageOneIsThePage
-                : copy.editor.removeSubpageHint(subpageCount)
-            }
-            onClick={handleRemoveSubpage}
-          >
-            <span>{copy.editor.removeSubpage}</span>
-          </button>
-        </div>
-      </section>
-
-      {saveError != null && (
-        <p className="rc-error" role="alert">
-          {copy.editor.notSaved(saveError)}
-        </p>
-      )}
+      </div>
+      {subpageTabs}
     </>
   );
 
-  const brand = (
+  /* The way out, the name on the badge, and the lamp that says it is saving. */
+  const nameplate = (
     <div className="rc-brand">
-      <Link to="/" className="rc-brand-back" aria-label={copy.layout.backHome}>
+      <Link to="/" className="rc-brand-back" aria-label={copy.layout.backHome} title={copy.layout.backHome}>
         <span aria-hidden>‹</span>
       </Link>
       <span className="rc-brand-name">Teletextron</span>
       <span
-        className={`rc-lamp${saveError != null ? ' rc-lamp-fault' : ''}`}
+        className="rc-status"
         role="status"
-        aria-label={saveError != null ? copy.editor.notSaving : copy.editor.saving}
-      />
+        title={saveError != null ? copy.editor.notSaved(saveError) : copy.editor.savedHint}
+      >
+        <span className={`rc-lamp${saveError != null ? ' rc-lamp-fault' : ''}`} aria-hidden />
+        <span className="rc-status-label">
+          {saveError != null ? copy.editor.notSaving : copy.editor.saved}
+        </span>
+      </span>
     </div>
   );
 
@@ -519,9 +527,17 @@ export function SoloEditor() {
       subpageCount={subpageCount}
       page={page}
       onEditCell={handleEditCell}
-      brand={brand}
-      display={display}
-      pageControls={pageControls}
+      nameplate={nameplate}
+      pageDisplay={pageDisplay}
+      pageKeypad={pageKeypad}
+      pageDetails={pageDetails}
+      alert={
+        saveError != null ? (
+          <p className="rc-alert" role="alert">
+            {copy.editor.notSaved(saveError)}
+          </p>
+        ) : null
+      }
     />
   );
 }

@@ -215,3 +215,87 @@ export function IconBack({ className }: IconProps) {
     </svg>
   );
 }
+
+/** A hooked arrow turning back on itself: the step just taken, taken back. */
+export function IconUndo({ className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      width={ICON_SIZE}
+      height={ICON_SIZE}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M5.5 3 2.5 6l3 3" />
+      <path d="M2.5 6h7a4 4 0 0 1 0 8H7" />
+    </svg>
+  );
+}
+
+/** {@link IconUndo}, mirrored. */
+export function IconRedo({ className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      width={ICON_SIZE}
+      height={ICON_SIZE}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M10.5 3l3 3-3 3" />
+      <path d="M13.5 6h-7a4 4 0 0 0 0 8H9" />
+    </svg>
+  );
+}
+
+/** A block eraser at an angle, its worn end on the line. */
+export function IconEraser({ className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      width={ICON_SIZE}
+      height={ICON_SIZE}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M9.2 2.6 13.4 6.8 7.6 12.6H4.9L2.6 10.3a1 1 0 0 1 0-1.4z" />
+      <path d="M6 5.8 10.2 10M7.6 12.6H14" />
+    </svg>
+  );
+}
+
+/** A flat brush, bristles down: painting, as against {@link IconEraser}. */
+export function IconBrush({ className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      width={ICON_SIZE}
+      height={ICON_SIZE}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M13.5 2.5 7.8 8.2" />
+      <path d="M7.8 8.2 9.1 9.5 8.2 10.4a3 3 0 0 1-2.1.9H3l.4-1.1a3 3 0 0 1 .7-1.1L6.5 7z" />
+    </svg>
+  );
+}

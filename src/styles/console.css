@@ -36,16 +36,6 @@
     #2a2927 90%,
     #1e1d1c 100%
   );
-  /* Brushed aluminium: the strip that splits one cluster of keys from the next,
-     as on the set between the display row and the keypad. */
-  --rc-alu: linear-gradient(
-    180deg,
-    #e6e8ea 0%,
-    #b9bdc0 30%,
-    #d9dcde 55%,
-    #8f9396 80%,
-    #5f6366 100%
-  );
 
   /* --- what is printed on them ------------------------------------------- */
   --rc-legend-ink: #dcdcda;
@@ -54,6 +44,11 @@
   --rc-red: #b7302a;
   --rc-panel-font: Michroma, 'Chakra Petch', Eurostile, Microgramma,
     'Arial Narrow', sans-serif;
+  /* Words that have to be *read* — on a key, in a hint — rather than
+     recognised as a caption: the system's own sans, which reads at the size a
+     panel prints at. Michroma stays for the engraved captions. */
+  --rc-text-font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --rc-pip: #5dde6a;
 
   /* --- and the light falling on them -------------------------------------- */
   --rc-cast: 1px 2px 2px rgb(0 0 0 / 75%);
@@ -76,318 +71,14 @@
 }
 
 /* One statement of the plastic, wherever a piece of the panel needs it. */
-.editor-console .rc-toolbar,
+.editor-console .rc-strip,
+.editor-console .rc-remote,
 .editor-console .rc-flyout,
-.editor-console .rc-handset {
+.editor-console .rc-dock,
+.editor-console .rc-sheet {
   background-image: var(--rc-mould), var(--rc-grain), var(--rc-cab);
   background-blend-mode: overlay, soft-light, normal;
   background-size: 320px 320px, 160px 160px, auto;
-}
-
-/* =====================================================================
- * The strip, across the top of the desk.
- *
- * This was a 23rem panel down the left-hand side, which is the shape a console
- * takes when it has a keyboard in it. Taking the keyboard out — a desk has one
- * already; the moulded pad exists because a phone's own slides up over the page
- * you are drawing on — left a column carrying a readout, ten small keys and one
- * open panel, holding a quarter of a monitor to do it. So the panel is laid on
- * its side, and everything that needed depth hangs off a key as a drawer.
- *
- * What the strip gains is that nothing on it is behind a tab. The old console
- * could show one of its six panels at a time, so the readout — the one thing you
- * always want to know — was behind a key like everything else. Here the window
- * and both rockers are simply out, and dialling stops being somewhere you go.
- *
- * The materials are unchanged: same cabinet, same caps, same aluminium between
- * one group and the next, only upright now.
- * ===================================================================== */
-
-/* The desk turns through ninety degrees: strip, then page. */
-.editor-console.editor-layout-bar {
-  flex-direction: column;
-}
-
-.editor-console .rc-toolbar {
-  position: relative;
-  z-index: 5;
-  flex: 0 0 auto;
-  display: flex;
-  /*
-   * Stretch, so every group is as tall as the tallest and the metal between them
-   * comes out the same length. Each group then puts its own caps on its floor —
-   * with `flex-end` here instead, a group of two square keys was shorter than the
-   * one holding the readout, and its separator was correspondingly stumpy.
-   */
-  align-items: stretch;
-  gap: 0.85rem;
-  padding: 0.6rem 1rem 0.65rem;
-  /* The drawers hang out of the strip into the desk, so it must not clip. */
-  overflow: visible;
-  /* No 300ms tap delay on a control panel: these are keys, not links. */
-  touch-action: manipulation;
-  /* The moulded edges, rotated with the panel: light along the top, occlusion
-     along the bottom where it turns away, and the cast onto the desk below. */
-  box-shadow:
-    inset 0 1px 0 rgb(125 124 120 / 55%),
-    inset 0 -2px 6px rgb(0 0 0 / 45%),
-    0 4px 22px rgb(0 0 0 / 55%);
-}
-
-/* Corner darkening, so the strip reads as a moulding and not a flat bar. The
-   cabinet's `#cabVig`, flattened to the shape it is on now. */
-.editor-console .rc-toolbar::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(
-    ellipse 90% 220% at 30% 30%,
-    transparent 45%,
-    rgb(0 0 0 / 34%) 100%
-  );
-}
-
-.editor-console .rc-toolbar > * {
-  position: relative;
-}
-
-/*
- * One group of controls. They sit on the strip's floor rather than centred on
- * it: every cap on this panel has its caption underneath, and a row of caps
- * centred against a row of caps-with-captions lines up on neither.
- */
-.editor-console .rc-toolbar-group {
-  display: flex;
-  align-items: flex-end;
-  gap: 0.45rem;
-  min-width: 0;
-}
-
-/*
- * The aluminium, upright.
- *
- * The column had one strip of metal in it, under the tab row, where the panel
- * stopped being navigation and started being whatever was open. On a strip the
- * same job falls between groups — page, tools, whole-page — so it is the same
- * five bright pixels stood on end.
- */
-.editor-console .rc-toolbar-group + .rc-toolbar-group {
-  position: relative;
-  margin-left: 0.5rem;
-  padding-left: 0.95rem;
-}
-
-.editor-console .rc-toolbar-group + .rc-toolbar-group::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: -0.6rem;
-  bottom: -0.65rem;
-  width: 5px;
-  background: var(--rc-alu);
-  box-shadow:
-    inset 1px 0 0 rgb(255 255 255 / 35%),
-    inset -1px 0 0 rgb(0 0 0 / 45%);
-}
-
-/* ── the nameplate, at the near end ───────────────────────────────────────── */
-
-.editor-console .rc-toolbar .rc-brand {
-  /* The column's nameplate sat above everything with air under it; here it is
-     one more thing on the row. */
-  padding-bottom: 0;
-  gap: 0.5rem;
-}
-
-.editor-console .rc-toolbar .rc-brand-name {
-  flex: 0 0 auto;
-  font-size: 0.6rem;
-  letter-spacing: 0.18em;
-}
-
-.editor-console .rc-toolbar .rc-brand-back {
-  width: 1.7rem;
-  height: 1.7rem;
-  font-size: 1rem;
-}
-
-/* ── the readout, and the rockers beside it ───────────────────────────────── */
-
-.editor-console .rc-toolbar .rc-display-row {
-  align-items: flex-end;
-  gap: 0.55rem;
-}
-
-/* Sized, not flexible: on a strip there is nothing to share the row with, and a
-   window that grows with the browser is a window that never looks the same. */
-.editor-console .rc-toolbar .rc-display {
-  flex: 0 0 auto;
-  width: 8.5rem;
-  max-width: none;
-}
-
-/* Side by side rather than stacked: stacked they make the strip twice as tall
-   as every key on it, and the strip's height is the page's to have. */
-.editor-console .rc-toolbar .rc-rockers {
-  flex-direction: row;
-  gap: 0.5rem;
-}
-
-.editor-console .rc-toolbar .rc-key-rocker {
-  width: 2.1rem;
-  min-height: 1.85rem;
-}
-
-/* ── the tools ────────────────────────────────────────────────────────────── */
-
-.editor-console .rc-toolbar-tools {
-  flex: 1 1 auto;
-}
-
-/* The tab strip's caps stretch to fill a column six keys wide. On the strip they
-   are a fixed size, because what is beside them is not another tool. */
-.editor-console .rc-toolbar .rc-key-tool {
-  flex: 0 0 auto;
-  width: 3.4rem;
-}
-
-/*
- * The rack, standing open beside the tools that draw from it.
- *
- * Bounded and scrolling rather than growing: it is a rack, and a rack that
- * lengthens until it pushes the whole-page keys off the end of the strip is a
- * rack that has forgotten it is furniture.
- */
-.editor-console .rc-toolbar-rack {
-  flex: 0 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  /* Its shelf and caption sit on the strip's floor with the caps beside it. */
-  justify-content: flex-end;
-  margin-left: 0.35rem;
-}
-
-.editor-console .rc-toolbar-rack .brush-history-strip {
-  display: flex;
-  gap: 0.3rem;
-  max-width: 11rem;
-  min-height: 1.9rem;
-  padding: 0.2rem 0.25rem;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  border-radius: 4px;
-  /* Sunk, like the window: it is a shelf cut into the panel, not a row of caps
-     sitting on it. */
-  box-shadow:
-    inset 0 2px 5px rgb(0 0 0 / 75%),
-    0 1px 0 rgb(154 154 148 / 25%);
-}
-
-/* ── whatever acts on the whole page, at the far end ──────────────────────── */
-
-.editor-console .rc-toolbar-actions {
-  margin-left: auto;
-}
-
-/* An icon on its own needs a cap it can sit in the middle of, not one shaped
-   for an icon and a word. */
-.editor-console .rc-key-square {
-  width: 2.5rem;
-  min-height: 2.5rem;
-  padding: 0.4rem;
-}
-
-/* ── the drawers ──────────────────────────────────────────────────────────── */
-
-.editor-console .rc-anchor {
-  position: relative;
-  display: flex;
-}
-
-/*
- * A drawer, hanging off its own key.
- *
- * The plastic of the strip continued downwards, with the shadow it casts onto
- * the page proving which is in front. It is `max-content` up to a cap, so a
- * palette sets its own width and a keypad sets its own, and it scrolls rather
- * than growing past the window: a drawer is allowed to be tall, but never
- * taller than the desk it is standing on.
- */
-.editor-console .rc-flyout {
-  position: absolute;
-  top: calc(100% + 0.55rem);
-  left: 0;
-  z-index: 20;
-  width: max-content;
-  min-width: 15rem;
-  max-width: min(26rem, calc(100vw - 2rem));
-  max-height: min(62vh, 34rem);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 0.35rem 0.9rem 0.85rem;
-  border: 1px solid #0a0a0a;
-  border-radius: 0 0 7px 7px;
-  box-shadow:
-    inset 0 1px 0 rgb(125 124 120 / 45%),
-    0 16px 34px rgb(0 0 0 / 62%);
-}
-
-/* The keys at the far end open theirs against the right edge, which is the whole
-   of the edge handling a one-row strip needs. */
-.editor-console .rc-flyout-end {
-  left: auto;
-  right: 0;
-}
-
-/*
- * A drawer holds clusters, and the first and last of them lose the padding they
- * carry in a column: there the padding was the gap between clusters, here the
- * drawer's own edge already is.
- */
-.editor-console .rc-flyout .rc-cluster:first-child {
-  padding-top: 0.4rem;
-}
-
-.editor-console .rc-flyout .rc-cluster:last-child {
-  padding-bottom: 0;
-}
-
-/*
- * Inside a drawer the readout is not the head of anything — the strip already
- * has it — so the page drawer's own copy stacks its rockers back up under the
- * window, where there is depth to spare and no strip height to protect.
- */
-.editor-console .rc-flyout .rc-rockers {
-  flex-direction: column;
-}
-
-/* ── the strip on a smaller monitor ───────────────────────────────────────── */
-
-/*
- * Above 900px there is no handset, so everything has to keep fitting on one row
- * down to that width. The wordmark goes first — it is the one thing on the strip
- * that is decoration — then the rack's caption, then the rack narrows. The keys
- * themselves are never touched: they are what the strip is for.
- */
-@media (min-width: 901px) and (max-width: 1180px) {
-  .editor-console .rc-toolbar {
-    gap: 0.6rem;
-  }
-
-  .editor-console .rc-toolbar .rc-brand-name {
-    display: none;
-  }
-
-  .editor-console .rc-toolbar-rack .rc-cap {
-    display: none;
-  }
-
-  .editor-console .rc-toolbar-rack .brush-history-strip {
-    max-width: 6.5rem;
-  }
 }
 
 /* ── nameplate ───────────────────────────────────────────────────────────── */
@@ -491,50 +182,38 @@
   box-shadow: 0 1px 0 rgb(255 255 255 / 6%);
 }
 
-.editor-console .rc-cluster-actions {
-  margin-top: auto;
-  gap: 0.5rem;
-}
-
 /* Engraved into the panel: pale ink, a black shadow a pixel below it. */
 .editor-console .rc-legend {
   margin: 0;
   font-family: var(--rc-panel-font);
-  font-size: 0.6rem;
+  font-size: 0.52rem;
   font-weight: 400;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--rc-cap-ink);
+  color: #9a9994;
   text-shadow: 0 1px 0 rgb(0 0 0 / 80%);
 }
 
-.editor-console .sidebar-hint {
-  margin: 0;
-  font-family: 'Courier New', Courier, monospace;
+.editor-console .rc-sublegend {
+  font-family: var(--rc-text-font);
   font-size: 0.72rem;
-  line-height: 1.45;
-  color: #9c9b96;
+  color: #a6a5a0;
 }
 
-.editor-console .rc-error,
-.editor-console .sidebar-error {
+.editor-console .rc-cluster-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 2rem;
+}
+
+.editor-console .rc-error {
   margin: 0;
-  font-family: 'Courier New', Courier, monospace;
-  font-size: 0.72rem;
+  font-family: var(--rc-text-font);
+  font-size: 0.78rem;
   line-height: 1.4;
-  color: #ff8a7a;
-}
-
-.editor-console .sidebar-field-label,
-.editor-console .text-preview-label {
-  display: block;
-  font-family: var(--rc-panel-font);
-  font-size: 0.55rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--rc-cap-ink);
-  text-shadow: 0 1px 0 rgb(0 0 0 / 70%);
-  margin: 0.35rem 0;
+  color: #f0a597;
 }
 
 /* ── keys ─────────────────────────────────────────────────────────────────── */
@@ -554,23 +233,22 @@
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
-  min-height: 2.4rem;
-  padding: 0.5rem 0.6rem;
+  min-height: 2.3rem;
+  padding: 0.45rem 0.6rem;
   border: 1px solid #0a0a0a;
   border-radius: 6px;
   background: var(--rc-key);
-  box-shadow: var(--rc-cast), inset 0 1px 0 var(--rc-mould-hi);
+  box-shadow: 0 1px 1.5px rgb(0 0 0 / 70%), inset 0 1px 0 var(--rc-mould-hi);
   color: var(--rc-legend-ink);
-  font-family: var(--rc-panel-font);
-  font-size: 0.66rem;
-  letter-spacing: 0.04em;
+  font-family: var(--rc-text-font);
+  font-size: 0.78rem;
   line-height: 1.2;
   cursor: pointer;
   transition: transform 0.05s ease, filter 0.12s ease, box-shadow 0.12s ease;
 }
 
 .editor-console .rc-key:hover:not(:disabled) {
-  filter: brightness(1.15);
+  filter: brightness(1.08);
 }
 
 .editor-console .rc-key:active:not(:disabled) {
@@ -603,16 +281,30 @@
  * not already on the front of it.
  */
 .editor-console .rc-key-lit {
-  color: var(--rc-lit);
-  background: linear-gradient(180deg, #232421 0%, #1b1c19 60%, #16170f 100%);
+  /* Held down in the panel, not lit up on it: the cap sits lower and darker,
+     and the only colour is the small lamp in its corner (below). */
+  color: #f0efeb;
+  background: linear-gradient(180deg, #1c1b19 0%, #252422 100%);
   box-shadow:
-    inset 0 2px 4px rgb(0 0 0 / 70%),
-    inset 0 0 10px rgb(126 224 140 / 14%),
-    0 0 0 1px rgb(126 224 140 / 30%);
+    inset 0 2px 4px rgb(0 0 0 / 75%),
+    0 1px 0 rgb(154 154 148 / 18%);
 }
 
 .editor-console .rc-key-lit:active:not(:disabled) {
   transform: none;
+}
+
+/* The lamp: the one green on the panel, as on the set's power key. */
+.editor-console .rc-key-lit::after {
+  content: '';
+  position: absolute;
+  top: 0.3rem;
+  right: 0.3rem;
+  width: 0.28rem;
+  height: 0.28rem;
+  border-radius: 50%;
+  background: var(--rc-pip);
+  box-shadow: 0 0 4px rgb(93 222 106 / 60%);
 }
 
 .editor-console .rc-key-icon {
@@ -626,15 +318,15 @@
 /* The one red key on the panel, off the fastext strip: whatever cannot be
    undone. Same fill, same gloss, same hairline. */
 .editor-console .rc-key-danger {
-  background:
-    linear-gradient(
-      180deg,
-      rgb(255 255 255 / 22%) 0%,
-      rgb(255 255 255 / 0%) 25%,
-      rgb(0 0 0 / 30%) 100%
-    ),
-    var(--rc-red);
-  color: #ffe9e6;
+  /* The answer that actually destroys something. Red, but the set's dull
+     fastext red rather than a warning light. */
+  background: linear-gradient(180deg, #93352c 0%, #7a2a22 55%, #5f1f19 100%);
+  color: #fbe4df;
+}
+
+/* A key that only *asks* before destroying: an ordinary cap, red picture. */
+.editor-console .rc-key-caution {
+  color: #e48a7d;
 }
 
 .editor-console .rc-keyrow {
@@ -650,66 +342,36 @@
 /* Six keys across is too tight for an icon beside its word, so the cap stacks
    them — the icon large enough to be read as a picture, the word under it. */
 .editor-console .rc-key-tool {
-  flex: 1 1 0;
-  min-width: 0;
+  width: 100%;
+  min-height: 2.6rem;
+  padding: 0.4rem 0;
+}
+
+.editor-console .rc-key-tool .rc-key-icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* A key with its name engraved under it rather than printed on it. */
+.editor-console .rc-keycap {
+  display: flex;
   flex-direction: column;
-  gap: 0.28rem;
-  padding: 0.45rem 0.1rem;
-}
-
-/* ── the tab strip ────────────────────────────────────────────────────────── */
-
-/*
- * Page, then the five tools, with a moulded gap between the two groups.
- *
- * The gap is the whole of the separation — no rule, no different shape. It is
- * how a panel of this kind says "these five belong together and that one does
- * not", and it survives being six keys wide on a phone, which a divider drawn
- * between two of them would not.
- */
-.editor-console .rc-tabs {
-  display: flex;
-  align-items: stretch;
-  gap: 0.7rem;
-  
-}
-
-.editor-console .rc-tabs-tools {
-  flex: 1 1 auto;
-  display: flex;
-  gap: 0.35rem;
+  align-items: center;
+  gap: 0.3rem;
   min-width: 0;
 }
 
-.editor-console .rc-tabs .rc-key-label {
-  font-size: 0.5rem;
-  letter-spacing: 0.04em;
+.editor-console .rc-keycap .rc-cap {
+  margin-top: 0;
+  white-space: nowrap;
 }
 
-/*
- * The tool still in the hand while the page panel is open.
- *
- * Not the full lit treatment — that belongs to the tab you are looking at — but
- * a pip in the corner, which is what a panel does for a state that is true
- * without being in front of you. Come back from the page and this is the tool
- * you are still drawing with.
- */
-.editor-console .rc-key-tool[data-held]::after {
-  content: '';
-  position: absolute;
-  top: 0.3rem;
-  right: 0.3rem;
-  width: 0.3rem;
-  height: 0.3rem;
-  border-radius: 50%;
-  background: var(--rc-lit);
-  box-shadow: 0 0 4px rgb(126 224 140 / 80%);
-}
-
-.editor-console .rc-key-label {
-  font-size: 0.55rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+/* The small square key that sits at the end of a heading: the eyedropper. */
+.editor-console .rc-key-small {
+  flex: 0 0 auto;
+  width: 2rem;
+  min-height: 2rem;
+  padding: 0.3rem;
 }
 
 /* ── the display, and the rockers beside it ───────────────────────────────── */
@@ -765,13 +427,6 @@
   fill: var(--rc-cap-ink);
   letter-spacing: 1.4px;
   text-anchor: middle;
-}
-
-.editor-console .rc-rockers {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
 }
 
 .editor-console .rc-rocker-keys {
@@ -887,8 +542,8 @@
   background: #121211;
   box-shadow: inset 0 2px 4px rgb(0 0 0 / 75%), 0 1px 0 rgb(154 154 148 / 22%);
   color: #e8e7e3;
-  font-family: 'Courier New', Courier, monospace;
-  font-size: 0.85rem;
+  font-family: var(--rc-text-font);
+  font-size: 0.88rem;
 }
 
 .editor-console .rc-field::placeholder {
@@ -917,22 +572,21 @@
 .editor-console .color-swatch {
   border: 1px solid #0a0a0a;
   border-radius: 3px;
-  box-shadow: var(--rc-cast), inset 0 1px 0 rgb(255 255 255 / 22%);
-  transition: transform 0.1s ease, box-shadow 0.12s ease;
+  box-shadow: 0 1px 1.5px rgb(0 0 0 / 70%), inset 0 1px 0 rgb(255 255 255 / 18%);
+  transition: box-shadow 0.12s ease;
 }
 
 .editor-console .color-swatch:hover {
-  transform: scale(1.08);
   border-color: #0a0a0a;
+  filter: brightness(1.1);
 }
 
 /* Chosen, in the panel's language: the cap is down and the lamp is on it. */
 .editor-console .color-swatch.active {
-  border-color: var(--rc-lit);
+  /* Chosen: a pale ring stood off the cap — no glow. */
   box-shadow:
-    0 0 0 1px var(--rc-lit),
-    0 0 7px rgb(126 224 140 / 55%),
-    inset 0 1px 2px rgb(0 0 0 / 55%);
+    0 0 0 2px #262523,
+    0 0 0 3.5px #dcdcda;
 }
 
 .editor-console .text-preview-cell {
@@ -947,7 +601,7 @@
   border: 1px solid #0a0a0a;
   border-radius: 5px;
   background: var(--rc-key);
-  box-shadow: var(--rc-cast), inset 0 1px 0 var(--rc-mould-hi);
+  box-shadow: 0 1px 1.5px rgb(0 0 0 / 70%), inset 0 1px 0 var(--rc-mould-hi);
   color: var(--rc-legend-ink);
 }
 
@@ -960,10 +614,11 @@
 
 .editor-console .preset-motif-btn-active,
 .editor-console .brush-history-btn-active {
-  border-color: var(--rc-lit);
+  border-color: #0a0a0a;
+  background: linear-gradient(180deg, #1c1b19 0%, #252422 100%);
   box-shadow:
-    0 0 0 1px rgb(126 224 140 / 55%),
-    inset 0 2px 4px rgb(0 0 0 / 65%);
+    inset 0 2px 4px rgb(0 0 0 / 75%),
+    0 0 0 1px rgb(220 220 218 / 45%);
 }
 
 /*
@@ -980,8 +635,8 @@
 }
 
 .editor-console .preset-motif-btn {
-  padding: 0.35rem 0.1rem;
-  gap: 0.2rem;
+  padding: 0.45rem 0.1rem;
+  gap: 0;
 }
 
 .editor-console .preset-motif-name {
@@ -997,273 +652,904 @@
   box-shadow: var(--rc-cast);
 }
 
-.editor-console .clear-confirm-label {
-  font-family: var(--rc-panel-font);
-  font-size: 0.6rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: #ffb0a4;
+/* ── what the panel says for itself ───────────────────────────────────────── */
+
+/* How the tool in hand is used, in one line under its keys. */
+.editor-console .rc-help {
+  margin: 0;
+  font-family: var(--rc-text-font);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: #9a9994;
 }
 
-/* ── the page, on the desk beside the panel ───────────────────────────────── */
+/* Why something was refused, hung under the control that refused it. */
+.editor-console .rc-bubble {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 0;
+  z-index: 30;
+  width: max-content;
+  max-width: 18rem;
+  margin: 0;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid #0a0a0a;
+  border-radius: 5px;
+  background: #1b1a18;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 55%), inset 0 1px 0 rgb(125 124 120 / 30%);
+  font-family: var(--rc-text-font);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: #f0a597;
+}
 
-.editor-console .editor-main {
-  background:
-    radial-gradient(ellipse 70% 60% at 50% 42%, #16171a 0%, #0b0b0c 100%);
+/* A save that failed, across the full width under the strip. */
+.editor-console .rc-alert {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0.4rem 1rem;
+  border-bottom: 1px solid #000;
+  background: #2a1512;
+  font-family: var(--rc-text-font);
+  font-size: 0.8rem;
+  color: #f0a597;
+}
+
+/* The lamp and what it means, beside the badge. */
+.editor-console .rc-status {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.editor-console .rc-status-label {
+  font-family: var(--rc-panel-font);
+  font-size: 0.5rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--rc-cap-ink);
+  text-shadow: 0 1px 0 rgb(0 0 0 / 75%);
+}
+
+/* ── asking first ─────────────────────────────────────────────────────────── */
+
+.editor-console .rc-anchor {
+  position: relative;
+  display: flex;
+}
+
+/* A small drawer hanging off the key that asked, into the desk below. */
+.editor-console .rc-flyout {
+  position: absolute;
+  top: calc(100% + 0.55rem);
+  left: 0;
+  z-index: 20;
+  width: max-content;
+  padding: 0.75rem 0.85rem 0.85rem;
+  border: 1px solid #0a0a0a;
+  border-radius: 0 0 7px 7px;
+  box-shadow:
+    inset 0 1px 0 rgb(125 124 120 / 45%),
+    0 16px 34px rgb(0 0 0 / 62%);
+}
+
+.editor-console .rc-flyout-end {
+  left: auto;
+  right: 0;
+}
+
+.editor-console .rc-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-width: 12rem;
+}
+
+.editor-console .rc-confirm-question {
+  font-family: var(--rc-text-font);
+  font-size: 0.82rem;
+  color: #ecebe7;
+}
+
+/* ── the whole editor ─────────────────────────────────────────────────────── */
+
+.editor-console.rc-layout {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  color: var(--rc-legend-ink);
+}
+
+/* =====================================================================
+ * The strip, across the top.
+ *
+ * The document, left to right: the way out and the save lamp, which page is
+ * open, what it is called and which of its screens, then whatever acts on the
+ * whole of it. Each group sits on the strip's floor with its caption under it,
+ * and a bar of aluminium stands between one group and the next, as on the set
+ * between the display row and the keypad.
+ * ===================================================================== */
+
+.editor-console .rc-strip {
+  position: relative;
+  z-index: 5;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  gap: 0.85rem;
+  padding: 0.6rem 1rem 0.65rem;
+  /* No 300ms tap delay on a control panel: these are keys, not links. */
+  touch-action: manipulation;
+  box-shadow:
+    inset 0 1px 0 rgb(125 124 120 / 55%),
+    inset 0 -2px 6px rgb(0 0 0 / 45%),
+    0 4px 22px rgb(0 0 0 / 55%);
+}
+
+/* Corner darkening, so the strip reads as a moulding and not a flat bar. */
+.editor-console .rc-strip::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 90% 220% at 30% 30%,
+    transparent 45%,
+    rgb(0 0 0 / 28%) 100%
+  );
+}
+
+/* The set's one strip of metal: a hairline along the foot of the strip, as
+   between the tube and the panel on /watch. Everything else is a groove. */
+.editor-console .rc-strip::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1.5px;
+  background: rgb(255 255 255 / 38%);
+  pointer-events: none;
+}
+
+.editor-console .rc-strip > * {
+  position: relative;
+}
+
+.editor-console .rc-strip-group {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.editor-console .rc-strip-group + .rc-strip-group {
+  margin-left: 0.3rem;
+  padding-left: 1rem;
+}
+
+.editor-console .rc-strip-group + .rc-strip-group::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.1rem;
+  bottom: 0.1rem;
+  width: 1px;
+  background: rgb(0 0 0 / 65%);
+  box-shadow: 1px 0 0 rgb(255 255 255 / 6%);
+}
+
+.editor-console .rc-strip-nameplate {
+  align-items: center;
+}
+
+.editor-console .rc-strip .rc-brand {
+  padding-bottom: 0;
+  gap: 0.55rem;
+}
+
+.editor-console .rc-strip .rc-brand-name {
+  flex: 0 0 auto;
+  font-size: 0.6rem;
+  letter-spacing: 0.18em;
+}
+
+.editor-console .rc-strip .rc-brand-back {
+  width: 1.8rem;
+  height: 1.8rem;
+  font-size: 1.05rem;
+}
+
+/* The window and its rockers. Sized, not flexible: a readout that grows with
+   the browser is a readout that never looks the same twice. */
+.editor-console .rc-strip .rc-display-row {
+  position: relative;
+  align-items: flex-end;
+  gap: 0.55rem;
+}
+
+.editor-console .rc-strip .rc-display {
+  flex: 0 0 auto;
+  width: 8.5rem;
+  max-width: none;
+  cursor: text;
+}
+
+.editor-console .rc-rocker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.editor-console .rc-strip .rc-key-rocker {
+  width: 2.1rem;
+  min-height: 1.95rem;
+}
+
+/* The title and the carousel: the one group that takes what the strip has spare. */
+.editor-console .rc-strip-details {
+  flex: 1 1 auto;
+  gap: 0.9rem;
+}
+
+.editor-console .rc-title {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 14rem;
+  min-width: 8rem;
+  max-width: 24rem;
+}
+
+.editor-console .rc-strip .rc-field {
+  padding: 0.45rem 0.6rem;
+}
+
+.editor-console .rc-subpages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+}
+
+.editor-console .rc-subpage-row {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* The numbers scroll sideways once there are more than fit; `+` and `−` stay. */
+.editor-console .rc-subpage-keys {
+  display: flex;
+  gap: 0.3rem;
+  min-width: 0;
+  max-width: 17rem;
+  /* Room for the keys' cast shadow and focus ring inside the scroller. */
+  padding: 3px;
+  margin: -3px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.editor-console .rc-subpage-keys::-webkit-scrollbar {
+  display: none;
+}
+
+.editor-console .rc-key-sub {
+  flex: 0 0 auto;
+  min-width: 2.1rem;
+  min-height: 1.95rem;
+  padding: 0.3rem 0.45rem;
+  font-size: 0.72rem;
+}
+
+/* A numbered key already says which one is down; a lamp on it is noise. */
+.editor-console .rc-key-sub.rc-key-lit::after {
+  display: none;
+}
+
+.editor-console .rc-strip-actions {
+  margin-left: auto;
+  gap: 0.75rem;
+}
+
+/* A key on the strip: its icon, and its word under it on the cap. */
+.editor-console .rc-strip .rc-key-action {
+  flex: 0 0 auto;
+  width: 2.4rem;
+  min-height: 2.1rem;
+  padding: 0.3rem;
+}
+
+/*
+ * Down to 901px everything has to keep fitting on one row. What goes first is
+ * what is decoration or said twice: the wordmark, then the lamp's word (the
+ * lamp stays), then the words on the action keys (their icons and tooltips
+ * stay).
+ */
+@media (max-width: 1280px) {
+  .editor-console .rc-strip .rc-brand-name {
+    display: none;
+  }
+}
+
+@media (max-width: 1120px) {
+  .editor-console .rc-strip .rc-status-label {
+    display: none;
+  }
+
+}
+
+/* =====================================================================
+ * The desk: the remote down the left, the page in the rest.
+ * ===================================================================== */
+
+.editor-console .rc-desk {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+/*
+ * The remote, stood beside the page.
+ *
+ * The tool keys along its head, a bar of aluminium under them, and everything
+ * about the tool in hand below that, always out. It scrolls on its own if the
+ * window is short; the page never does.
+ */
+.editor-console .rc-remote {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 18.5rem;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  padding: 0.2rem 1rem 1rem;
+  touch-action: manipulation;
+  box-shadow:
+    inset 1px 0 0 rgb(125 124 120 / 30%),
+    inset -1px 0 0 rgb(0 0 0 / 60%),
+    6px 0 18px rgb(0 0 0 / 45%);
+}
+
+.editor-console .rc-tools {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+/* Five across a panel this wide leaves each cap about fifty pixels, which the
+   longest words on them only fit into set a little tighter. */
+/* The head of the remote ends in aluminium, where the set's display row does. */
+.editor-console .rc-cluster-tools {
+  position: relative;
+  gap: 0.8rem;
+}
+
+/* The metal already says where the head ends; a groove under it would say it twice. */
+/* A palette: eight caps in a row, as wide as the panel lets them be. */
+.editor-console .rc-palette {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 0.3rem;
+}
+
+.editor-console .rc-palette .color-swatch {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  min-width: 0;
+  padding: 0;
+}
+
+.editor-console .rc-swatch-row {
+  display: grid;
+  grid-template-columns: 3.4rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.editor-console .rc-text-style {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 4.9rem;
+}
+
+.editor-console .rc-key-toggle {
+  flex: 1 1 auto;
+}
+
+.editor-console .rc-segmented {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.editor-console .rc-segmented > .rc-key {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* What the brush is loaded with, while the eraser is down: still there, but
+   not what the brush is doing. Choosing from it goes back to painting. */
+.editor-console .rc-idle .preset-motifs,
+.editor-console .rc-idle .rc-palette,
+.editor-console .rc-idle .rc-motif-colours {
+  opacity: 0.45;
+}
+
+/* The motif's six parts beside the palette that colours the chosen one. */
+.editor-console .rc-motif-colours {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+}
+
+.editor-console .rc-motif-colours .brush-sixel-preview {
+  flex: 0 0 auto;
+  width: 4.6rem;
+  min-width: 4.6rem;
+  min-height: 0;
+  margin: 0;
+}
+
+.editor-console .brush-sixel-part-active {
+  outline: 2px solid #dcdcda;
+  outline-offset: -2px;
+}
+
+.editor-console .rc-motif-palette {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.editor-console .rc-motif-palette .rc-palette {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.editor-console .brush-picked-pattern {
+  margin: 0.2rem 0 0;
+  padding: 0.6rem 0 0;
+  border-top: 1px solid rgb(0 0 0 / 55%);
+  border-bottom: 0;
+}
+
+.editor-console .brush-history-strip {
+  gap: 0.35rem;
+}
+
+/* ── the page ─────────────────────────────────────────────────────────────── */
+
+.editor-console .rc-stage {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: radial-gradient(ellipse 70% 60% at 50% 42%, #16171a 0%, #0b0b0c 100%);
   /* Measured, so the picture can be told to fill it — see below. */
   container-type: size;
 }
 
 /*
- * The page takes the desk it is given.
- *
- * It was a fixed 14px cell, which on the screen this is now — a panel down one
- * side and everything else free — left a teletext page the size of a postcard
- * in the middle of a monitor, with the cells too small to see which sixth of one
- * the brush was aimed at. Forty columns by twenty-four rows against whichever of
- * the container's two dimensions runs out first, exactly as on the phone.
- *
- * Capped at 20px because a cell has a natural size past which it stops being a
- * character and starts being a tile, and because a page wants a margin of desk
- * around it — filling the space to its last pixel reads as an overflow, not as a
- * fit. On a wide monitor the page centres in what is left rather than growing.
+ * The set the page is drawn on: the /watch cabinet around a sunk tube, with
+ * the badge under it. Same plastic as the panel, same moulding light.
  */
-.editor-console:not(.editor-layout-narrow) .teletext-screen {
+.editor-console .rc-bezel {
+  display: flex;
+  flex-direction: column;
+  padding: 16px 16px 8px;
+  border: 1px solid #0a0a0a;
+  border-radius: 14px;
+  background-image: var(--rc-mould), var(--rc-grain), var(--rc-cab);
+  background-blend-mode: overlay, soft-light, normal;
+  background-size: 320px 320px, 160px 160px, auto;
+  box-shadow:
+    inset 0 1px 0 rgb(125 124 120 / 55%),
+    inset 0 -2px 6px rgb(0 0 0 / 45%),
+    0 18px 40px rgb(0 0 0 / 55%);
+}
+
+.editor-console .rc-bezel .teletext-screen-wrapper {
+  padding: 6px;
+  border-radius: 6px;
+  background: #0d0d0e;
+  box-shadow: inset 0 2px 6px #000, 0 1px 0 rgb(154 154 148 / 22%);
+}
+
+.editor-console .rc-bezel .teletext-screen {
+  border-color: #000;
+}
+
+.editor-console .rc-nameplate {
+  margin: 7px 4px 0;
+  font-family: var(--rc-panel-font);
+  font-size: 0.5rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--rc-cap-ink);
+  text-shadow: 0 1px 0 rgb(0 0 0 / 80%);
+}
+
+/*
+ * The page takes the desk it is given: forty columns and twenty-four rows
+ * against whichever of the stage's two dimensions runs out first. Capped at
+ * 20px, past which a cell stops being a character and starts being a tile.
+ */
+.editor-console.rc-layout:not(.rc-layout-narrow) .teletext-screen {
   font-size: min(
     20px,
-    calc((100cqw - 5rem) / 40),
-    calc((100cqh - 5rem) / 32.4)
+    calc((100cqw - 7rem) / 40),
+    calc((100cqh - 8.5rem) / 32.4)
   );
 }
 
 /* =====================================================================
- * The console on a phone.
+ * The phone.
  *
- * Not the column stacked. Below 900px the panel is rebuilt as the handset it
- * already looks like: pinned to the foot of the window under the picture, tool
- * keys along its head where a thumb always finds them, and the rest of the
- * panel scrolling underneath.
- *
- * There is no sheet any more. A phone is a good deal taller than a teletext
- * page is — forty columns across a 390px screen leaves the picture under three
- * hundred pixels tall — and the room left over is enough for the controls to
- * simply be on screen. What used to pull up over the page you were drawing is
- * now the lower half of the thing you are holding.
+ * The strip keeps what a thumb wants between strokes. The page takes what is
+ * left of the height once the handset at the foot has what it needs: the tool
+ * keys along the bottom edge, the keyboard over them when typing, and the
+ * tool's settings above that — the one part that scrolls.
  * ===================================================================== */
 
-@media (max-width: 900px) {
-  .editor-console.editor-layout-narrow {
-    flex-direction: column;
-    height: 100dvh;
-    max-height: 100dvh;
-    overflow: hidden;
-    gap: 0;
-  }
-
-  .editor-console.editor-layout-narrow .editor-main {
-    flex: 1 1 auto;
-    min-height: 0;
-    padding: 0.45rem;
-    overflow: hidden;
-    /*
-     * The picture is measured against what the handset left it.
-     *
-     * It used to be sized off `100dvh` minus a guess at everything else on the
-     * screen, which only holds while that guess does — and the handset's height
-     * moves with the tool in hand. A size container turns the guess into the
-     * measurement it was standing in for: `cqh` *is* whatever is left.
-     */
-    container-type: size;
-  }
-
-  /*
-   * 40 cells across whatever is left, and 24 down it.
-   *
-   * The grid is 40em by 32.4em (24 rows at 1.35), so one font size decides
-   * both, and the smaller of the two fits is the one that fits. The `dvh`
-   * version is kept first as the answer for an engine without size containers,
-   * which would otherwise drop the declaration and take the sizing with it.
-   */
-  .editor-console.editor-layout-narrow .teletext-screen {
-    font-size: min(
-      calc((100vw - 1.8rem) / 40),
-      calc((100dvh - 26rem) / 32.4)
-    );
-    font-size: min(
-      calc((100cqw - 14px) / 40),
-      calc((100cqh - 14px) / 32.4)
-    );
-    padding: 4px;
-    border-width: 1px;
-  }
-
-  /* The handset: one body, holding the whole panel. */
-  .editor-console .rc-handset {
-    position: relative;
-    flex: 0 1 auto;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    /*
-     * Enough for the Text tab's keyboard to be whole without a scroll.
-     *
-     * It costs the picture nothing on a phone: forty columns across 390px caps
-     * the cell at about 9.4px, so the page is a little over 300px tall and is
-     * limited by the *width* long before it is limited by what is left here.
-     * Handing those extra few per cent to the panel takes them from empty desk.
-     */
-    max-height: 62dvh;
-    padding: 0.5rem 0.6rem calc(0.6rem + env(safe-area-inset-bottom, 0px));
-    border-radius: 14px 14px 0 0;
-    touch-action: manipulation;
-    box-shadow:
-      inset 0 1px 0 rgb(125 124 120 / 55%),
-      inset 1px 0 0 rgb(110 109 105 / 30%),
-      inset -1px 0 0 rgb(0 0 0 / 42%),
-      0 -0.35rem 1rem rgb(0 0 0 / 55%);
-  }
-
-  .editor-console .rc-handset::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: 14px 14px 0 0;
-    pointer-events: none;
-    background: radial-gradient(
-      ellipse 120% 140% at 38% 10%,
-      transparent 45%,
-      rgb(0 0 0 / 38%) 100%
-    );
-  }
-
-  /*
-   * The head of the handset, which does not scroll.
-   *
-   * Choosing a tool is most of what editing is; everything below can be gone
-   * looking for, and this cannot.
-   */
-  .editor-console .rc-handset-head {
-    position: relative;
-    flex: 0 0 auto;
-    padding-bottom: 0.6rem;
-  }
-
-  .editor-console .rc-handset-head::after {
-    content: '';
-    position: absolute;
-    left: -0.25rem;
-    right: -0.25rem;
-    bottom: 0.1rem;
-    height: 5px;
-    background: var(--rc-alu);
-    border-radius: 1px;
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 55%),
-      0 1px 0 rgb(0 0 0 / 85%),
-      0 3px 5px rgb(0 0 0 / 45%);
-  }
-
-  .editor-console .rc-handset-body {
-    position: relative;
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  /* A thumb, not a pointer. 44px is the smallest target worth offering, and
-     these are the keys pressed hardest and most often. */
-  .editor-console .rc-key-tool {
-    min-height: 3.1rem;
-  }
-
-  /* Six keys across a phone leaves each one about a thumb wide, so the strip
-     gives back what it can: a tighter group gap and no padding to spare. */
-  .editor-console .rc-tabs {
-    gap: 0.45rem;
-    padding-bottom: 0.8rem;
-  }
-
-  .editor-console .rc-tabs-tools {
-    gap: 0.25rem;
-  }
-
-  .editor-console .rc-key {
-    min-height: 2.75rem;
-  }
-
-  .editor-console .rc-key-digit {
-    min-height: 3rem;
-  }
-
-  /* The keyboard is the reason the system one is suppressed on a phone, so it
-     has to be at least as good a target as the one it replaced. */
-  .editor-console .rc-key-char {
-    min-height: 2.7rem;
-  }
-
-  .editor-console .rc-pad-glyph {
-    font-size: 0.85rem;
-  }
-
-  .editor-console .rc-key-rocker {
-    width: 3rem;
-    min-height: 2.6rem;
-  }
-
-  .editor-console .rc-cluster {
-    padding: 0.8rem 0;
-  }
-
-  /* Wider than on a desktop — the panel is the width of the screen here — but
-     still capped: the window is a readout, and past a hand's width it starts
-     reading as a clock radio. The captions inside it scale with the box, so the
-     cap is what keeps `PAGE` and `SUB` the size they are on the set. */
-  .editor-console .rc-display {
-    max-width: 14rem;
-  }
-
-  /*
-   * Colours are chosen with a thumb here, so the swatches grow — but the grid
-   * that holds them stops being elastic at the same time.
-   *
-   * Four `1fr` columns across a tablet spread eight thumb-sized keys over six
-   * hundred pixels with the gaps doing the growing, which reads as a rash rather
-   * than as a palette. Fixed columns keep the pair of grids together whatever
-   * the panel is wide, and the row centres them.
-   */
-  .editor-console .text-preview-swatches-4x4 {
-    grid-template-columns: repeat(4, 1.9rem);
-    max-width: none;
-    gap: 0.3rem;
-  }
-
-  .editor-console .color-swatch {
-    width: 1.9rem;
-    height: 1.9rem;
-  }
-
-  .editor-console .text-preview-three-col {
-    gap: 0.75rem;
-    min-height: 0;
-    justify-content: flex-start;
-  }
-
-  .editor-console .text-preview-col {
-    flex: 0 0 auto;
-  }
-
+.editor-console .rc-strip-narrow {
+  align-items: center;
+  gap: 0.4rem;
+  padding: calc(0.4rem + env(safe-area-inset-top, 0px)) 0.5rem 0.4rem;
 }
 
-/*
- * A short window — a phone turned on its side, mostly — has no surplus to give
- * the handset, so it takes less: the picture keeps its half and the panel
- * scrolls for the rest.
- */
-@media (max-width: 900px) and (max-height: 620px) {
-  .editor-console .rc-handset {
-    max-height: 50dvh;
+.editor-console .rc-strip-narrow .rc-brand-name,
+.editor-console .rc-strip-narrow .rc-status-label,
+.editor-console .rc-strip-narrow .rc-cap {
+  display: none;
+}
+
+.editor-console .rc-strip-narrow .rc-brand {
+  padding-bottom: 0;
+  gap: 0.4rem;
+}
+
+.editor-console .rc-strip-narrow .rc-brand-back {
+  width: 2rem;
+  height: 2rem;
+}
+
+.editor-console .rc-strip-narrow .rc-display-row {
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.editor-console .rc-strip-narrow .rc-display {
+  flex: 0 0 auto;
+  width: 5.75rem;
+}
+
+.editor-console .rc-strip-narrow .rc-key-rocker {
+  width: 2.1rem;
+  min-height: 2.4rem;
+}
+
+.editor-console .rc-strip-narrow .rc-strip-actions {
+  display: flex;
+  gap: 0.3rem;
+  margin-left: auto;
+}
+
+.editor-console .rc-strip-narrow .rc-key-action,
+.editor-console .rc-strip-narrow .rc-key-square {
+  flex: 0 0 auto;
+  width: 2.4rem;
+  min-height: 2.4rem;
+  padding: 0.3rem;
+}
+
+/* The window is a key on a phone — it opens the page sheet — but it should
+   not look like one: it is the set's display, sunk into the panel. */
+.editor-console .rc-display-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.editor-console.rc-layout-narrow .rc-stage {
+  padding: 0.35rem;
+}
+
+.editor-console.rc-layout-narrow .rc-bezel {
+  padding: 6px;
+  border-radius: 9px;
+  box-shadow:
+    inset 0 1px 0 rgb(125 124 120 / 55%),
+    0 8px 18px rgb(0 0 0 / 55%);
+}
+
+.editor-console.rc-layout-narrow .rc-bezel .teletext-screen-wrapper {
+  padding: 3px;
+  border-radius: 4px;
+}
+
+.editor-console.rc-layout-narrow .rc-nameplate {
+  /* A phone needs that line for the keyboard more than it needs the badge. */
+  display: none;
+}
+
+.editor-console.rc-layout-narrow .teletext-screen {
+  font-size: min(
+    calc((100cqw - 34px) / 40),
+    calc((100cqh - 40px) / 32.4)
+  );
+  padding: 4px;
+  border-width: 1px;
+}
+
+.editor-console .rc-dock {
+  position: relative;
+  flex: 0 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  /*
+   * The handset takes what a full-width page leaves it — the page is 40 cells
+   * across, so its height follows from the width — and never less than half
+   * the screen, so on a short phone the page shrinks rather than the keys.
+   */
+  max-height: max(52dvh, calc(100dvh - 4.25rem - 81vw));
+  padding: 0.35rem 0.6rem calc(0.35rem + env(safe-area-inset-bottom, 0px));
+  border-radius: 14px 14px 0 0;
+  touch-action: manipulation;
+  box-shadow:
+    inset 0 1px 0 rgb(125 124 120 / 55%),
+    inset 1px 0 0 rgb(110 109 105 / 30%),
+    inset -1px 0 0 rgb(0 0 0 / 42%),
+    0 -0.35rem 1rem rgb(0 0 0 / 55%);
+}
+
+.editor-console .rc-dock-options {
+  flex: 1 1 auto;
+  min-height: 2.5rem;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-top: 0.35rem;
+}
+
+.editor-console .rc-dock .rc-cluster {
+  gap: 0.45rem;
+  padding: 0.45rem 0;
+}
+
+.editor-console .rc-dock-keyboard {
+  flex: 0 0 auto;
+  padding: 0.4rem 0 0.15rem;
+}
+
+.editor-console .rc-dock-tools {
+  position: relative;
+  flex: 0 0 auto;
+  margin-top: 0.4rem;
+  padding-top: 0.6rem;
+}
+
+/* Aluminium over the tool keys, as over the set's keypad. */
+.editor-console .rc-dock-tools::before {
+  content: '';
+  position: absolute;
+  left: -0.6rem;
+  right: -0.6rem;
+  top: 0;
+  height: 1px;
+  background: rgb(0 0 0 / 65%);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 6%);
+}
+
+/* A thumb, not a pointer: 44px is the smallest target worth offering. */
+.editor-console .rc-dock .rc-key-tool {
+  min-height: 2.5rem;
+}
+
+.editor-console .rc-dock .rc-key {
+  min-height: 2.6rem;
+}
+
+.editor-console .rc-dock .rc-key-char {
+  min-height: 2.2rem;
+}
+
+.editor-console .rc-dock .rc-pad-glyph {
+  font-size: 0.85rem;
+}
+
+/* Colours are picked with a thumb, so the label goes beside the row, not over it. */
+.editor-console .rc-dock .rc-swatch-row {
+  grid-template-columns: 3.2rem minmax(0, 1fr);
+}
+
+.editor-console .rc-dock .rc-swatch-row > .rc-palette {
+  max-width: 17.5rem;
+}
+
+.editor-console .rc-dock .rc-text-style {
+  min-height: 0;
+}
+
+.editor-console .rc-dock .rc-text-style .rc-key {
+  min-height: 2.3rem;
+}
+
+/* The double-height preview is taller than the rest of the text panel put
+   together; on a phone the page itself is the preview. */
+.editor-console .rc-dock .text-preview-cell {
+  display: none;
+}
+
+/* Recent styles and brushes in one row that scrolls, rather than a pile. */
+.editor-console .rc-dock .brush-history-strip {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.editor-console .rc-dock .rc-cluster-recent {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.editor-console .rc-dock .rc-motif-colours .brush-sixel-preview {
+  width: 2.6rem;
+  min-width: 2.6rem;
+}
+
+.editor-console .rc-dock .rc-motif-palette .rc-palette {
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+}
+
+.editor-console .rc-dock .preset-motif-btn {
+  min-height: 3rem;
+}
+
+/* ── the page sheet ───────────────────────────────────────────────────────── */
+
+.editor-console .rc-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgb(0 0 0 / 55%);
+  animation: rc-fade 0.16s ease-out;
+}
+
+.editor-console .rc-sheet {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 32rem;
+  max-height: 88dvh;
+  padding: 0.6rem 1rem calc(0.9rem + env(safe-area-inset-bottom, 0px));
+  border-radius: 16px 16px 0 0;
+  touch-action: manipulation;
+  box-shadow:
+    inset 0 1px 0 rgb(125 124 120 / 55%),
+    0 -0.5rem 2rem rgb(0 0 0 / 65%);
+  animation: rc-rise 0.2s ease-out;
+}
+
+.editor-console .rc-sheet-head {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 0.8rem;
+}
+
+.editor-console .rc-sheet-head::after {
+  content: '';
+  position: absolute;
+  left: -1rem;
+  right: -1rem;
+  bottom: 0;
+  height: 1px;
+  background: rgb(0 0 0 / 65%);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 6%);
+}
+
+.editor-console .rc-sheet-head .rc-key-square {
+  width: 2.4rem;
+  min-height: 2.4rem;
+}
+
+.editor-console .rc-sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.editor-console .rc-sheet-body > .rc-cluster:first-child::before {
+  display: none;
+}
+
+.editor-console .rc-sheet-dial {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.editor-console .rc-sheet-dial .rc-display {
+  flex: 0 0 8rem;
+}
+
+.editor-console .rc-sheet-dial .rc-keypad {
+  flex: 1 1 auto;
+}
+
+.editor-console .rc-sheet .rc-key-digit {
+  min-height: 2.9rem;
+}
+
+.editor-console .rc-sheet .rc-key {
+  min-height: 2.75rem;
+}
+
+/* In the sheet the details stack, so the title stops sharing a row it grew
+   along — left as it is on the strip, it grows down the sheet instead. */
+.editor-console .rc-sheet .rc-title {
+  flex: 0 0 auto;
+  max-width: none;
+}
+
+.editor-console .rc-sheet .rc-subpages {
+  align-items: stretch;
+  gap: 0.2rem;
+}
+
+.editor-console .rc-sheet .rc-subpage-row {
+  flex-wrap: wrap;
+}
+
+.editor-console .rc-sheet .rc-subpage-keys {
+  flex-wrap: wrap;
+  max-width: none;
+  overflow: visible;
+}
+
+.editor-console .rc-sheet .rc-key-sub {
+  min-width: 2.75rem;
+}
+
+.editor-console .rc-sheet .rc-cap {
+  text-align: left;
+}
+
+@keyframes rc-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes rc-rise {
+  from {
+    transform: translateY(40%);
+    opacity: 0.4;
   }
 }
 
@@ -1271,5 +1557,10 @@
   .editor-console .rc-key,
   .editor-console .color-swatch {
     transition: none;
+  }
+
+  .editor-console .rc-sheet-backdrop,
+  .editor-console .rc-sheet {
+    animation: none;
   }
 }

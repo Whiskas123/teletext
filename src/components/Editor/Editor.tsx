@@ -1,4 +1,28 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+/**
+ * The page editor: the strip along the top, the remote beside the page, and
+ * the page itself.
+ *
+ * The controls are the television's own — moulded keys, an LED window,
+ * engraved captions — because they work the same appliance the remote on
+ * `/watch` does. What they are arranged into depends on the screen:
+ *
+ * - **On a desk** the strip across the top carries the document: the way out,
+ *   which page and screen is open and what it is called, undo, export and
+ *   clear. The remote stands down the left of the page and holds the five tool
+ *   keys with everything about the tool in hand under them, always out — no
+ *   drawers to open, nothing covering the picture.
+ * - **On a phone** the strip shrinks to the LED and the keys a thumb needs
+ *   most, the tool keys move to the foot of the screen where a thumb rests, and
+ *   the tool's settings (and, for text, the panel's own keyboard) sit between
+ *   the two. Everything else about the page — dialling it, its title, its
+ *   subpages, export and clear — is one tap away in the page sheet.
+ *
+ * What a page *is* is the host's business: it hands the editor its page
+ * controls as slots (see {@link EditorProps}) and the editor decides where they
+ * go. Every edit leaves through `onEditCell`, via the undo history.
+ */
+
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   brushKey,
   recordBrush,
@@ -15,16 +39,19 @@ import {
   type TextStyleHistoryState,
 } from "../../domain/textStyle";
 import {
-  IconBack,
   IconBlink,
   IconBlock,
   IconDoubleHeight,
+  IconBrush,
+  IconEraser,
   IconExport,
   IconPage,
   IconPipette,
   IconPixel,
+  IconRedo,
   IconTextCursor,
   IconTrash,
+  IconUndo,
 } from "./icons";
 import {
   brushColorsFromSlots,
@@ -57,46 +84,15 @@ import { useMediaQuery } from "../../utils/useMediaQuery";
 import { useCopy } from "../Room/useCopy";
 import type { Copy } from "../../domain/copy";
 import { TeletextGrid } from "../TeletextGrid/TeletextGrid";
+import { ConfirmKey } from "./ConfirmKey";
+import { useEditHistory } from "./useEditHistory";
 
-const SIXEL_TOOLTIP_MARGIN = 8;
-const SIXEL_TOOLTIP_WIDTH = 200;
-const SIXEL_TOOLTIP_HEIGHT = 90;
-
-const SIXEL_TOOLTIP_GAP = 8;
-
-const SIXEL_PART_NAMES: readonly [
-  string,
-  string,
-  string,
-  string,
-  string,
-  string,
-] = [
-  "Top-left",
-  "Top-right",
-  "Mid-left",
-  "Mid-right",
-  "Bottom-left",
-  "Bottom-right",
-];
-
-function clampTooltipToViewport(anchor: {
-  part: { top: number; height: number };
-  preview: { left: number; width: number };
-}): { left: number; top: number } {
-  const m = SIXEL_TOOLTIP_MARGIN;
-  const w = SIXEL_TOOLTIP_WIDTH;
-  const h = SIXEL_TOOLTIP_HEIGHT;
-  const left = Math.min(
-    anchor.preview.left + anchor.preview.width + SIXEL_TOOLTIP_GAP,
-    window.innerWidth - m - w,
-  );
-  const top = Math.max(
-    m,
-    Math.min(anchor.part.top, window.innerHeight - m - h),
-  );
-  return { left, top };
-}
+/**
+ * Below this the editor is laid out for a phone. Exported so the host can make
+ * the same call about its own controls (a tapped LED opens the page sheet on a
+ * phone and takes typed digits on a desk).
+ */
+export const EDITOR_NARROW_QUERY = "(max-width: 900px)";
 
 /** Get the first grapheme cluster (one user-perceived character, e.g. é or a). */
 function getFirstGrapheme(str: string): string {
@@ -138,149 +134,52 @@ function resolveCursorColor(color: string): string {
   return (TELETEXT_COLOR_HEX as Record<string, string | undefined>)[color] ?? color;
 }
 
-/** Which tool the pointer is holding. */
+/**
+ * What the pointer does on the page, as the grid's handler reads it.
+ *
+ * Derived from the three things a person actually chooses — which tool, which
+ * size of brush when drawing, and whether the eyedropper is up — rather than
+ * chosen directly. See `brushMode` in the component.
+ */
 type BrushMode = "off" | "block" | "pixel" | "blink" | "picker";
 
 /**
- * Which panel is open under the tab strip.
+ * The three tool keys.
  *
- * A tool and everything that configures it, or the page: which number is being
- * drawn on and what it is called. `"page"` is the one tab that is not a tool,
- * and choosing it deliberately does *not* put the tool down — you go there to
- * dial a page and come straight back to what you were drawing with.
+ * There were five, and they were three different kinds of thing in one row:
+ * what you are making (text or mosaic), how big a brush (a whole cell or one
+ * sixth of one) and an effect (blink) — with the eyedropper, which is not a
+ * tool at all but a way of choosing colours, on the end. Now the row is only
+ * *what you are doing*; the brush size is a switch inside Draw, and the
+ * eyedropper sits beside the colours it fills in.
+ *
+ * The words are looked up rather than written here: this table is the order
+ * the keys are moulded in, which is not language.
  */
-type ConsoleTab = "page" | BrushMode;
+type Tool = "text" | "draw" | "blink";
 
-/**
- * The five tool keys, as data.
- *
- * The console and the handset are two shells for one set of controls, and the
- * keys are the part that was hardest to keep in step while each shell spelled
- * them out for itself — five buttons written twice is five chances to add a
- * tool to one and not the other. Written once here, both shells get the same
- * row in the same order, and a sixth tool is a line in this table.
- */
-/*
- * The five tool keys.
- *
- * The cap's word and its tooltip are looked up rather than written here: this
- * table is the *order the keys are moulded in*, which is not language, and a
- * module-level constant is evaluated once at import — long before anyone has
- * said which language they read in. So it carries the key into {@link Copy} and
- * the strip resolves it at render.
- */
-const BRUSH_KEYS: readonly {
-  mode: BrushMode;
+const TOOL_KEYS: readonly {
+  tool: Tool;
   label: keyof Copy["editor"];
   title: keyof Copy["editor"];
   Icon: (props: { className?: string }) => React.ReactElement;
 }[] = [
-  {
-    mode: "off",
-    label: "toolText",
-    title: "toolTextHint",
-    Icon: IconTextCursor,
-  },
-  {
-    mode: "block",
-    label: "toolBlock",
-    title: "toolBlockHint",
-    Icon: IconBlock,
-  },
-  {
-    mode: "pixel",
-    label: "toolPixel",
-    title: "toolPixelHint",
-    Icon: IconPixel,
-  },
-  {
-    mode: "blink",
-    label: "toolBlink",
-    title: "toolBlinkHint",
-    Icon: IconBlink,
-  },
-  {
-    mode: "picker",
-    label: "toolPick",
-    title: "toolPickHint",
-    Icon: IconPipette,
-  },
+  { tool: "text", label: "toolText", title: "toolTextHint", Icon: IconTextCursor },
+  { tool: "draw", label: "toolDraw", title: "toolDrawHint", Icon: IconBlock },
+  { tool: "blink", label: "toolBlink", title: "toolBlinkHint", Icon: IconBlink },
 ];
 
-/** Resolve one of {@link BRUSH_KEYS}' copy keys to the words themselves. */
+/** Resolve one of {@link TOOL_KEYS}' copy keys to the words themselves. */
 function toolWord(copy: Copy, key: keyof Copy["editor"]): string {
   const value = copy.editor[key];
   return typeof value === "string" ? value : "";
 }
 
-/**
- * Which toolbar keys have something to open, and what the panel is called in
- * the markup.
- *
- * Two of the five tools have nothing to configure — blink paints blink, and the
- * eyedropper takes what it is pointed at — so their keys are keys and no more,
- * with what used to be a paragraph of panel now carried as the cap's own
- * tooltip. A key that opens an empty drawer is a key you press twice and then
- * stop trusting.
- */
-const FLYOUT_IDS: Readonly<Record<ConsoleTab, string>> = {
-  page: 'rc-flyout-page',
-  off: 'rc-flyout-text',
-  block: 'rc-flyout-block',
-  pixel: 'rc-flyout-pixel',
-  blink: 'rc-flyout-blink',
-  picker: 'rc-flyout-picker',
-};
-
-const CLEAR_FLYOUT_ID = 'rc-flyout-clear';
-
-/** The tabs with a drawer behind them; the rest are plain keys. */
-const FLYOUT_TABS: ReadonlySet<ConsoleTab> = new Set<ConsoleTab>([
-  'page',
-  'off',
-  'block',
-  'pixel',
-]);
-
-/**
- * A drawer hanging off a toolbar key.
- *
- * Absolutely positioned under its own key rather than placed by measurement:
- * the strip is one row along the top of the window, so "under the key, hanging
- * into the desk" is a fact of the layout and not something that has to be
- * computed against the viewport every time one opens. The two keys at the far
- * end open theirs `end`-aligned, which is the whole of the edge handling this
- * needs.
- *
- * Dismissal is not in here. One drawer is open at a time and the strip owns
- * which — see `closeFlyouts` and the effect beside it — so the pointer and
- * Escape listeners are registered once for the strip instead of once per key.
- */
-function Flyout({
-  open,
-  panelId,
-  label,
-  align = 'start',
-  children,
-}: {
-  open: boolean;
-  panelId: string;
-  label: string;
-  align?: 'start' | 'end';
-  children: React.ReactNode;
-}) {
-  if (!open) return null;
-  return (
-    <div
-      id={panelId}
-      className={`rc-flyout${align === 'end' ? ' rc-flyout-end' : ''}`}
-      role="group"
-      aria-label={label}
-    >
-      {children}
-    </div>
-  );
-}
+/** How the undo shortcut is written on this machine, for the keys' tooltips. */
+const MOD_KEY =
+  typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.userAgent)
+    ? "⌘"
+    : "Ctrl+";
 
 /**
  * The panel's own keyboard, in two layers of four rows.
@@ -368,75 +267,73 @@ export interface EditorRemoteCursor {
   name: string;
 }
 
+/**
+ * What the host's page controls are handed, so they can behave for the shell
+ * they are in: on a phone a tapped LED opens the page sheet, and a page dialled
+ * on the sheet's keypad closes it again.
+ */
+export interface EditorPageSheet {
+  narrow: boolean;
+  open: () => void;
+  close: () => void;
+}
+
 interface EditorProps {
-  /** Page number used for header/export (does not by itself render a back button). */
+  /** Page number used for the header row and the export. */
   pageNumber?: number;
   /**
    * Which screen of the page's carousel is being edited, and how many there
-   * are — shown in the grid's header as `X/Y`, exactly as a viewer sees it, so
-   * the editor is never ambiguous about which subpage the keystrokes land on.
+   * are — shown in the grid's header as `X/Y`, exactly as a viewer sees it.
    */
   subpage?: number;
   subpageCount?: number;
-  /** When set, renders a "Back to grid" key in the console actions that calls this. */
-  onBackToGrid?: () => void | Promise<void>;
-  /**
-   * The nameplate: the host's way out of the editor and whatever lamp it wants
-   * lit. It rides at the near end of the toolbar, where an appliance puts its
-   * badge. The handset has no room for one and does not render it.
-   */
-  brand?: import('react').ReactNode;
-  /**
-   * The host's readout and the rockers beside it: what page is open, and the
-   * keys that step off it.
-   *
-   * Handed over apart from {@link EditorProps.pageControls} because it is the
-   * one part of choosing a page that is never put away — the toolbar keeps it on
-   * the strip at all times, where the old console kept it at the top of a tab
-   * you had to open first.
-   */
-  display?: import('react').ReactNode;
-  /**
-   * The rest of the host's page panel — its dialling, its title, its subpages.
-   * Behind one key on the toolbar and behind the strip's `Page` tab on the
-   * handset; supplied by the host, because only the host knows what a page is
-   * here.
-   */
-  pageControls?: import('react').ReactNode;
   /** The page to edit, supplied by the host (e.g. `useEditPage`'s normalized page). */
   page: TeletextPage;
   /**
    * Single-cell edit callback. Every edit (typing, painting, blink, backspace,
-   * clear) is applied through this callback as an absolute cell value at
-   * `index`, so a collaborative store can persist and merge edits at cell
-   * granularity (Req 6.1, 6.5).
+   * clear, undo) is applied through this callback as an absolute cell value at
+   * `index`, so a collaborative store can persist and merge edits per cell.
    */
   onEditCell: (index: number, cell: Cell) => void;
-  /**
-   * Controlled cursor index. When provided, the Editor uses it as the local
-   * cursor position instead of its own internal state.
-   */
+  /** Controlled cursor index; the editor keeps its own when omitted. */
   cursorIndex?: number;
   /** Notified whenever the local cursor position changes (e.g. to publish presence). */
   onCursorChange?: (index: number | null) => void;
-  /** Other members' editing cursors to render on the grid, attributed by color (Req 6.6). */
+  /** Other members' editing cursors to render on the grid, attributed by color. */
   remoteCursors?: EditorRemoteCursor[];
+
+  /* ── the host's page controls, placed by the editor ─────────────────────── */
+
+  /** The way out and the save lamp: the near end of the strip. */
+  nameplate?: ReactNode;
+  /** The LED window and the page rockers: always on the strip. */
+  pageDisplay?: (sheet: EditorPageSheet) => ReactNode;
+  /** The keypad that dials a page: in the page sheet, on a phone only. */
+  pageKeypad?: (sheet: EditorPageSheet) => ReactNode;
+  /** The page's title and subpages: on the strip on a desk, in the sheet on a phone. */
+  pageDetails?: ReactNode;
+  /** Something that went wrong with the page as a whole, said under the strip. */
+  alert?: ReactNode;
 }
 
 export function Editor({
   pageNumber,
   subpage = 1,
   subpageCount = 1,
-  onBackToGrid,
-  brand,
-  display,
-  pageControls,
   page,
   onEditCell,
   cursorIndex: controlledCursorIndex,
   onCursorChange,
   remoteCursors,
+  nameplate,
+  pageDisplay,
+  pageKeypad,
+  pageDetails,
+  alert,
 }: EditorProps) {
+  const copy = useCopy();
+  const isNarrow = useMediaQuery(EDITOR_NARROW_QUERY);
+
   // Cursor is controlled when a cursorIndex prop is supplied; otherwise local.
   const cursorControlled = controlledCursorIndex !== undefined;
   const [localCursorIndex, setLocalCursorIndex] = useState(COLS);
@@ -449,39 +346,48 @@ export function Editor({
     [cursorControlled, onCursorChange],
   );
 
-  // Single-cell writer: every edit funnels through the host's cell-level
-  // callback so a collaborative store can merge edits per cell.
-  const writeCell = useCallback(
-    (index: number, cell: Cell) => {
-      onEditCell(index, cell);
-    },
-    [onEditCell],
-  );
+  /*
+   * Every write goes through the history, which passes it on to the host.
+   * See `useEditHistory` for how writes are gathered into undoable steps.
+   */
+  const history = useEditHistory(page, onEditCell, `${pageNumber}/${subpage}`);
+  const writeCell = history.write;
+  const { transact, undo, redo } = history;
 
-  // Whole-page clear: apply an empty cell to every position.
+  // Whole-page clear: an empty cell at every position, as one undoable step.
   const clearPage = useCallback(() => {
-    for (let i = 0; i < TOTAL_CELLS; i++) onEditCell(i, emptyCellValue());
-  }, [onEditCell]);
+    transact(() => {
+      for (let i = 0; i < TOTAL_CELLS; i++) writeCell(i, emptyCellValue());
+    });
+  }, [transact, writeCell]);
 
   const [fg, setFg] = useState<TeletextColor>("white");
   const [bg, setBg] = useState<TeletextColor>("black");
   /** When on, typed characters render at double the row height (text only — not the block/pixel brushes). */
   const [doubleHeightOn, setDoubleHeightOn] = useState(false);
-  const [clearConfirmShown, setClearConfirmShown] = useState(false);
-  const [brushMode, setBrushMode] = useState<BrushMode>("off");
-  /** Which panel the tab strip has open; see {@link ConsoleTab}. */
-  const [tab, setTab] = useState<ConsoleTab>("off");
+  const [tool, setTool] = useState<Tool>("text");
+  /** Drawing a whole cell at a time, or one sixth of one. */
+  const [drawSize, setDrawSize] = useState<"cell" | "pixel">("cell");
+  /** The eyedropper is up: the next cell pressed gives its colours. */
+  const [picking, setPicking] = useState(false);
+  const brushMode: BrushMode = picking
+    ? "picker"
+    : tool === "text"
+      ? "off"
+      : tool === "blink"
+        ? "blink"
+        : drawSize === "cell"
+          ? "block"
+          : "pixel";
   /**
-   * Whether the toolbar has {@link tab}'s drawer pulled out.
+   * Whether the pixel and blink tools take away rather than put down.
    *
-   * Deliberately *whether* and not a second *which*: `tab` already says which
-   * panel belongs to the moment, and on the strip it goes on saying so while the
-   * drawer is shut. Keeping the two apart is what makes a drawer follow the
-   * tool — the eyedropper landing on Block moves `tab`, and a drawer already out
-   * swaps its contents instead of being left describing a tool nobody is
-   * holding. The handset never reads this: its panel is never shut.
+   * Alt did this on its own before, which left a phone — no Alt key — able to
+   * paint and never to erase. Alt still works on a desk, as a momentary switch.
    */
-  const [flyoutOpen, setFlyoutOpen] = useState(false);
+  const [eraseOn, setEraseOn] = useState(false);
+  /** Whether the page sheet is up (phone only). */
+  const [sheetOpen, setSheetOpen] = useState(false);
   /** Which layer the panel's keyboard is showing, and whether it is in caps. */
   const [padLayer, setPadLayer] = useState<"letters" | "symbols">("letters");
   const [padShift, setPadShift] = useState(true);
@@ -500,7 +406,7 @@ export function Editor({
   const [selectedMotifIndex, setSelectedMotifIndex] = useState(0);
   /** Color the pixel brush paints a single sixth with. */
   const [pixelColor, setPixelColor] = useState<TeletextColor>("white");
-  /** Recently used brushes (index 0 = most recent) and the ◀ ▶ stepper cursor. */
+  /** Recently used brushes (index 0 = most recent) and the stepper cursor. */
   const [brushes, setBrushes] = useState<BrushHistoryState>(() => ({
     history: [],
     index: 0,
@@ -512,31 +418,21 @@ export function Editor({
   }));
   /** Sixel sub-cell (0-5) the pixel brush is currently aimed at. */
   const [hoveredPartIndex, setHoveredPartIndex] = useState<number | null>(null);
+  /** Which sixth of the motif preview the palette under it is colouring. */
   const [selectedSixelIndex, setSelectedSixelIndex] = useState(0);
   const [hoveredSlotIndex, setHoveredSlotIndex] = useState<number | null>(null);
-  const [colorTooltipOpen, setColorTooltipOpen] = useState(false);
-  const [tooltipAnchor, setTooltipAnchor] = useState<{
-    part: { left: number; top: number; width: number; height: number };
-    preview: { left: number; top: number; width: number; height: number };
-  } | null>(null);
   const [hoveredCellIndex, setHoveredCellIndex] = useState<number | null>(null);
   const isDrawingRef = useRef(false);
   /**
    * The last cell this stroke painted, so the gap to the next one can be filled.
    *
-   * A drag is sampled, not continuous: the browser reports the pointer perhaps
-   * sixty times a second, and a hand moving quickly crosses several cells
-   * between two reports. Painting only the reported cells drew a dashed line —
-   * solid where the hand was slow, gapped where it was fast. See
-   * `domain/strokeLine.ts`.
+   * A drag is sampled, not continuous: a hand moving quickly crosses several
+   * cells between two pointer reports, and painting only the reported cells
+   * drew a dashed line. See `domain/strokeLine.ts`.
    */
   const lastPaintedRef = useRef<number | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
-  /** The toolbar, so a pointer landing anywhere else can shut whatever is open. */
-  const toolbarRef = useRef<HTMLDivElement>(null);
   const hiddenInputRef = useRef<HTMLInputElement>(null);
-  const sixelColorTooltipRef = useRef<HTMLDivElement>(null);
-  const brushSixelPreviewRef = useRef<HTMLDivElement>(null);
 
   /** Remember a brush that was just painted with (see `domain/brush.ts`). */
   const rememberBrush = useCallback((brush: Brush) => {
@@ -549,68 +445,34 @@ export function Editor({
     setTextStyles((prev) => recordTextStyle(prev, style));
   }, []);
 
-  /** Make a remembered style the active one, and go back to typing. */
   /**
-   * Take up a tool, and bring the panel with it.
+   * Take up a tool.
    *
-   * The strip is not just navigation — a tab *is* a tool — so anything that
-   * changes the tool by another route has to move the strip too, or you end up
-   * drawing mosaics while the panel shows you the text style. The eyedropper is
-   * the case that matters: it becomes whichever tool made the cell it picked, so
-   * lifting a mosaic should land you on Block with that mosaic's colours already
-   * under your thumb, and lifting a character should land you on Text with its
-   * style. Going through here is what makes that automatic rather than a `setTab`
-   * somebody has to remember at each call site.
+   * The eraser is put down with the tool it belonged to: picking up the pixel
+   * brush later and finding it silently rubbing out is the kind of surprise
+   * that makes people stop trusting a switch.
    */
-  const holdTool = useCallback((mode: BrushMode) => {
-    setBrushMode(mode);
-    setTab(mode);
-  }, []);
-
-  /** Shut everything the toolbar has open. */
-  const closeFlyouts = useCallback(() => {
-    setFlyoutOpen(false);
-    setClearConfirmShown(false);
-  }, []);
-
-  /**
-   * A tool key on the strip: take the tool up, and show what configures it.
-   *
-   * Pressing a tool you are not holding opens its drawer as well as taking it
-   * up, because the two are almost always one intention — nobody reaches for the
-   * block brush without a mosaic in mind. Pressing the tool you *are* holding
-   * shuts the drawer again, so the same cap is also how you get the desk back.
-   * A tool with nothing to configure just shuts whatever was open.
-   */
-  const pressToolKey = useCallback(
-    (mode: BrushMode) => {
-      const wasShowing = flyoutOpen && tab === mode;
-      holdTool(mode);
-      setClearConfirmShown(false);
-      setFlyoutOpen(FLYOUT_TABS.has(mode) && !wasShowing);
+  const selectTool = useCallback(
+    (next: Tool) => {
+      if (next !== tool) setEraseOn(false);
+      setTool(next);
+      setPicking(false);
     },
-    [flyoutOpen, tab, holdTool],
+    [tool],
   );
 
   /**
-   * The page key: the keypad, the title and the carousel, all behind one cap.
-   *
-   * `setTab` rather than `holdTool`, exactly as the tab strip does it — going to
-   * the page is not putting the tool down, and you come back to whatever you
-   * were drawing with.
+   * Take up whatever made a brush or a style — a remembered one, or one the
+   * eyedropper just lifted: text is the text tool, a mosaic is Draw at the
+   * size it was painted at.
    */
-  const pressPageKey = useCallback(() => {
-    const wasShowing = flyoutOpen && tab === "page";
-    setTab("page");
-    setClearConfirmShown(false);
-    setFlyoutOpen(!wasShowing);
-  }, [flyoutOpen, tab]);
-
-  /** The red key: ask before wiping, in a drawer of its own. */
-  const pressClearKey = useCallback(() => {
-    setFlyoutOpen(false);
-    setClearConfirmShown((shown) => !shown);
-  }, []);
+  const holdTool = useCallback(
+    (mode: "off" | "block" | "pixel") => {
+      selectTool(mode === "off" ? "text" : "draw");
+      if (mode !== "off") setDrawSize(mode === "block" ? "cell" : "pixel");
+    },
+    [selectTool],
+  );
 
   const applyTextStyle = useCallback(
     (style: TextStyle) => {
@@ -721,6 +583,18 @@ export function Editor({
     [page, writeCell, pixelColor, setCursorIndex, rememberBrush],
   );
 
+  /** The block brush's eraser: the cell goes back to an empty one. */
+  const eraseCell = useCallback(
+    (index: number) => {
+      const cell = page[index];
+      if (cell.graphics != null || cell.char !== " " || cell.bg !== "black") {
+        writeCell(index, emptyCellValue());
+      }
+      setCursorIndex(index);
+    },
+    [page, writeCell, setCursorIndex],
+  );
+
   const paintBlinkCell = useCallback(
     (index: number, value: boolean) => {
       writeCell(index, { ...page[index], blink: value });
@@ -746,6 +620,7 @@ export function Editor({
 
   const selectMotif = useCallback((index: number) => {
     setSelectedMotifIndex(index);
+    setSelectedSixelIndex(0);
     // A motif is a colour arrangement for a whole cell, so choosing one clears
     // any shape the eyedropper had lifted.
     setBlockPattern(SIXEL_MAX);
@@ -795,21 +670,6 @@ export function Editor({
       setBrushes((prev) => ({ ...prev, index }));
     },
     [brushes, applyBrush],
-  );
-
-  const pickMotifFromCell = useCallback(
-    (index: number) => {
-      const cell = page[index];
-      if (cell && typeof cell.graphics === "number" && cell.graphicsColors) {
-        const picked = [...cell.graphicsColors] as SixelColors;
-        setMotifColors((prev) => {
-          const n = [...prev];
-          n[selectedMotifIndex] = picked;
-          return n;
-        });
-      }
-    },
-    [page, selectedMotifIndex],
   );
 
   const focusHiddenInput = useCallback(() => {
@@ -911,11 +771,16 @@ export function Editor({
   );
 
   /** Begin a stroke at `index`: nothing to interpolate from yet. */
-  const beginStroke = useCallback((index: number, paint: (cellIndex: number) => void) => {
-    isDrawingRef.current = true;
-    lastPaintedRef.current = index;
-    paint(index);
-  }, []);
+  const beginStroke = useCallback(
+    (index: number, paint: (cellIndex: number) => void) => {
+      // The whole stroke, however long, is one step of undo.
+      history.begin();
+      isDrawingRef.current = true;
+      lastPaintedRef.current = index;
+      paint(index);
+    },
+    [history],
+  );
 
   /**
    * A pointer touched or moved over a cell.
@@ -937,6 +802,8 @@ export function Editor({
       }
 
       const alt = e.altKey;
+      // Alt is a momentary eraser on a desk; the switch is the lasting one.
+      const erase = alt || eraseOn;
       const drawing = isDrawingRef.current;
 
       if (brushMode === 'picker') {
@@ -948,15 +815,11 @@ export function Editor({
 
       if (brushMode === 'block') {
         setHoveredCellIndex(index);
+        const paint = erase ? eraseCell : paintCell;
         if (phase === 'down') {
-          // Alt is "pick up the motif under the pointer", not "paint with it".
-          if (alt) {
-            pickMotifFromCell(index);
-            return;
-          }
-          beginStroke(index, paintCell);
+          beginStroke(index, paint);
         } else if (drawing) {
-          paintAlong(index, paintCell);
+          paintAlong(index, paint);
         }
         return;
       }
@@ -965,19 +828,19 @@ export function Editor({
         setHoveredCellIndex(index);
         setHoveredPartIndex(part);
         if (phase === 'down') {
-          beginStroke(index, (cell) => paintSixelPart(cell, part, alt));
+          beginStroke(index, (cell) => paintSixelPart(cell, part, erase));
         } else if (drawing) {
-          paintAlong(index, (cell) => paintSixelPart(cell, part, alt));
+          paintAlong(index, (cell) => paintSixelPart(cell, part, erase));
         }
         return;
       }
 
       if (brushMode === 'blink') {
-        const on = !alt;
+        const on = !erase;
         if (phase === 'down') {
           beginStroke(index, (cell) => paintBlinkCell(cell, on));
         } else if (drawing) {
-          paintAlong(index, (cell) => paintBlinkCell(cell, true));
+          paintAlong(index, (cell) => paintBlinkCell(cell, on));
         }
         return;
       }
@@ -991,12 +854,13 @@ export function Editor({
     },
     [
       brushMode,
+      eraseOn,
       beginStroke,
       paintAlong,
       paintCell,
       paintBlinkCell,
       paintSixelPart,
-      pickMotifFromCell,
+      eraseCell,
       pickFromCell,
       focusHiddenInput,
       setCursorIndex,
@@ -1015,7 +879,8 @@ export function Editor({
     lastPaintedRef.current = null;
     setHoveredCellIndex(null);
     setHoveredPartIndex(null);
-  }, []);
+    history.commit();
+  }, [history]);
 
   const handleGridMouseLeave = useCallback(() => {
     setHoveredCellIndex(null);
@@ -1028,28 +893,11 @@ export function Editor({
       // The next stroke starts wherever it starts; interpolating from the end of
       // the last one would draw a line across the page between them.
       lastPaintedRef.current = null;
+      history.commit();
     };
     window.addEventListener("mouseup", onMouseUp);
     return () => window.removeEventListener("mouseup", onMouseUp);
-  }, []);
-
-  useEffect(() => {
-    if (!colorTooltipOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (sixelColorTooltipRef.current?.contains(target)) return;
-      setColorTooltipOpen(false);
-    };
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setColorTooltipOpen(false);
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleEscape);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, [colorTooltipOpen]);
+  }, [history]);
 
   const setCellChar = useCallback(
     (index: number, char: string): boolean => {
@@ -1097,7 +945,12 @@ export function Editor({
    */
   const typeCharacter = useCallback(
     (char: string) => {
-      const wasDoubleHeight = setCellChar(cursorIndex, char);
+      let wasDoubleHeight = false;
+      // One character is one step, even when it also clears the row under a
+      // double-height glyph.
+      transact(() => {
+        wasDoubleHeight = setCellChar(cursorIndex, char);
+      });
       const { col, row } = rowColFromIndex(cursorIndex);
       const rawNext = Math.min(ROWS * COLS - 1, cursorIndex + 1);
       // Wrapping off the last column of a row we just made double-height: skip
@@ -1111,7 +964,7 @@ export function Editor({
           : resolveDoubleHeightCursor(page, rawNext, 1);
       setCursorIndex(next);
     },
-    [cursorIndex, setCellChar, page, setCursorIndex],
+    [cursorIndex, setCellChar, page, setCursorIndex, transact],
   );
 
   /**
@@ -1141,7 +994,7 @@ export function Editor({
           );
           return true;
         case "Delete":
-          setCellChar(cursorIndex, " ");
+          transact(() => setCellChar(cursorIndex, " "));
           return true;
         case "ArrowLeft":
           setCursorIndex(
@@ -1172,7 +1025,7 @@ export function Editor({
           return false;
       }
     },
-    [cursorIndex, page, setCellChar, setCursorIndex, writeCell],
+    [cursorIndex, page, setCellChar, setCursorIndex, writeCell, transact],
   );
 
   const handleKeyDown = useCallback(
@@ -1278,154 +1131,6 @@ export function Editor({
   }, []);
 
   /*
-   * Which shell to draw.
-   *
-   * The controls are the television's own — moulded keys on a plastic panel,
-   * an LED window, an aluminium strip between one cluster and the next — because
-   * they work the same appliance as the remote on `/watch` does, and an editor
-   * for teletext should not be the one screen in the app that looks like a form.
-   * There is no cabinet here: a page being drawn is not a page being watched, so
-   * the picture stands on its own and only the panel came across.
-   *
-   * A phone has no room beside the page, so the panel cannot sit next to it.
-   * Below 900px the console is rebuilt as the handset it already resembles:
-   * pinned under the picture, tool keys along its head where they are never
-   * scrolled away from, and the rest of the panel scrolling beneath them.
-   *
-   * Above it the panel is not beside the page either, any more. It was a column
-   * twenty-three rems wide holding a readout, six keys and whichever of them was
-   * open — width the page wanted and the panel never earned — so the same
-   * controls are moulded into a strip along the top instead, and whatever needs
-   * more than a cap hangs off its key as a drawer. See `toolbar`.
-   */
-  const isNarrow = useMediaQuery("(max-width: 900px)");
-  const copy = useCopy();
-
-  /**
-   * Which drawer the strip has out, if any.
-   *
-   * Derived rather than stored, so there is no second copy of "which panel" to
-   * fall out of step with `tab` — and so a tool with nothing behind it can never
-   * leave an empty drawer hanging open, however it came to be the tab.
-   */
-  const openFlyout: ConsoleTab | null =
-    flyoutOpen && FLYOUT_TABS.has(tab) ? tab : null;
-
-  /*
-   * The strip shuts when you go back to the page, and when you say so.
-   *
-   * Registered once for the whole toolbar rather than once per drawer: only one
-   * is ever out, and a listener per key would be four ways for the same rule to
-   * be spelled slightly differently. A pointer landing inside the strip is
-   * ignored, which is what lets a cap toggle its own drawer — otherwise the
-   * press would shut it here and reopen it in the handler, or the other way
-   * about, depending on the order two listeners happened to fire in.
-   *
-   * The handset has no drawers, and its clear-page confirmation is inline where
-   * a stray tap should not dismiss it, so none of this is armed there.
-   */
-  const flyoutShown = flyoutOpen || clearConfirmShown;
-  useEffect(() => {
-    if (isNarrow || !flyoutShown) return;
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target as Node | null;
-      if (target != null && toolbarRef.current?.contains(target)) return;
-      closeFlyouts();
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") closeFlyouts();
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [isNarrow, flyoutShown, closeFlyouts]);
-
-  /**
-   * The strip does not take the page's focus away from it.
-   *
-   * On a desk the keyboard *is* the input — there is no moulded pad up here to
-   * type with — so focus belongs to the grid and a control panel that stole it
-   * every time you chose a colour would be a control panel you had to click your
-   * way back out of. Preventing the default on `mousedown` is the whole of it:
-   * the cap never becomes the focused element, the grid never blurs, and the
-   * next thing typed still lands on the page. It is the same trick the handset's
-   * own keyboard uses, one level up, so a drawer's contents get it too.
-   *
-   * The exceptions are the controls that are *about* focus: a text field, and
-   * the LED window, which takes typed digits while it holds it.
-   */
-  const keepGridFocus = useCallback((event: React.MouseEvent) => {
-    const target = event.target as HTMLElement | null;
-    if (target?.closest("input, textarea, select, [contenteditable], .rc-display"))
-      return;
-    event.preventDefault();
-  }, []);
-
-  /*
-   * One set of controls, in one of two shells.
-   *
-   * Built here rather than inline in each layout so the phone and the desktop
-   * cannot drift apart: a control added to one is added to both, because there
-   * is only one of it.
-   */
-
-  /**
-   * The tab strip: the page, then the five tools. The handset's, only.
-   *
-   * The only navigation that panel has — what is under it is whatever this row
-   * has open, and nothing else. A brush's colours, its motifs and its history
-   * are its own; so is the text style, which belongs to typing and to nothing
-   * else on this panel and used to sit above all five tools as though it
-   * belonged to all of them.
-   *
-   * Page is set apart by a gap rather than by a different shape, the way a
-   * moulded panel groups keys. Pressing it opens the page panel and leaves the
-   * tool exactly where it was: the held tool keeps a lit pip in its corner so
-   * you can see what you will still be drawing with when you come back.
-   *
-   * The toolbar spells the same six keys out again — as buttons with drawers
-   * rather than as tabs — but off {@link BRUSH_KEYS}, which is the table both
-   * read from and the reason a sixth tool is still one line of data.
-   */
-  const tabs = (
-    <div className="rc-tabs" role="tablist" aria-label={copy.editor.console}>
-      {(display != null || pageControls != null) && (
-        <button
-          type="button"
-          role="tab"
-          className={`rc-key rc-key-tool${tab === "page" ? " rc-key-lit" : ""}`}
-          onClick={() => setTab("page")}
-          title={copy.editor.pageSetupHint}
-          aria-selected={tab === "page"}
-        >
-          <IconPage className="rc-key-icon" />
-          <span className="rc-key-label">{copy.editor.page}</span>
-        </button>
-      )}
-      <div className="rc-tabs-tools">
-        {BRUSH_KEYS.map(({ mode, label, title, Icon }) => (
-          <button
-            key={mode}
-            type="button"
-            role="tab"
-            className={`rc-key rc-key-tool${tab === mode ? " rc-key-lit" : ""}`}
-            data-held={brushMode === mode && tab !== mode ? "" : undefined}
-            onClick={() => holdTool(mode)}
-            title={toolWord(copy, title)}
-            aria-selected={tab === mode}
-          >
-            <Icon className="rc-key-icon" />
-            <span className="rc-key-label">{toolWord(copy, label)}</span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-
-  /*
    * The keyboard, moulded into the panel.
    *
    * A phone has a keyboard of its own and it is the wrong one: it slides up over
@@ -1513,70 +1218,6 @@ export function Editor({
   );
 
   /*
-   * TEXT: what a typed character is made of.
-   *
-   * No heading of its own — the lit key that opened this is the heading, and
-   * writing "Text style" under a cap that already says TEXT is the panel telling
-   * you where you are twice. What it is called survives as the `aria-label` on
-   * whatever is holding it, which is the one reader that cannot see the key.
-   *
-   * A foreground, a background and a double-height switch are settings for
-   * *typing* — the block brush paints its six colours from its own motif and the
-   * pixel brush has a colour of its own — so they belong to the one tool and are
-   * never shown beside another.
-   */
-  const textStyleControls = (
-    <>
-      <div className="text-preview-three-col">
-        <div className="text-preview-col">
-          <span className="text-preview-label">{copy.editor.color}</span>
-          <div className="text-preview-swatches text-preview-swatches-4x4">
-            {TELETEXT_COLORS.map((color) => (
-              <button
-                key={color}
-                type="button"
-                className={`color-swatch color-swatch-mini teletext-bg-${color} ${fg === color ? "active" : ""}`}
-                title={`Foreground ${color}`}
-                onClick={() => setFg(color)}
-                aria-label={`Foreground ${color}`}
-              />
-            ))}
-          </div>
-        </div>
-        <div className="text-preview-col">
-          <span className="text-preview-label">{copy.editor.background}</span>
-          <div className="text-preview-swatches text-preview-swatches-4x4">
-            {TELETEXT_COLORS.map((color) => (
-              <button
-                key={color}
-                type="button"
-                className={`color-swatch color-swatch-mini teletext-bg-${color} ${bg === color ? "active" : ""}`}
-                title={`Background ${color}`}
-                onClick={() => setBg(color)}
-                aria-label={`Background ${color}`}
-              />
-            ))}
-          </div>
-        </div>
-        <div
-          className={`text-preview-cell teletext-fg-${fg} teletext-bg-${bg} ${doubleHeightOn ? "text-preview-cell-double-height" : ""}`}
-          aria-hidden
-        />
-      </div>
-      <button
-        type="button"
-        className={`rc-key rc-key-wide ${doubleHeightOn ? "rc-key-lit" : ""}`}
-        onClick={() => setDoubleHeightOn((v) => !v)}
-        aria-pressed={doubleHeightOn}
-        title={copy.editor.doubleHeightHint}
-      >
-        <IconDoubleHeight className="rc-key-icon" />
-        <span>{copy.editor.doubleHeight}</span>
-      </button>
-    </>
-  );
-
-  /*
    * The two racks, as their caps alone.
    *
    * A remembered style or brush is one swatch and a click, and the strip of them
@@ -1616,55 +1257,363 @@ export function Editor({
     </button>
   ));
 
-  const textStyleSection = (
-    <section className="rc-cluster" aria-label={copy.editor.toolText}>
-      {textStyleControls}
+  /*
+   * Undo and redo from the keyboard, wherever focus is.
+   *
+   * On the grid's own input, and on any key of the panel — which never take
+   * focus, so that is mostly the grid anyway. A text field keeps its own undo:
+   * ⌘Z in the title box should take back the last letter of the title, not the
+   * last stroke on the page.
+   */
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target !== hiddenInputRef.current &&
+        target?.closest("input, textarea, [contenteditable]")
+      ) {
+        return;
+      }
+      const key = event.key.toLowerCase();
+      if (key === "z") {
+        event.preventDefault();
+        if (event.shiftKey) redo();
+        else undo();
+      } else if (key === "y") {
+        event.preventDefault();
+        redo();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [undo, redo]);
 
-      {textPad}
+  /* ── the page sheet (phone) ─────────────────────────────────────────────── */
 
-      {textStyleChips.length > 0 && (
-        <div className="color-block brush-history">
-          <span className="sidebar-field-label">{copy.editor.recentTextStyles}</span>
-          <div className="brush-history-strip">{textStyleChips}</div>
+  const openSheet = useCallback(() => setSheetOpen(true), []);
+  const closeSheet = useCallback(() => setSheetOpen(false), []);
+  // Turning a tablet on its side can cross the breakpoint with the sheet up;
+  // on a desk there is no sheet to be up.
+  const sheetShown = sheetOpen && isNarrow;
+  const sheet: EditorPageSheet = { narrow: isNarrow, open: openSheet, close: closeSheet };
+
+  useEffect(() => {
+    if (!sheetShown) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeSheet();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [sheetShown, closeSheet]);
+
+  /**
+   * The panel does not take the page's focus away from it.
+   *
+   * Focus belongs to the grid — it is where typed characters land — and a
+   * panel that stole it every time you chose a colour would be a panel you had
+   * to click your way back out of. Preventing the default on `mousedown` is the
+   * whole of it: the key never becomes the focused element and the next thing
+   * typed still lands on the page. The exceptions are the controls that are
+   * *about* focus: a text field, and the LED window, which takes typed digits.
+   */
+  const keepGridFocus = useCallback((event: React.MouseEvent) => {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest("input, textarea, select, [contenteditable], .rc-display"))
+      return;
+    event.preventDefault();
+  }, []);
+
+  /* ── the tool keys, and what each tool needs ────────────────────────────── */
+
+  /*
+   * The keys carry a picture and nothing else; what each one is called is
+   * engraved on the panel under it, as on the set's own remote. The one in
+   * use sits pressed into the panel with its lamp lit.
+   */
+  const toolKeys = (
+    <div className="rc-tools" role="radiogroup" aria-label={copy.editor.tools}>
+      {TOOL_KEYS.map(({ tool: key, label, title, Icon }) => (
+        <div className="rc-keycap" key={key}>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={tool === key}
+            aria-label={toolWord(copy, label)}
+            className={`rc-key rc-key-tool${tool === key ? " rc-key-lit" : ""}`}
+            onClick={() => selectTool(key)}
+            title={toolWord(copy, title)}
+          >
+            <Icon className="rc-key-icon" />
+          </button>
+          <span className="rc-cap" aria-hidden>
+            {toolWord(copy, label)}
+          </span>
         </div>
-      )}
-    </section>
+      ))}
+    </div>
   );
 
-  /*
-   * What the tool on the open tab needs, and nothing else.
-   *
-   * One cluster rather than one per tool: only one tab is ever open, so four of
-   * the five would always be empty panel. The tab it is describing is the one
-   * the strip has open, not the one the pointer is holding — those are the same
-   * thing except while the page panel is up, and the page panel replaces this
-   * one outright.
-   */
-  /*
-   * The three tools that have anything to say for themselves.
-   *
-   * Each is written once and framed twice: dropped straight into the
-   * handset's one open panel, or hung under its own cap on the toolbar. Blink
-   * and the eyedropper have no settings at all — a sentence each is the whole
-   * of what there is to know, and on the strip that sentence is the cap's
-   * tooltip rather than a drawer with a paragraph in it.
-   */
-  const pickerHint = (
-    <p className="sidebar-hint">
-      Click any cell to copy what made it. A cell with a character hands its
-      colours to the text tool and puts the cursor there; a mosaic cell hands
-      its shape and its six colours to the block brush.
+  /** One line saying how the tool in hand is used — the panel's own manual. */
+  const helpKey: keyof Copy["editor"] = picking
+    ? "helpPick"
+    : tool === "text"
+      ? "helpText"
+      : tool === "blink"
+        ? "helpBlink"
+        : eraseOn
+          ? "helpErase"
+          : drawSize === "cell"
+          ? "helpDrawCell"
+          : "helpDrawPixel";
+  const help = (
+    <p className="rc-help">
+      {toolWord(copy, helpKey)}
+      {!isNarrow && !picking && tool !== "text" ? ` ${copy.editor.altErases}` : ""}
     </p>
   );
 
-  const blinkHint = <p className="sidebar-hint">Click or drag to set blink on.</p>;
+  // The eyedropper is put down with Escape, like anything else held up.
+  useEffect(() => {
+    if (!picking) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPicking(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [picking]);
 
-  const blockOptions = (
-    <div className="brush-options">
+  /** The eight teletext colours as a row of caps, one of them down. */
+  const palette = (
+    value: TeletextColor,
+    onPick: (color: TeletextColor) => void,
+    describe: (color: TeletextColor) => string,
+  ) => (
+    <div className="rc-palette">
+      {TELETEXT_COLORS.map((color) => (
+        <button
+          key={color}
+          type="button"
+          className={`color-swatch teletext-bg-${color}${value === color ? " active" : ""}`}
+          onClick={() => onPick(color)}
+          title={describe(color)}
+          aria-label={describe(color)}
+          aria-pressed={value === color}
+        />
+      ))}
+    </div>
+  );
+
+  /*
+   * The eyedropper, beside the colours it fills in.
+   *
+   * It is a way of choosing colours, not a thing to do to the page, so it
+   * lives with the palettes rather than in the row of tools. Pressed, the next
+   * cell touched hands over what made it — and the panel follows: a character
+   * lands you in Write with its colours, a mosaic in Draw with its shape.
+   */
+  const eyedropper = (
+    <button
+      type="button"
+      className={`rc-key rc-key-small${picking ? " rc-key-lit" : ""}`}
+      onClick={() => setPicking((up) => !up)}
+      aria-pressed={picking}
+      title={copy.editor.eyedropperHint}
+      aria-label={copy.editor.eyedropper}
+    >
+      <IconPipette className="rc-key-icon" />
+    </button>
+  );
+
+  /** A cluster's engraved heading, with room for a key at the far end. */
+  const clusterHead = (label: string, end?: ReactNode) => (
+    <div className="rc-cluster-head">
+      <span className="rc-legend">{label}</span>
+      {end}
+    </div>
+  );
+
+  /** Remembered styles or brushes, when there are any to remember. */
+  const recentCluster = (chips: ReactNode[], label: string) =>
+    chips.length > 0 ? (
+      <section className="rc-cluster rc-cluster-recent">
+        {clusterHead(copy.editor.recent)}
+        <div className="brush-history-strip" role="group" aria-label={label}>
+          {chips}
+        </div>
+      </section>
+    ) : null;
+
+  /** Two or three keys of which exactly one is down. */
+  const segmented = <T extends string>(
+    label: string,
+    value: T,
+    options: readonly { value: T; label: string; icon?: ReactNode }[],
+    onPick: (value: T) => void,
+  ) => (
+    <div className="rc-segmented" role="radiogroup" aria-label={label}>
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          role="radio"
+          aria-checked={value === option.value}
+          className={`rc-key${value === option.value ? " rc-key-lit" : ""}`}
+          onClick={() => onPick(option.value)}
+        >
+          {option.icon}
+          <span>{option.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+
+  /*
+   * WRITE: what a typed character is made of.
+   *
+   * A foreground, a background and a double-height switch are settings for
+   * typing — the mosaic brush has colours of its own — so they belong to the
+   * one tool.
+   */
+  const textOptions = (
+    <>
+      <section className="rc-cluster">
+        {/* On a phone the keyboard needs the height a heading would take, so
+            the eyedropper moves down beside the double-height key. */}
+        {!isNarrow && clusterHead(copy.editor.colours, eyedropper)}
+        <div className="rc-swatch-row">
+          <span className="rc-sublegend">{copy.editor.color}</span>
+          {palette(fg, setFg, (c) => `${copy.editor.color}: ${c}`)}
+        </div>
+        <div className="rc-swatch-row">
+          <span className="rc-sublegend">{copy.editor.background}</span>
+          {palette(bg, setBg, (c) => `${copy.editor.background}: ${c}`)}
+        </div>
+      </section>
+      <section className="rc-cluster">
+        <div className="rc-text-style">
+          <button
+            type="button"
+            className={`rc-key rc-key-toggle${doubleHeightOn ? " rc-key-lit" : ""}`}
+            onClick={() => setDoubleHeightOn((v) => !v)}
+            aria-pressed={doubleHeightOn}
+            title={copy.editor.doubleHeightHint}
+          >
+            <IconDoubleHeight className="rc-key-icon" />
+            <span>{copy.editor.doubleHeight}</span>
+          </button>
+          <div
+            className={`text-preview-cell teletext-fg-${fg} teletext-bg-${bg}${
+              doubleHeightOn ? " text-preview-cell-double-height" : ""
+            }`}
+            aria-hidden
+          />
+          {isNarrow && eyedropper}
+        </div>
+      </section>
+      {recentCluster(textStyleChips, copy.editor.recentTextStyles)}
+    </>
+  );
+
+  /*
+   * DRAW: a brush size, an eraser, and what the brush is loaded with.
+   *
+   * Cell and pixel were two tools; they are one brush at two sizes, and a
+   * size is a switch. The motif only means anything for a whole cell, so it
+   * is only there then.
+   */
+  const selectedSlot = selectedMotif.slots[selectedSixelIndex];
+  const multiSlot = motifSlotCount(selectedMotif.slots) > 1;
+  /** Choosing a colour is choosing to paint, so it puts the eraser down. */
+  const paintWith = (fn: () => void) => () => {
+    fn();
+    setEraseOn(false);
+  };
+
+  const motifCluster = (
+    <section className={`rc-cluster${eraseOn ? " rc-idle" : ""}`}>
+      {clusterHead(copy.editor.motif)}
+      <div className="preset-motifs">
+        {MOTIF_PATTERNS.map((pattern, idx) => {
+          const previewColors =
+            motifColors[idx] ?? defaultColorsForMotif(pattern.slots);
+          return (
+            <button
+              key={pattern.name}
+              type="button"
+              className={`preset-motif-btn ${selectedMotifIndex === idx ? "preset-motif-btn-active" : ""}`}
+              title={pattern.name}
+              onClick={paintWith(() => selectMotif(idx))}
+              aria-label={`Use ${pattern.name} motif`}
+              aria-pressed={selectedMotifIndex === idx}
+            >
+              <div className="preset-motif-preview">
+                {([0, 1, 2, 3, 4, 5] as const).map((i) => (
+                  <span
+                    key={i}
+                    className={`preset-motif-dot teletext-bg-${previewColors[i]}`}
+                  />
+                ))}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+
+  const cellColours = (
+    <>
+      <div className="rc-motif-colours">
+        <div
+          className="brush-sixel-preview"
+          role="radiogroup"
+          aria-label={copy.editor.colours}
+        >
+          {([0, 1, 2, 3, 4, 5] as const).map((i) => {
+            const slots = selectedMotif.slots;
+            const slotIndex = slots[i];
+            /* Grid is 2×3 row-major: [0][1] / [2][3] / [4][5]. */
+            const rightNeighbor = i % 2 === 0 ? i + 1 : null;
+            const bottomNeighbor = i <= 3 ? i + 2 : null;
+            const borderRight =
+              rightNeighbor !== null && slots[i] !== slots[rightNeighbor];
+            const borderBottom =
+              bottomNeighbor !== null && slots[i] !== slots[bottomNeighbor];
+            const chosen = multiSlot && slotIndex === selectedSlot;
+            return (
+              <button
+                key={i}
+                type="button"
+                role="radio"
+                aria-checked={slotIndex === selectedSlot}
+                className={`brush-sixel-part teletext-bg-${brushColors[i]}${
+                  borderRight ? " brush-sixel-part-border-r" : ""
+                }${borderBottom ? " brush-sixel-part-border-b" : ""}${
+                  hoveredSlotIndex === slotIndex ? " brush-sixel-part-hover" : ""
+                }${chosen ? " brush-sixel-part-active" : ""}`}
+                onMouseEnter={() => setHoveredSlotIndex(slotIndex)}
+                onMouseLeave={() => setHoveredSlotIndex(null)}
+                onClick={() => setSelectedSixelIndex(i)}
+                aria-label={`${i + 1}: ${brushColors[i]}`}
+              />
+            );
+          })}
+        </div>
+        <div className="rc-motif-palette">
+          {multiSlot && <p className="rc-help">{copy.editor.motifColorsHelp}</p>}
+          {palette(
+            brushColors[selectedSixelIndex],
+            (color) => paintWith(() => setMotifSlotColor(selectedSlot, color))(),
+            (c) => `${copy.editor.colours}: ${c}`,
+          )}
+        </div>
+      </div>
+
       {/*
-        * A lifted shape is otherwise invisible state: the motif previews
-        * all show full cells, so a half-filled brush would look identical
-        * to a solid one right up until it painted.
+        * A lifted shape is otherwise invisible state: the motif previews all
+        * show full cells, so a half-filled brush would look identical to a
+        * solid one right up until it painted.
         */}
       {blockPattern !== SIXEL_MAX && (
         <div className="brush-picked-pattern">
@@ -1679,7 +1628,7 @@ export function Editor({
             ))}
           </div>
           <div className="brush-picked-text">
-            <span className="sidebar-field-label">{copy.editor.pickedShape}</span>
+            <span className="rc-sublegend">{copy.editor.pickedShape}</span>
             <button
               type="button"
               className="rc-key rc-key-wide"
@@ -1690,632 +1639,414 @@ export function Editor({
           </div>
         </div>
       )}
-      <div className="color-block">
-        <div className="preset-motifs">
-          {MOTIF_PATTERNS.map((pattern, idx) => {
-            const previewColors =
-              motifColors[idx] ?? defaultColorsForMotif(pattern.slots);
-            return (
-              <button
-                key={pattern.name}
-                type="button"
-                className={`preset-motif-btn ${selectedMotifIndex === idx ? "preset-motif-btn-active" : ""}`}
-                title={pattern.name}
-                onClick={() => selectMotif(idx)}
-                aria-label={`Use ${pattern.name} motif`}
-                aria-pressed={selectedMotifIndex === idx}
-              >
-                <div className="preset-motif-preview">
-                  {([0, 1, 2, 3, 4, 5] as const).map((i) => (
-                    <span
-                      key={i}
-                      className={`preset-motif-dot teletext-bg-${previewColors[i]}`}
-                    />
-                  ))}
-                </div>
-                <span className="preset-motif-name">{pattern.name}</span>
-              </button>
-            );
-          })}
-        </div>
-        <div
-          className="color-block sixel-color-tooltip-ref"
-          ref={sixelColorTooltipRef}
-        >
-          <span className="sidebar-field-label">
-            Click a part to change its color
-          </span>
-          <div
-            className="brush-sixel-preview"
-            ref={brushSixelPreviewRef}
-            aria-hidden
-          >
-            {([0, 1, 2, 3, 4, 5] as const).map((i) => {
-              const slotIndex = selectedMotif.slots[i];
-              const slots = selectedMotif.slots;
-              /* Grid is 2×3 row-major: [0][1] / [2][3] / [4][5]. Right = i+1 when left col; bottom = i+2 when row 0 or 1. */
-              const rightNeighbor = i % 2 === 0 && i < 5 ? i + 1 : null;
-              const bottomNeighbor = i <= 3 ? i + 2 : null;
-              const borderRight =
-                rightNeighbor !== null && slots[i] !== slots[rightNeighbor];
-              const borderBottom =
-                bottomNeighbor !== null &&
-                slots[i] !== slots[bottomNeighbor];
-              return (
-                <button
-                  key={i}
-                  type="button"
-                  className={`brush-sixel-part brush-sixel-part-slot-${slotIndex} teletext-bg-${brushColors[i]} ${borderRight ? "brush-sixel-part-border-r" : ""} ${borderBottom ? "brush-sixel-part-border-b" : ""} ${hoveredSlotIndex === slotIndex ? "brush-sixel-part-hover" : ""} ${selectedSixelIndex === i && colorTooltipOpen ? "brush-sixel-part-active" : ""}`}
-                  title={`Part ${i + 1}`}
-                  onMouseEnter={() => setHoveredSlotIndex(slotIndex)}
-                  onMouseLeave={() => setHoveredSlotIndex(null)}
-                  onClick={(e) => {
-                    const open =
-                      colorTooltipOpen && selectedSixelIndex === i
-                        ? false
-                        : true;
-                    setSelectedSixelIndex(i);
-                    if (open && brushSixelPreviewRef.current) {
-                      const partRect = (
-                        e.currentTarget as HTMLButtonElement
-                      ).getBoundingClientRect();
-                      const previewRect =
-                        brushSixelPreviewRef.current.getBoundingClientRect();
-                      setTooltipAnchor({
-                        part: {
-                          left: partRect.left,
-                          top: partRect.top,
-                          width: partRect.width,
-                          height: partRect.height,
-                        },
-                        preview: {
-                          left: previewRect.left,
-                          top: previewRect.top,
-                          width: previewRect.width,
-                          height: previewRect.height,
-                        },
-                      });
-                    }
-                    setColorTooltipOpen(open);
-                  }}
-                  aria-label={`Part ${i + 1}, ${brushColors[i]}`}
-                  aria-expanded={
-                    selectedSixelIndex === i && colorTooltipOpen
-                  }
-                />
-              );
-            })}
-          </div>
-          {(() => {
-            const clamped = tooltipAnchor
-              ? clampTooltipToViewport(tooltipAnchor)
-              : null;
-            const slotCount = motifSlotCount(selectedMotif.slots);
-            const tooltipLabel =
-              slotCount === 1
-                ? "Color"
-                : SIXEL_PART_NAMES[selectedSixelIndex];
-            return (
-              <div
-                className={`sixel-color-tooltip ${colorTooltipOpen ? "sixel-color-tooltip-open" : ""}`}
-                role="tooltip"
-                aria-hidden={!colorTooltipOpen}
-                style={{
-                  position: "fixed",
-                  left: clamped ? clamped.left : -9999,
-                  top: clamped ? clamped.top : 0,
-                }}
-              >
-                <div
-                  className="sixel-color-tooltip-label"
-                  aria-live="polite"
-                >
-                  {tooltipLabel}
-                </div>
-                <div className="sixel-color-tooltip-swatches">
-                  {TELETEXT_COLORS.map((color) => (
-                    <button
-                      key={color}
-                      type="button"
-                      className={`color-swatch teletext-bg-${color}`}
-                      title={color}
-                      onClick={() => {
-                        const slotIndex =
-                          selectedMotif.slots[selectedSixelIndex];
-                        setMotifSlotColor(slotIndex, color);
-                        setColorTooltipOpen(false);
-                      }}
-                      aria-label={`Set to ${color}`}
-                    />
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-      </div>
-
-    </div>
+    </>
   );
 
-  const pixelOptions = (
-    <div className="brush-options">
-      <div className="color-block">
-        <span className="sidebar-field-label">{copy.editor.pixelColor}</span>
-        <div className="text-preview-swatches text-preview-swatches-4x4">
-          {TELETEXT_COLORS.map((color) => (
-            <button
-              key={color}
-              type="button"
-              className={`color-swatch color-swatch-mini teletext-bg-${color} ${pixelColor === color ? "active" : ""}`}
-              title={`Pixel ${color}`}
-              onClick={() => setPixelColor(color)}
-              aria-label={`Pixel color ${color}`}
-              aria-pressed={pixelColor === color}
-            />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-
-  const recentBrushes =
-    brushChips.length > 0 ? (
-      <div className="color-block brush-history">
-        <span className="sidebar-field-label">{copy.editor.recentBrushes}</span>
-        <div className="brush-history-strip">{brushChips}</div>
-      </div>
-    ) : null;
-
-  /*
-   * What the tool on the open tab needs, and nothing else — the handset's
-   * framing of the three above.
-   *
-   * One cluster rather than one per tool: only one tab is ever open there, so
-   * four of the five would always be empty panel. The tab it is describing is
-   * the one the strip has open, not the one the pointer is holding — those are
-   * the same thing except while the page panel is up, and the page panel
-   * replaces this one outright.
-   */
-  const brushOptionsSection = (
-    <section
-      className="rc-cluster"
-      aria-label={`${BRUSH_KEYS.find((k) => k.mode === brushMode)?.label ?? ""} options`}
-    >
-      {brushMode === "picker" && pickerHint}
-      {brushMode === "block" && blockOptions}
-      {brushMode === "pixel" && pixelOptions}
-      {brushMode === "blink" && blinkHint}
+  const drawOptions = (
+    <>
       {/*
-        * On this panel, remembered brushes live on the Block tab and nowhere
-        * else.
-        *
-        * The strip is a rack of mosaics — that is what a brush is here, a shape
-        * and six colours — and a rack of them under the blink tool or the
-        * eyedropper was a shelf of things those tools cannot use. Pixel brushes
-        * still go into it as they are used, and picking one off it takes you to
-        * the tool it belongs to (see `applyBrush`).
-        *
-        * The toolbar keeps its rack out permanently instead, because there it is
-        * not shelved under a tool: it is a fixture of the strip, and the shelf
-        * argument does not reach it. See `toolbar`.
+        * Paint or erase first, then the size of the brush — two separate
+        * questions, asked separately. Erasing is the same switch as on Blink,
+        * in the same place, so the two tools read the same way.
         */}
-      {brushMode === "block" && recentBrushes}
+      <section className="rc-cluster">
+        {segmented(
+          copy.editor.toolDraw,
+          eraseOn ? "erase" : "paint",
+          [
+            { value: "paint", label: copy.editor.paint, icon: <IconBrush className="rc-key-icon" /> },
+            { value: "erase", label: copy.editor.erase, icon: <IconEraser className="rc-key-icon" /> },
+          ] as const,
+          (value) => setEraseOn(value === "erase"),
+        )}
+      </section>
+
+      <section className="rc-cluster">
+        {clusterHead(copy.editor.size)}
+        {segmented(
+          copy.editor.size,
+          drawSize,
+          [
+            { value: "cell", label: copy.editor.sizeCell, icon: <IconBlock className="rc-key-icon" /> },
+            { value: "pixel", label: copy.editor.sizePixel, icon: <IconPixel className="rc-key-icon" /> },
+          ] as const,
+          (size) => {
+            setDrawSize(size);
+            setPicking(false);
+          },
+        )}
+      </section>
+
+      {/* What the brush is loaded with. Still shown while erasing, dimmed, so
+          the panel does not jump — and choosing from it goes back to painting. */}
+      {drawSize === "cell" && motifCluster}
+
+      <section className={`rc-cluster${eraseOn ? " rc-idle" : ""}`}>
+        {clusterHead(copy.editor.colours, eyedropper)}
+        {drawSize === "cell"
+          ? cellColours
+          : palette(
+              pixelColor,
+              (color) => paintWith(() => setPixelColor(color))(),
+              (c) => `${copy.editor.colours}: ${c}`,
+            )}
+      </section>
+
+      {recentCluster(brushChips, copy.editor.recentBrushes)}
+    </>
+  );
+
+  /* BLINK: on or off, over whatever is already on the page. */
+  const blinkOptions = (
+    <section className="rc-cluster">
+      {segmented(
+        copy.editor.toolBlink,
+        eraseOn ? "off" : "on",
+        [
+          { value: "on", label: copy.editor.blinkOn, icon: <IconBlink className="rc-key-icon" /> },
+          { value: "off", label: copy.editor.blinkOff, icon: <IconEraser className="rc-key-icon" /> },
+        ] as const,
+        (value) => setEraseOn(value === "off"),
+      )}
     </section>
   );
 
-  /*
-   * The keys that do something to the whole page rather than to a cell.
-   *
-   * "Clear page" is the panel's red key — the one colour on it that means stop,
-   * borrowed from the fastext strip for the one control here that cannot be
-   * undone. It asks first, in place, rather than in a dialog over the picture.
-   */
-  const clearConfirm = (
-    <div className="clear-confirm">
-      <span className="clear-confirm-label">{copy.editor.clearConfirm}</span>
-      <div className="rc-keyrow">
-        <button
-          type="button"
-          className="rc-key rc-key-wide rc-key-danger"
-          onClick={() => {
-            clearPage();
-            setClearConfirmShown(false);
-          }}
-        >
-          <span>{copy.editor.clearYes}</span>
-        </button>
-        <button
-          type="button"
-          className="rc-key rc-key-wide"
-          onClick={() => setClearConfirmShown(false)}
-        >
-          <span>{copy.editor.clearNo}</span>
-        </button>
-      </div>
+  const toolOptions =
+    tool === "text" ? textOptions : tool === "draw" ? drawOptions : blinkOptions;
+
+  /* ── the keys that act on the whole page ────────────────────────────────── */
+
+  /** A strip key: a picture on the cap, its name engraved under it. */
+  const capped = (key: ReactNode, caption: string) => (
+    <div className="rc-keycap">
+      {key}
+      <span className="rc-cap" aria-hidden>
+        {caption}
+      </span>
     </div>
   );
 
-  const actionsSection = (
-    <section className="rc-cluster rc-cluster-actions" aria-label={copy.editor.wholePage}>
-      {onBackToGrid != null && (
+  const historyKeys = (
+    <>
+      {capped(
         <button
           type="button"
-          className="rc-key rc-key-wide"
-          onClick={() => {
-            void onBackToGrid();
-          }}
+          className="rc-key rc-key-action"
+          onClick={undo}
+          disabled={!history.canUndo}
+          title={`${copy.editor.undo} (${MOD_KEY}Z)`}
+          aria-label={copy.editor.undo}
         >
-          <IconBack className="rc-key-icon" />
-          <span>{copy.editor.backToGrid}</span>
-        </button>
+          <IconUndo className="rc-key-icon" />
+        </button>,
+        copy.editor.undo,
       )}
+      {capped(
+        <button
+          type="button"
+          className="rc-key rc-key-action"
+          onClick={redo}
+          disabled={!history.canRedo}
+          title={`${copy.editor.redo} (${MOD_KEY}⇧Z)`}
+          aria-label={copy.editor.redo}
+        >
+          <IconRedo className="rc-key-icon" />
+        </button>,
+        copy.editor.redo,
+      )}
+    </>
+  );
+
+  const exportPng = () =>
+    exportPageAsPng(page, `teletext-${pageNumber ?? 100}.png`, pageNumber ?? 100);
+
+  const exportKey = (wide: boolean) => {
+    const key = (
       <button
         type="button"
-        className="rc-key rc-key-wide"
-        onClick={() => exportPageAsPng(page, "teletext.png", pageNumber ?? 100)}
+        className={`rc-key ${wide ? "rc-key-wide" : "rc-key-action"}`}
+        onClick={exportPng}
+        title={copy.editor.exportPng}
+        aria-label={copy.editor.exportPng}
       >
         <IconExport className="rc-key-icon" />
-        <span>Export PNG</span>
+        {wide && <span>{copy.editor.exportKey}</span>}
       </button>
-      {clearConfirmShown ? (
-        clearConfirm
-      ) : (
-        <button
-          type="button"
-          className="rc-key rc-key-wide rc-key-danger"
-          onClick={() => setClearConfirmShown(true)}
-        >
-          <IconTrash className="rc-key-icon" />
-          <span>{copy.editor.clearPage}</span>
-        </button>
-      )}
-    </section>
-  );
-
-  /**
-   * What is under the tab strip, on the handset.
-   *
-   * The page panel, or the open tool's. Exactly one, always — a tab strip whose
-   * tabs can be empty is a strip you learn to distrust.
-   *
-   * The readout heads the page panel, in a cluster of its own: on a handset
-   * there is nowhere for it to be permanently, so it opens with the keypad that
-   * drives it, which is the arrangement the set's own front panel is in. (The
-   * toolbar has room to keep it out at all times, and does.)
-   *
-   * Exporting and clearing ride with the page, because that is what they are
-   * about: they take the whole of it, not the cell the brush is over, and a red
-   * key that wipes the page had no business sitting under the motif picker while
-   * you were choosing a mosaic.
-   */
-  const tabPanel =
-    tab === "page" ? (
-      <>
-        {display != null && <section className="rc-cluster">{display}</section>}
-        {pageControls}
-        {actionsSection}
-      </>
-    ) : tab === "off" ? (
-      textStyleSection
-    ) : (
-      brushOptionsSection
     );
-
-  /** What a tool key pulls out, or nothing if the tool has no settings. */
-  const toolPanel = (mode: BrushMode): import('react').ReactNode =>
-    mode === "off"
-      ? textStyleControls
-      : mode === "block"
-        ? blockOptions
-        : mode === "pixel"
-          ? pixelOptions
-          : null;
+    return wide ? key : capped(key, "PNG");
+  };
 
   /*
-   * The control strip, laid across the top of the desk.
-   *
-   * One row, and it stays one row: the page's own controls at the near end where
-   * a set puts them, the tools next to them with the rack they draw from, and
-   * the two keys that act on the whole page at the far end. Anything that needs
-   * more than a cap — a palette, five motifs, a keypad — hangs off its key as a
-   * drawer, which is what buys the page the rest of the desk.
-   *
-   * Nothing here is hidden behind a tab. The old console could only ever show
-   * one of its six panels, so the readout — the one thing you always want to
-   * know — was behind a key like everything else; on a strip there is room for
-   * the window and both rockers to simply be out, and dialling stops being
-   * somewhere you go.
-   *
-   * The keyboard did not come across. A desk has one already, and the moulded
-   * pad exists because a phone's own keyboard slides up over the page you are
-   * drawing on (see `textPad`) — a problem no monitor has.
+   * Clearing the page asks first — and undo can take it back, too. The cap is
+   * an ordinary one with a red picture on it: red is for the answer that does
+   * it, not for a key that only asks.
    */
-  const toolbar = (
-    <div className="rc-toolbar" ref={toolbarRef} onMouseDown={keepGridFocus}>
-      {brand != null && (
-        <div className="rc-toolbar-group rc-toolbar-nameplate">{brand}</div>
-      )}
+  const clearKey = (wide: boolean) => {
+    const key = (
+      <ConfirmKey
+        className={`rc-key ${wide ? "rc-key-wide" : "rc-key-action"} rc-key-caution`}
+        title={copy.editor.clearPage}
+        question={copy.editor.clearConfirm}
+        yes={copy.editor.clearYes}
+        no={copy.editor.clearNo}
+        onConfirm={clearPage}
+        inline={wide}
+        align="end"
+      >
+        <IconTrash className="rc-key-icon" />
+        {wide && <span>{copy.editor.clearYes}</span>}
+      </ConfirmKey>
+    );
+    return wide ? key : capped(key, copy.editor.clearYes);
+  };
 
-      {(display != null || pageControls != null) && (
-        <div className="rc-toolbar-group" role="group" aria-label={copy.editor.page}>
-          {display}
-          {pageControls != null && (
-            <div className="rc-anchor">
-              {/*
-                * The keypad, behind a key.
-                *
-                * Ten caps is more than a one-row strip can spare for the slowest
-                * way of doing this: the window beside it is focusable and takes
-                * typed digits, which on a desk is how a page actually gets
-                * dialled. What is behind the cap is everything else the page
-                * needs anyway — its title, its carousel — so the drawer is not
-                * a keypad with two strangers in it but the page's own panel,
-                * with the readout lifted out onto the strip.
-                */}
-              <button
-                type="button"
-                className={`rc-key rc-key-square${
-                  openFlyout === "page" ? " rc-key-lit" : ""
-                }`}
-                onClick={pressPageKey}
-                title={copy.editor.pageSetupHint}
-                aria-label={copy.editor.pageSetup}
-                aria-expanded={openFlyout === "page"}
-                aria-controls={FLYOUT_IDS.page}
-              >
-                <IconPage className="rc-key-icon" />
-              </button>
-              <Flyout
-                open={openFlyout === "page"}
-                panelId={FLYOUT_IDS.page}
-                label={copy.editor.pageSetup}
-              >
-                {pageControls}
-              </Flyout>
+  /* ── the page ───────────────────────────────────────────────────────────── */
+
+  const stage = (
+    <main className="rc-stage">
+      {/*
+        * The set the page is drawn on: the same moulded bezel, sunk tube and
+        * badge the page is watched in on /watch, so the two screens are one
+        * appliance. The badge is what tells you so; nothing else about the
+        * frame is decoration.
+        */}
+      <div className="rc-bezel">
+        <div
+          ref={gridRef}
+          className={`teletext-screen-wrapper${
+            brushMode === "picker"
+              ? " picker-cursor"
+              : isBrushActive
+                ? " brush-cursor"
+                : ""
+          }`}
+          tabIndex={0}
+          onFocus={focusHiddenInput}
+          onBlur={handleGridBlur}
+          onMouseLeave={handleGridMouseLeave}
+          role="application"
+          aria-label={copy.editor.grid}
+        >
+          <input
+            ref={hiddenInputRef}
+            type="text"
+            className="editor-hidden-input"
+            aria-hidden
+            tabIndex={-1}
+            /* Keeps the input focusable — and so still fed by a real keyboard —
+               without the system's on-screen one sliding up over the page. The
+               panel's own keyboard is what types here instead; see `textPad`. */
+            inputMode={isNarrow ? "none" : undefined}
+            onKeyDown={handleKeyDown}
+            onInput={handleHiddenInput}
+          />
+          <TeletextGrid
+            page={page}
+            pageNumber={pageNumber ?? 100}
+            subpage={subpage}
+            subpageCount={subpageCount}
+            cursorIndex={isBrushActive ? hoveredCellIndex : cursorIndex}
+            hoverPartIndex={brushMode === "pixel" ? hoveredPartIndex : null}
+            cursorDoubleHeight={brushMode === "off" && doubleHeightOn}
+            onPointerCell={handlePointerCell}
+            onPointerEnd={endStroke}
+            readOnly={false}
+          />
+          {remoteCursors && remoteCursors.length > 0 && (
+            <div
+              className="editor-remote-cursors"
+              aria-hidden
+              style={{
+                position: "absolute",
+                inset: 0,
+                pointerEvents: "none",
+                fontSize: "14px",
+              }}
+            >
+              {remoteCursors.map((rc) => {
+                const { col, row } = rowColFromIndex(rc.index);
+                const color = resolveCursorColor(rc.color);
+                return (
+                  <div
+                    key={`${rc.name}-${rc.index}`}
+                    className="editor-remote-cursor"
+                    style={{
+                      position: "absolute",
+                      left: `calc(14px + ${col} * 1em)`,
+                      top: `calc(14px + ${row} * 1.35em)`,
+                      width: "1em",
+                      height: "1.35em",
+                      outline: `2px solid ${color}`,
+                      outlineOffset: "-2px",
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    <span
+                      className="editor-remote-cursor-label"
+                      style={{
+                        position: "absolute",
+                        top: "-1em",
+                        left: 0,
+                        fontSize: "0.5em",
+                        lineHeight: 1,
+                        background: color,
+                        color: "#000",
+                        padding: "1px 2px",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {rc.name}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
-      )}
-
-      <div className="rc-toolbar-group rc-toolbar-tools" role="group" aria-label={copy.editor.tools}>
-        {BRUSH_KEYS.map(({ mode, label, title, Icon }) => {
-          const panel = toolPanel(mode);
-          const shown = openFlyout === mode;
-          return (
-            <div className="rc-anchor" key={mode}>
-              <button
-                type="button"
-                className={`rc-key rc-key-tool${
-                  brushMode === mode ? " rc-key-lit" : ""
-                }`}
-                onClick={() => pressToolKey(mode)}
-                title={toolWord(copy, title)}
-                aria-pressed={brushMode === mode}
-                aria-expanded={panel != null ? shown : undefined}
-                aria-controls={panel != null ? FLYOUT_IDS[mode] : undefined}
-              >
-                <Icon className="rc-key-icon" />
-                <span className="rc-key-label">{toolWord(copy, label)}</span>
-              </button>
-              {panel != null && (
-                <Flyout
-                  open={shown}
-                  panelId={FLYOUT_IDS[mode]}
-                  label={toolWord(copy, label)}
-                >
-                  {panel}
-                </Flyout>
-              )}
-            </div>
-          );
-        })}
-
-        {/*
-          * The rack, out on the strip beside the tools that fill it.
-          *
-          * Whichever rack the tool in hand can use: the styles you have typed
-          * with while the cursor is up, the brushes you have painted with while
-          * one is. It is left standing when there is nothing in it yet, because
-          * a rack that appears the first time you use a colour would move every
-          * key to its right at the moment you were least expecting it.
-          */}
-        <div
-          className="rc-toolbar-rack"
-          role="group"
-          aria-label={isBrushActive ? copy.editor.recentBrushes : copy.editor.recentTextStyles}
-        >
-          <div className="brush-history-strip">
-            {isBrushActive ? brushChips : textStyleChips}
-          </div>
-          <span className="rc-cap">{copy.editor.recent}</span>
-        </div>
+        <span className="rc-nameplate" aria-hidden>
+          Teletextron
+        </span>
       </div>
-
-      <div
-        className="rc-toolbar-group rc-toolbar-actions"
-        role="group"
-        aria-label={copy.editor.wholePage}
-      >
-        {onBackToGrid != null && (
-          <button
-            type="button"
-            className="rc-key rc-key-square"
-            onClick={() => {
-              void onBackToGrid();
-            }}
-            title={copy.editor.backToGrid}
-            aria-label={copy.editor.backToGrid}
-          >
-            <IconBack className="rc-key-icon" />
-          </button>
-        )}
-        <button
-          type="button"
-          className="rc-key rc-key-square"
-          onClick={() => exportPageAsPng(page, "teletext.png", pageNumber ?? 100)}
-          title={copy.editor.exportPng}
-          aria-label={copy.editor.exportKey}
-        >
-          <IconExport className="rc-key-icon" />
-        </button>
-        <div className="rc-anchor">
-          {/* The one red key on the strip, and the one that asks first. */}
-          <button
-            type="button"
-            className="rc-key rc-key-square rc-key-danger"
-            onClick={pressClearKey}
-            title={copy.editor.clearPage}
-            aria-label={copy.editor.clearPage}
-            aria-expanded={clearConfirmShown}
-            aria-controls={CLEAR_FLYOUT_ID}
-          >
-            <IconTrash className="rc-key-icon" />
-          </button>
-          <Flyout
-            open={clearConfirmShown}
-            panelId={CLEAR_FLYOUT_ID}
-            label={copy.editor.clearPage}
-            align="end"
-          >
-            {clearConfirm}
-          </Flyout>
-        </div>
-      </div>
-    </div>
+    </main>
   );
 
-  const grid = (
-    <div className="editor-main">
-      <div
-        ref={gridRef}
-        className={`teletext-screen-wrapper${
-          brushMode === "picker"
-            ? " picker-cursor"
-            : isBrushActive
-              ? " brush-cursor"
-              : ""
-        }`}
-        tabIndex={0}
-        onFocus={focusHiddenInput}
-        onBlur={handleGridBlur}
-        onMouseLeave={handleGridMouseLeave}
-        role="application"
-        aria-label={copy.editor.grid}
-      >
-        <input
-          ref={hiddenInputRef}
-          type="text"
-          className="editor-hidden-input"
-          aria-hidden
-          tabIndex={-1}
-          /* Keeps the input focusable — and so still fed by a real keyboard —
-             without the system's on-screen one sliding up over the page. The
-             console's own keyboard is what types here instead; see `textPad`. */
-          inputMode={isNarrow ? "none" : undefined}
-          onKeyDown={handleKeyDown}
-          onInput={handleHiddenInput}
-        />
-        <TeletextGrid
-          page={page}
-          pageNumber={pageNumber ?? 100}
-          subpage={subpage}
-          subpageCount={subpageCount}
-          cursorIndex={isBrushActive ? hoveredCellIndex : cursorIndex}
-          hoverPartIndex={brushMode === "pixel" ? hoveredPartIndex : null}
-          cursorDoubleHeight={brushMode === "off" && doubleHeightOn}
-          onPointerCell={handlePointerCell}
-          onPointerEnd={endStroke}
-          readOnly={false}
-        />
-        {remoteCursors && remoteCursors.length > 0 && (
-          <div
-            className="editor-remote-cursors"
-            aria-hidden
-            style={{
-              position: "absolute",
-              inset: 0,
-              pointerEvents: "none",
-              fontSize: "14px",
-            }}
-          >
-            {remoteCursors.map((rc) => {
-              const { col, row } = rowColFromIndex(rc.index);
-              const color = resolveCursorColor(rc.color);
-              return (
-                <div
-                  key={`${rc.name}-${rc.index}`}
-                  className="editor-remote-cursor"
-                  style={{
-                    position: "absolute",
-                    left: `calc(14px + ${col} * 1em)`,
-                    top: `calc(14px + ${row} * 1.35em)`,
-                    width: "1em",
-                    height: "1.35em",
-                    outline: `2px solid ${color}`,
-                    outlineOffset: "-2px",
-                    boxSizing: "border-box",
-                  }}
-                >
-                  <span
-                    className="editor-remote-cursor-label"
-                    style={{
-                      position: "absolute",
-                      top: "-1em",
-                      left: 0,
-                      fontSize: "0.5em",
-                      lineHeight: 1,
-                      background: color,
-                      color: "#000",
-                      padding: "1px 2px",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {rc.name}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  /* ── the phone ──────────────────────────────────────────────────────────── */
 
   if (isNarrow) {
     return (
-      <div className="editor-layout editor-layout-narrow editor-console">
-        {/* The page, with nothing competing for the screen. */}
-        {grid}
+      <div className="editor-console rc-layout rc-layout-narrow">
+        {/*
+          * The strip, cut down to what a thumb reaches for between strokes:
+          * which page this is, the rockers off it, undo, and the sheet with
+          * everything else about the page.
+          */}
+        <header className="rc-strip rc-strip-narrow" onMouseDown={keepGridFocus}>
+          {nameplate}
+          {pageDisplay?.(sheet)}
+          <div className="rc-strip-actions">
+            {historyKeys}
+            <button
+              type="button"
+              className="rc-key rc-key-square"
+              onClick={openSheet}
+              aria-haspopup="dialog"
+              aria-expanded={sheetShown}
+              title={copy.editor.pageSetupHint}
+              aria-label={copy.editor.pageSetupHint}
+            >
+              <IconPage className="rc-key-icon" />
+            </button>
+          </div>
+        </header>
+        {alert}
+
+        {stage}
 
         {/*
-          * The handset.
-          *
-          * One body holding the whole panel, not a strip of brushes with the
-          * rest hidden behind a button: a phone is taller than a teletext page
-          * is, and the room left under the picture is enough for the controls
-          * to simply be there. What used to be a sheet you pulled up over your
-          * own work is now the lower half of the thing you are holding.
-          *
-          * The tab strip is its head and stays put while the rest scrolls —
-          * choosing a tool is most of what editing is, and a tool you have to
-          * scroll to is a tool you stop using.
+          * The handset: the tool in hand's settings, the keyboard when typing,
+          * and the tool keys along the foot where a thumb rests. The keys and
+          * the keyboard stay put; only the settings above them scroll.
           */}
-        <div className="rc-handset">
-          <div className="rc-handset-head">{tabs}</div>
-          <div className="rc-handset-body">{tabPanel}</div>
+        <div className="rc-dock" onMouseDown={keepGridFocus}>
+          <div className="rc-dock-options">
+            {help}
+            {toolOptions}
+          </div>
+          {tool === "text" && <div className="rc-dock-keyboard">{textPad}</div>}
+          <nav className="rc-dock-tools">{toolKeys}</nav>
         </div>
+
+        {sheetShown && (
+          <div
+            className="rc-sheet-backdrop"
+            // A click rather than a pointerdown: closing on the way down would
+            // hand the way up to whatever is under the backdrop — the page.
+            onClick={(event) => {
+              if (event.target === event.currentTarget) closeSheet();
+            }}
+          >
+            <div
+              className="rc-sheet"
+              role="dialog"
+              aria-modal="true"
+              aria-label={copy.editor.pageSetup}
+              onMouseDown={keepGridFocus}
+            >
+              <div className="rc-sheet-head">
+                <h2 className="rc-legend">{copy.editor.pageSetup}</h2>
+                <button
+                  type="button"
+                  className="rc-key rc-key-square"
+                  onClick={closeSheet}
+                  aria-label={copy.editor.close}
+                >
+                  <span aria-hidden>✕</span>
+                </button>
+              </div>
+              <div className="rc-sheet-body">
+                {pageKeypad != null && (
+                  <section className="rc-cluster">{pageKeypad(sheet)}</section>
+                )}
+                {pageDetails != null && (
+                  <section className="rc-cluster">{pageDetails}</section>
+                )}
+                <section className="rc-cluster">
+                  <div className="rc-keyrow">
+                    {exportKey(true)}
+                    {clearKey(true)}
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
-  return (
-    <div className="editor-layout editor-layout-bar editor-console">
-      {toolbar}
+  /* ── the desk ───────────────────────────────────────────────────────────── */
 
-      {/* Nothing between the strip and the page. The whole point of the strip is
-          that the desk below it belongs to the picture. */}
-      {grid}
+  return (
+    <div className="editor-console rc-layout">
+      <header className="rc-strip" onMouseDown={keepGridFocus}>
+        {nameplate != null && (
+          <div className="rc-strip-group rc-strip-nameplate">{nameplate}</div>
+        )}
+        {pageDisplay != null && (
+          <div className="rc-strip-group" role="group" aria-label={copy.editor.page}>
+            {pageDisplay(sheet)}
+          </div>
+        )}
+        {pageDetails != null && (
+          <div className="rc-strip-group rc-strip-details">{pageDetails}</div>
+        )}
+        <div
+          className="rc-strip-group rc-strip-actions"
+          role="group"
+          aria-label={copy.editor.wholePage}
+        >
+          {historyKeys}
+          {exportKey(false)}
+          {clearKey(false)}
+        </div>
+      </header>
+      {alert}
+
+      <div className="rc-desk">
+        {/* The remote: the tool keys, then everything about the tool in hand. */}
+        <aside
+          className="rc-remote"
+          onMouseDown={keepGridFocus}
+          aria-label={copy.editor.tools}
+        >
+          <section className="rc-cluster rc-cluster-tools">
+            {toolKeys}
+            {help}
+          </section>
+          {toolOptions}
+        </aside>
+        {stage}
+      </div>
     </div>
   );
 }
