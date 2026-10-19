@@ -34,7 +34,7 @@ describe('useExhibitMode, locked', () => {
 
     press('ColorF1Green');
     press('F4');
-    expect(onPageSelect.mock.calls).toEqual([[200], [400]]);
+    expect(onPageSelect.mock.calls).toEqual([[101], [700]]);
 
     press('2');
     press('4');

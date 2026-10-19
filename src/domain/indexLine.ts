@@ -25,11 +25,17 @@ export interface IndexLineItem {
   page: number;
 }
 
+/**
+ * Pages that exist here, not the broadcast's sections: the archive was
+ * renumbered on import, so a classic TV GUIDE on 200 lands on whatever the dial
+ * carries on to. Expo 98 is the archive's most complete self-contained service,
+ * with its own index. Each label must fit its ten-column zone.
+ */
 export const INDEX_LINE: IndexLineItem[] = [
-  { label: 'INDEX', fg: 'red', page: 100 },
-  { label: 'TV GUIDE', fg: 'green', page: 200 },
-  { label: 'WORLD', fg: 'yellow', page: 300 },
-  { label: 'FINANCE', fg: 'cyan', page: 400 },
+  { label: 'TUTORIAL', fg: 'red', page: 100 },
+  { label: 'INDEX', fg: 'green', page: 101 },
+  { label: 'EXPO 98', fg: 'yellow', page: 102 },
+  { label: 'PLAYGROUND', fg: 'cyan', page: 700 },
 ];
 
 export interface IndexLineRange {

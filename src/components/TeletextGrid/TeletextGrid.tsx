@@ -720,7 +720,7 @@ export function TeletextGrid({
             onPageNumberClick={onPageNumberClick}
           />
         ))}
-        {/* Extra row 25: index line (INDEX / TV GUIDE / WORLD / FINANCE) when in view mode */}
+        {/* Extra row 25: index line (see INDEX_LINE) when in view mode */}
         {showIndexLine &&
           Array.from({ length: COLS }, (_, col) => {
             let displayChar = '\u00a0';

@@ -22,6 +22,7 @@ import {
   sixelBit,
   TELETEXT_COLOR_HEX,
 } from '../types/teletext';
+import { INDEX_LINE_RANGES } from '../domain/indexLine';
 import { formatSubpageIndicator } from '../domain/subpages';
 
 // Widened to a plain string index so callers here (which look colors up by
@@ -70,13 +71,6 @@ function formatHeaderDateTime(d: Date): string {
 function formatPageNumber(n: number): string {
   return String(n).padStart(3).slice(-3);
 }
-
-const INDEX_LINE_RANGES: { start: number; end: number; label: string; fg: string }[] = [
-  { label: 'INDEX', fg: 'red', start: 2, end: 7 },
-  { label: 'TV GUIDE', fg: 'green', start: 10, end: 19 },
-  { label: 'WORLD', fg: 'yellow', start: 22, end: 27 },
-  { label: 'FINANCE', fg: 'cyan', start: 31, end: 38 },
-];
 
 function drawSixel(
   ctx: CanvasRenderingContext2D,
@@ -247,8 +241,8 @@ export function drawPage(
         }
       } else if (row === rows - 1 && showIndexLine) {
         const hit = INDEX_LINE_RANGES.find((r) => col >= r.start && col < r.end);
-        char = hit == null ? ' ' : hit.label[col - hit.start];
-        if (hit != null) fg = COLOR_HEX[hit.fg] ?? fg;
+        char = hit == null ? ' ' : hit.item.label[col - hit.start];
+        if (hit != null) fg = COLOR_HEX[hit.item.fg] ?? fg;
         isHeaderOverlay = true;
       }
 
