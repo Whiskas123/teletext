@@ -119,3 +119,49 @@ export function presenceCount(members: readonly unknown[] | null | undefined): n
   }
   return Math.min(length, ROOM_MAX_MEMBERS);
 }
+
+/** A stable palette color for a member id, so the same member keeps one color. */
+export function colorForMember(memberId: string): TeletextColor | string {
+  let hash = 0;
+  for (let i = 0; i < memberId.length; i++) {
+    hash = (hash * 31 + memberId.charCodeAt(i)) >>> 0;
+  }
+  return assignColor(hash);
+}
+
+/** A member as the presence list shows them. */
+export interface PresentMember {
+  memberId: string;
+  name: string;
+  color: TeletextColor | string;
+}
+
+/**
+ * The members present in a room, from what each connected client publishes on
+ * the room's presence channel.
+ *
+ * Every client connected anywhere on the site is offered, so most entries are
+ * absent: those clients are elsewhere, not in this room. An entry with no
+ * member id is skipped, a bad name or color is replaced by the member's
+ * default, and duplicates collapse by member id. When given, `me` is always
+ * present and authoritative for its own Identity, even before the server has
+ * echoed it back.
+ */
+export function membersFromPresence(
+  entries: Iterable<unknown>,
+  me?: PresentMember,
+): PresentMember[] {
+  const byId = new Map<string, PresentMember>();
+  for (const entry of entries) {
+    if (entry == null || typeof entry !== 'object') continue;
+    const { memberId, name, color } = entry as Record<string, unknown>;
+    if (typeof memberId !== 'string' || memberId === '') continue;
+    byId.set(memberId, {
+      memberId,
+      name: validateDisplayName(name) ? (name as string) : defaultDisplayName(memberId),
+      color: typeof color === 'string' ? color : colorForMember(memberId),
+    });
+  }
+  if (me) byId.set(me.memberId, me);
+  return Array.from(byId.values());
+}

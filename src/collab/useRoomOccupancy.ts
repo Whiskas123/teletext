@@ -2,40 +2,28 @@
  * useRoomOccupancy — read-only snapshot of how many members are present in
  * each of the given room IDs, for display on the landing page.
  *
- * Reads the `presence:${roomId}` shared-state channels (the same maps written
- * by {@link usePresence}) and counts entries whose `lastSeen` is recent (within
- * STALE_MS). No writes are made; this is purely observational.
+ * Reads the same presence channels {@link usePresence} publishes on, counting
+ * the clients that are in each room. Nothing is published from here, so the
+ * visitor on the landing page is not counted in any room.
  */
 
 import { useMemo } from 'react';
-import { usePageData } from '@playhtml/react';
+import { usePresence as usePlayPresence } from '@playhtml/react';
 
-/** Mirror of the staleness threshold used by usePresence. */
-const STALE_MS = 8000;
-
-interface PresenceEntry {
-  memberId: string;
-  lastSeen: number;
-}
-
-type PresenceData = Record<string, PresenceEntry>;
-
-/** Count non-stale entries in a presence map snapshot. */
-function countActive(data: PresenceData | null | undefined): number {
-  if (!data) return 0;
-  const now = Date.now();
-  return Object.values(data).filter(
-    (e) => e && typeof e.lastSeen === 'number' && now - e.lastSeen <= STALE_MS,
-  ).length;
-}
+import { membersFromPresence } from '../domain/identity';
+import { presenceChannel } from './usePresence';
 
 /**
  * Hook for a single room's occupancy count.
  * Returns the number of members currently present (0 when empty or loading).
  */
 function useRoomCount(roomId: string): number {
-  const [data] = usePageData<PresenceData>(`presence:${roomId}`, {});
-  return useMemo(() => countActive(data), [data]);
+  const channel = presenceChannel(roomId);
+  const { presences } = usePlayPresence<Record<string, unknown>>(channel);
+  return useMemo(
+    () => membersFromPresence(Array.from(presences.values(), (view) => view[channel])).length,
+    [presences, channel],
+  );
 }
 
 /**

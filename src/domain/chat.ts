@@ -19,6 +19,15 @@ const MIN_MESSAGE_LENGTH = 1;
 const MAX_MESSAGE_LENGTH = 500;
 
 /**
+ * How many messages a room keeps; older ones are removed as new ones arrive.
+ *
+ * The chat lives in the playhtml document every visitor downloads on connect,
+ * so an uncapped chat grows that document for good. Removing a message frees
+ * most of what it took, and 200 is several sessions of scrollback.
+ */
+export const MAX_CHAT_MESSAGES = 200;
+
+/**
  * Result of validating a candidate chat message.
  *
  * On success, `value` is the trimmed message text (1..500 characters). On

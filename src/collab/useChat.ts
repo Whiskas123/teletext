@@ -21,7 +21,7 @@
 import { useCallback, useMemo } from 'react';
 import { usePageData } from '@playhtml/react';
 
-import { validateChatMessage } from '../domain/chat';
+import { MAX_CHAT_MESSAGES, validateChatMessage } from '../domain/chat';
 import { assignColor, defaultDisplayName } from '../domain/identity';
 import { getSessionMemberId, getStoredDisplayName } from './session';
 import { useRoomId } from './RoomContext';
@@ -120,9 +120,14 @@ export function useChat(): ChatApi {
       // whole array would try to re-insert already-integrated Yjs objects and
       // throw on the second send; pushing a single plain object is the correct,
       // merge-friendly mutation (Req 5.3, 5.4). Order is guaranteed on read.
+      //
+      // Then drop the oldest past the cap, in the same transaction. Two members
+      // trimming at once delete the same items, which Yjs merges.
       setData((draft) => {
         if (!Array.isArray(draft.messages)) draft.messages = [];
         draft.messages.push(message);
+        const excess = draft.messages.length - MAX_CHAT_MESSAGES;
+        if (excess > 0) draft.messages.splice(0, excess);
       });
 
       return 'ok';
