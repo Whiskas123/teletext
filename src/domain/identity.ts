@@ -130,11 +130,11 @@ export function colorForMember(memberId: string): TeletextColor | string {
 }
 
 /** A member as the presence list shows them. */
-export interface PresentMember {
+export type PresentMember = {
   memberId: string;
   name: string;
   color: TeletextColor | string;
-}
+};
 
 /**
  * The members present in a room, from what each connected client publishes on

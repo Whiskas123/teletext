@@ -10,7 +10,7 @@
 import { useMemo } from 'react';
 import { usePresence as usePlayPresence } from '@playhtml/react';
 
-import { membersFromPresence } from '../domain/identity';
+import { membersFromPresence, type PresentMember } from '../domain/identity';
 import { presenceChannel } from './usePresence';
 
 /**
@@ -19,7 +19,7 @@ import { presenceChannel } from './usePresence';
  */
 function useRoomCount(roomId: string): number {
   const channel = presenceChannel(roomId);
-  const { presences } = usePlayPresence<Record<string, unknown>>(channel);
+  const { presences } = usePlayPresence<string, PresentMember>(channel);
   return useMemo(
     () => membersFromPresence(Array.from(presences.values(), (view) => view[channel])).length,
     [presences, channel],

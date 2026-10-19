@@ -4,10 +4,9 @@
  *
  * Each member publishes `{ memberId, name, color }` on the room's
  * `presence:${roomId}` channel, and the members list is everyone publishing
- * there. This is Yjs awareness, not the shared document: it is relayed to the
- * other clients and never stored. The server drops a client's entry when its
- * connection closes, and a client that stops renewing it (y-protocols renews
- * every 15 s) is dropped after 30 s.
+ * there. This is playhtml's presence, not the shared document: the server
+ * relays it to the other clients and never stores it, playhtml republishes it
+ * while the tab is open, and drops it when the connection closes or goes stale.
  *
  * ## Why not the shared document any more
  *
@@ -17,8 +16,8 @@
  * document every visitor downloads. The first room crashed playhtml's server at
  * ~8 MB (see `GlobalProvider.tsx`); presence was the fastest-growing part left.
  *
- * Awareness used to need cursors switched on. In playhtml 2.13.1 presence falls
- * back to the main connection when cursors are off, which is how this app runs.
+ * playhtml's presence used to need cursors switched on. Since 2.13 it works
+ * with cursors off, which is how this app runs.
  *
  * ## One entry per browser, not per tab
  *
@@ -55,12 +54,6 @@ import { useRoomId } from './RoomContext';
 export const presenceChannel = (roomId: string): string => `presence:${roomId}`;
 
 /**
- * playhtml hands each client's channels back under their names, so a view's
- * value for this room is `view[presenceChannel(roomId)]`.
- */
-type PresenceChannels = Record<string, PresentMember | undefined>;
-
-/**
  * A member's public Identity as surfaced to the UI.
  */
 export type MemberIdentity = PresentMember;
@@ -89,7 +82,7 @@ export function usePresence(): PresenceApi {
   const roomId = useRoomId();
   const channel = presenceChannel(roomId);
   const { isLoading } = usePlayContext();
-  const { presences, setMyPresence } = usePlayPresence<PresenceChannels>(channel);
+  const { presences, setMyPresence } = usePlayPresence<string, PresentMember>(channel);
 
   const memberId = useMemo(() => getSessionMemberId(), []);
   const color = useMemo(() => colorForMember(memberId), [memberId]);
@@ -111,14 +104,15 @@ export function usePresence(): PresenceApi {
   // playhtml has connected; before that it warns and drops the value.
   useEffect(() => {
     if (isLoading) return;
-    setMyPresence(me as unknown as PresenceChannels);
+    setMyPresence(me);
   }, [isLoading, setMyPresence, me]);
 
   // Leave the room's channel on unmount or on moving to another room (the
   // setter is per channel). A closed tab needs nothing: the server drops it.
   useEffect(() => {
     if (isLoading) return;
-    return () => setMyPresence(null as unknown as PresenceChannels);
+    // playhtml clears the channel on null, though its type only admits a value.
+    return () => setMyPresence(null as unknown as PresentMember);
   }, [isLoading, setMyPresence]);
 
   const members = useMemo(

@@ -169,7 +169,7 @@ The playhtml channels:
 | `room-sync:<roomId>` | per room | the page the room is watching |
 | `chat:<roomId>` | per room | the room's last 200 messages; older ones are removed as new ones arrive |
 | `vote:<roomId>` | per room | the active change request and its votes |
-| `presence:<roomId>` | per room | who is in the room. Not stored in the document: playhtml's presence (Yjs awareness), dropped when a client disconnects. Two tabs of one browser count as one member |
+| `presence:<roomId>` | per room | who is in the room. Not stored in the document: playhtml's presence, relayed by its server and dropped when a client disconnects. Two tabs of one browser count as one member |
 
 Decision logic lives in `src/domain/` — framework-free and covered by ~20 [fast-check](https://fast-check.dev) property tests (page normalization and navigation, vote tallying/eligibility/resolution, chat append ordering, CRDT convergence). The `src/collab/` hooks only bind that logic to playhtml; `src/components/` renders it.
 
