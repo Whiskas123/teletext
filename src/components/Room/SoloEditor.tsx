@@ -33,11 +33,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Link } from './LocalizedLink';
 
+import { useConnection } from '../../collab/useConnection';
 import { useEditPage } from '../../collab/useEditPage';
 import { usePageTitles } from '../../collab/useGuide';
 import { useIsModerator } from '../../collab/useIsModerator';
+import { useOccupiedPages } from '../../collab/useOccupiedPages';
 import { useSubpages } from '../../collab/useSubpages';
-import { canEditPage, PLAYGROUND_MIN_PAGE } from '../../domain/access';
+import {
+  canEditPage,
+  firstFreePlaygroundPage,
+  PLAYGROUND_MIN_PAGE,
+} from '../../domain/access';
 import { MAX_PAGE, MIN_PAGE } from '../../domain/pageOps';
 import {
   MAX_SUBPAGE,
@@ -96,6 +102,27 @@ export function SoloEditor() {
     resolveInitialPageNumber(params.pageNumber, isModerator),
   );
   const [pageError, setPageError] = useState<string | null>(null);
+
+  // A bare `/edit` — typed, linked, or followed from the playground's own intro
+  // on 700, which tells people to go there — opens on the first free page, as
+  // the landing's `criar` does; otherwise it opens on that intro. Decided once,
+  // when the playground has arrived: `connected` comes a render before the
+  // pages do, and writes are refused until it, so nothing typed on 700 first
+  // is left behind. An empty playground never arrives, so writing anything
+  // settles it too — 700 was free, and moving off it would strand the stroke.
+  const { status } = useConnection();
+  const occupiedPages = useOccupiedPages();
+  const placedRef = useRef(
+    isModerator || canEditPage(parseInt(params.pageNumber ?? '', 10), isModerator),
+  );
+  useEffect(() => {
+    if (placedRef.current || status !== 'connected') return;
+    if (!occupiedPages.some((n) => n >= PLAYGROUND_MIN_PAGE)) return;
+    placedRef.current = true;
+    const free = firstFreePlaygroundPage(occupiedPages);
+    // Only from where it opened: a page dialled while syncing was a choice.
+    if (free != null) setPageNumber((current) => (current === PLAYGROUND_MIN_PAGE ? free : current));
+  }, [status, occupiedPages]);
 
   // Which screen of the page's carousel is being edited. Held as a request and
   // clamped on read, so a page losing a subpage under a second editor moves
@@ -288,6 +315,7 @@ export function SoloEditor() {
 
   const handleEditCell = useCallback(
     (index: number, cell: Parameters<typeof editCell>[1]) => {
+      placedRef.current = true;
       editCell(index, cell);
     },
     [editCell],
