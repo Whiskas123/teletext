@@ -14,6 +14,7 @@
  */
 
 import { isConfigured, db } from '../api/_lib/db';
+import { isArchivePage } from '../src/domain/access';
 import { LiveDocumentError, readLiveDocument, roomName } from '../api/_lib/liveDocument';
 import { claimedPages, liveScreens, planMirror } from '../src/domain/liveMirror';
 import { SITE_URL } from '../src/domain/seo';
@@ -41,7 +42,9 @@ try {
       throw error;
     });
     const copy = new Map(rows.map((row) => [`${row.page_number}.${row.subpage}`, (row.digest as string | null) ?? null]));
-    const plan = planMirror(screens, copy, { maxRemovals: Infinity });
+    // Playground only, as the daily job compares: curated pages (100..699)
+    // live in the database alone, so their absence here is not a deletion.
+    const plan = planMirror(screens, copy, { maxRemovals: Infinity, scope: (page) => !isArchivePage(page) });
     console.log(`  database copy: ${copy.size} screens`);
     console.log(`    ${plan.upserts.length} to write (new or changed) — what the daily job would store`);
     console.log(`    ${plan.removed.length} pages gone from the service, ${plan.truncate.length} carousels shorter — left for the moderator mirror`);
