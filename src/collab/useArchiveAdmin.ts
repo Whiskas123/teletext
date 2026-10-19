@@ -320,12 +320,15 @@ export interface ArchiveAdminApi {
   /** The old publication table, while it still has records to move in. */
   legacy: LegacyRecords;
   /**
-   * Playground screens (700+) the database's copy holds and the live document
-   * does not have at all — what a move to a new, empty playhtml room leaves.
-   * Zero otherwise, including until playhtml has synced.
+   * Playground screens (700+) the database's copy holds for pages the live
+   * document does not have — what a move to a new, empty playhtml room leaves.
+   * Zero once every backed-up page is on air, and until playhtml has synced.
    */
   playgroundToRestore: number;
-  /** Write those screens, with their titles and the rest, into the live document. */
+  /**
+   * Write those pages, with their titles and the rest, into the live document.
+   * A page the live document already has is left alone.
+   */
   restorePlayground(): Result;
 }
 
@@ -1146,19 +1149,35 @@ export function useArchiveAdmin({
   /* --- after a move to a new room ------------------------------------------ */
 
   const boot = useSyncExternalStore(subscribeBoot, getBoot, getBoot);
-  const backupPlayground = useMemo(
-    () => pickStore(boot?.pages as Record<string, unknown> | undefined, false),
-    [boot],
+  /**
+   * Backed-up playground entries of one channel, for pages not on air.
+   *
+   * Page by page rather than "only when the playground is empty": a visitor
+   * creating a page in the new room takes the lowest free number, and the
+   * moment one did, an all-or-nothing restore would have been withheld for
+   * every other page — while each new page went on to overwrite the backup of
+   * the one that used to have its number.
+   */
+  const missingPlayground = useCallback(
+    (record: unknown): Record<string, unknown> => {
+      const entries = pickStore(record as Record<string, unknown> | undefined, false);
+      return Object.fromEntries(
+        Object.entries(entries).filter(([key]) => {
+          const page = parsePageKey(key)?.pageNumber;
+          return page != null && !occupiedSet.has(page);
+        }),
+      );
+    },
+    [occupiedSet],
   );
-  const playgroundOnAir = occupiedPages.some((page) => page >= PLAYGROUND_MIN_PAGE);
-  const playgroundToRestore =
-    liveSynced && !playgroundOnAir ? Object.keys(backupPlayground).length : 0;
+  const backupPlayground = useMemo(() => missingPlayground(boot?.pages), [missingPlayground, boot]);
+  const playgroundToRestore = liveSynced ? Object.keys(backupPlayground).length : 0;
 
   const restorePlayground = useCallback((): Result => {
     const refused = refuse([PLAYGROUND_MIN_PAGE]);
     if (refused != null) return refused;
     if (boot == null) return { ok: false, error: 'The backup has not loaded yet.' };
-    const playground = (record: unknown) => pickStore(record as Record<string, unknown> | undefined, false);
+    const playground = missingPlayground;
     // Screens in pieces small enough for playhtml's server, as every bulk write.
     for (const write of orderedWrites(changedEntries(backupPlayground, livePages as Record<string, unknown>))) {
       setPages((draft) => {
@@ -1179,6 +1198,7 @@ export function useArchiveAdmin({
   }, [
     refuse,
     boot,
+    missingPlayground,
     backupPlayground,
     livePages,
     liveSources,

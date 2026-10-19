@@ -155,8 +155,8 @@ export function ManageWorkspace({ deps, tab, query }: ManageWorkspaceProps) {
 
       {data.playgroundToRestore > 0 && (
         <div className="mg-banner mg-host-banner" role="status">
-          The playground (700+) is empty here, but the backup holds {data.playgroundToRestore} of its
-          screens — what a move to a new playhtml room leaves behind.
+          The backup holds {data.playgroundToRestore} playground screens (700+) for pages the live
+          document does not have — what a move to a new playhtml room leaves behind.
           <button
             type="button"
             className="mg-btn mg-btn-small"
@@ -166,8 +166,8 @@ export function ManageWorkspace({ deps, tab, query }: ManageWorkspaceProps) {
                 confirmLabel: `Restore ${data.playgroundToRestore} screens`,
                 body: (
                   <p>
-                    Writes the playground screens the database holds into the live document, with their titles,
-                    roles and descriptions. Curated pages are not touched.
+                    Writes the backed-up playground pages that are missing into the live document, with their
+                    titles, roles and descriptions. Pages already on air, and curated pages, are not touched.
                   </p>
                 ),
                 onConfirm: () => void data.restorePlayground(),
