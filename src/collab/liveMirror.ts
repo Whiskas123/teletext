@@ -78,6 +78,8 @@ export interface MirrorStatus {
     ranAt: string;
     ok: boolean;
     detail: string | null;
+    /** When a daily read last worked, so a failure can say how long it has lasted. */
+    lastOkAt: string | null;
     /** No run for over a day and a half: the job has stopped, whatever the last one said. */
     stale: boolean;
   } | null;
@@ -99,7 +101,12 @@ async function loadDailyStatus() {
     const response = await fetch('/api/snapshot', { credentials: 'same-origin' });
     if (!response.ok) return;
     const body = (await response.json()) as {
-      daily?: { ran_at: string; ok: boolean; detail: string | null } | null;
+      daily?: {
+        ran_at: string;
+        ok: boolean;
+        detail: string | null;
+        last_ok_at?: string | null;
+      } | null;
     };
     const run = body.daily;
     setStatus({
@@ -110,6 +117,7 @@ async function loadDailyStatus() {
               ranAt: run.ran_at,
               ok: run.ok,
               detail: run.detail,
+              lastOkAt: run.last_ok_at ?? null,
               stale: Date.now() - Date.parse(run.ran_at) > 36 * 60 * 60 * 1000,
             },
     });

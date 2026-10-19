@@ -68,6 +68,8 @@ export interface PagesTabProps {
   query: ArchiveQuery;
   /** Whether the live document has synced; until then the list is unknown. */
   connected: boolean;
+  /** Not synced long past a cold load: the banner above says why. */
+  unreachable: boolean;
   confirm(spec: ConfirmSpec): void;
 }
 
@@ -86,6 +88,7 @@ export function PagesTab({
   isShowcased,
   query,
   connected,
+  unreachable,
   confirm,
 }: PagesTabProps) {
   const selection = useLineupSelection();
@@ -746,7 +749,9 @@ export function PagesTab({
 
   const shownCount = order.length;
   const emptyMessage = !connected
-    ? 'Reading the live pages…'
+    ? unreachable
+      ? 'The live pages cannot be reached.'
+      : 'Reading the live pages…'
     : occupied.length === 0
       ? 'No page holds anything yet. Add some from the archive.'
       : filtering && shownCount === 0

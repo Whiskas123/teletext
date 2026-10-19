@@ -32,12 +32,14 @@ function memoryStorage(): Storage {
 const signMock = vi.fn<GuestbookApi['sign']>();
 let entries: GuestbookEntry[] = [];
 let loading = false;
+let unreachable = false;
 const MEMBER_ID = 'member-me';
 
 vi.mock('../../collab/useGuestbook', () => ({
   useGuestbook: (): GuestbookApi => ({
     entries,
     loading,
+    unreachable,
     memberId: MEMBER_ID,
     sign: signMock,
   }),
@@ -86,6 +88,7 @@ describe('the guestbook', () => {
     signMock.mockReturnValue({ ok: true, name: 'Ana' });
     entries = [];
     loading = false;
+    unreachable = false;
     vi.stubGlobal('localStorage', memoryStorage());
   });
 
@@ -102,6 +105,18 @@ describe('the guestbook', () => {
     renderGuestbook();
 
     expect(screen.getByText(/a carregar as assinaturas/i)).toBeInTheDocument();
+    expect(screen.queryByText(/ainda ninguém assinou/i)).not.toBeInTheDocument();
+  });
+
+  // The document can fail to arrive at all, and a skeleton that never resolves
+  // is a promise the page cannot keep.
+  it('says the book cannot be reached once the wait is over', () => {
+    loading = true;
+    unreachable = true;
+    renderGuestbook();
+
+    expect(screen.getByText(/não conseguimos chegar ao livro/i)).toBeInTheDocument();
+    expect(screen.queryByText(/a carregar as assinaturas/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/ainda ninguém assinou/i)).not.toBeInTheDocument();
   });
 
@@ -225,6 +240,18 @@ describe('the guestbook', () => {
     await user.click(screen.getByRole('button', { name: 'Assinar' }));
 
     expect(screen.getByRole('status')).toHaveTextContent(/está vazia/i);
+  });
+
+  it('says a signature did not land while the book is not connected', async () => {
+    const user = userEvent.setup();
+    signMock.mockReturnValue({ ok: false, reason: 'offline' });
+    renderGuestbook();
+    await openForm(user);
+
+    await user.type(screen.getByRole('textbox'), 'Ana');
+    await user.click(screen.getByRole('button', { name: 'Assinar' }));
+
+    expect(screen.getByRole('status')).toHaveTextContent(/não ficou assinado/i);
   });
 
   it('reports a missing name against the field, not the page', async () => {

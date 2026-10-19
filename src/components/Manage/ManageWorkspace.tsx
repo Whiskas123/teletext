@@ -34,6 +34,8 @@ export interface ManageDeps {
   mirror: MirrorApi;
   /** Whether the live document has synced. */
   connected: boolean;
+  /** Not synced long past a cold load (`useConnection`'s `unreachable`). */
+  unreachable: boolean;
 }
 
 export interface ManageWorkspaceProps {
@@ -51,7 +53,7 @@ const TAB_NAMES: Record<TabKey, string> = {
 const NAV_KEYS: readonly string[] = ['ArrowRight', 'ArrowLeft', 'Home', 'End'];
 
 export function ManageWorkspace({ deps, tab, query }: ManageWorkspaceProps) {
-  const { data, showcase, kindOf, setKind, mirror, connected } = deps;
+  const { data, showcase, kindOf, setKind, mirror, connected, unreachable } = deps;
   const actions = useManageActions({ data, showcase, setKind });
   const [confirming, setConfirming] = useState<ConfirmSpec | null>(null);
   const tabRefs = useRef(new Map<TabKey, HTMLButtonElement | null>());
@@ -106,7 +108,7 @@ export function ManageWorkspace({ deps, tab, query }: ManageWorkspaceProps) {
         </nav>
         <span className="mg-grow" />
         <span className={`mg-live${connected ? ' mg-live-on' : ''}`} role="status">
-          {connected ? 'Live' : 'Connecting…'}
+          {connected ? 'Live' : unreachable ? 'Unreachable' : 'Connecting…'}
         </span>
         <MirrorBadge mirror={mirror} onConfirmHeld={() => setConfirming({
           title: `Remove ${mirror.held.length} pages from the backup?`,
@@ -131,6 +133,12 @@ export function ManageWorkspace({ deps, tab, query }: ManageWorkspaceProps) {
         </div>
       )}
 
+      {unreachable && (
+        <div className="mg-banner mg-host-banner" role="alert">
+          {unreachableText(mirror.daily)}
+        </div>
+      )}
+
       <main id="mg-panel" className="mg-main" role="tabpanel" aria-labelledby={`mg-tab-${tab.selected}`}>
         {tab.selected === 'pages' ? (
           <PagesTab
@@ -140,6 +148,7 @@ export function ManageWorkspace({ deps, tab, query }: ManageWorkspaceProps) {
             isShowcased={showcase.has}
             query={query}
             connected={connected}
+            unreachable={unreachable}
             confirm={setConfirming}
           />
         ) : tab.selected === 'front' ? (
@@ -273,4 +282,25 @@ function MirrorBadge({ mirror, onConfirmHeld }: { mirror: MirrorApi; onConfirmHe
       </button>
     </span>
   );
+}
+
+/**
+ * What the banner says when the live document will not arrive.
+ *
+ * The daily read is the only other witness: it connects from the server, so
+ * when it fails too the problem is the room, not this browser — and when it
+ * last worked dates the failure.
+ */
+function unreachableText(daily: MirrorApi['daily']): string {
+  const when = (iso: string) => new Date(iso).toLocaleString();
+  const head =
+    'The live pages cannot be reached: playhtml has not answered for over 10 seconds, ' +
+    'so nothing here can be read or changed until it does.';
+  if (daily == null) return head;
+  if (!daily.ok) {
+    const since = daily.lastOkAt == null ? '' : ` It last worked ${when(daily.lastOkAt)}.`;
+    return `${head} The daily backup cannot read them either.${since} Latest attempt, ${when(daily.ranAt)}: ${daily.detail ?? 'failed'}`;
+  }
+  if (daily.stale) return `${head} The daily backup has not run since ${when(daily.ranAt)}.`;
+  return `${head} The daily backup read them ${when(daily.ranAt)}, so this started after that — it may be this browser's connection.`;
 }

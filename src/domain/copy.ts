@@ -238,6 +238,15 @@ export interface Copy {
      * wrong answer rather than a slow one.
      */
     loading: string;
+    /**
+     * Said once the book has been arriving for too long to call it a moment.
+     *
+     * The shared document can fail to arrive at all — playhtml's server has
+     * been seen dropping every connection to this room — and a skeleton that
+     * never resolves is a promise the page cannot keep. Covers both cases:
+     * nothing to show, and last visit's signatures shown from the cache.
+     */
+    unreachable: string;
     /** Marks the reader's own signature in the list. */
     yours: string;
     /** How an entry is dated, and named, when read out. */
@@ -268,6 +277,8 @@ export interface Copy {
     errorNoName: string;
     errorNameTooLong(max: number): string;
     errorBlank: string;
+    /** Refused because the book has not synced, so the write would be dropped. */
+    errorOffline: string;
     /** Said once a signature has landed. */
     signed: string;
   };
@@ -459,6 +470,8 @@ export const COPY: Record<Language, Copy> = {
       entries: 'Assinaturas',
       empty: 'Ainda ninguém assinou. Podes ser a primeira pessoa.',
       loading: 'A carregar as assinaturas…',
+      unreachable:
+        'Não conseguimos chegar ao livro agora: as assinaturas novas não aparecem e não é possível assinar. Tenta mais tarde.',
       yours: 'a tua',
       signedBy: (name) => `Assinado por ${name}`,
       sign: 'Assinar',
@@ -479,6 +492,7 @@ export const COPY: Record<Language, Copy> = {
       errorNoName: 'Escreve um nome.',
       errorNameTooLong: (max) => `O nome tem de ter ${max} caracteres ou menos.`,
       errorBlank: 'A página está vazia. Escreve ou desenha alguma coisa.',
+      errorOffline: 'Não ficou assinado: o livro ainda não está ligado. Tenta daqui a pouco.',
       signed: 'Assinado. Obrigado.',
     },
     notFound: {
@@ -657,6 +671,8 @@ export const COPY: Record<Language, Copy> = {
       entries: 'Signatures',
       empty: 'Nobody has signed yet. You could be first.',
       loading: 'Loading the signatures…',
+      unreachable:
+        "The book can't be reached right now, so new signatures won't show and signing is paused. Try again later.",
       yours: 'yours',
       signedBy: (name) => `Signed by ${name}`,
       sign: 'Sign the book',
@@ -676,6 +692,7 @@ export const COPY: Record<Language, Copy> = {
       errorNoName: 'Enter a name.',
       errorNameTooLong: (max) => `A name must be ${max} characters or fewer.`,
       errorBlank: 'The page is empty. Write or draw something on it.',
+      errorOffline: "Not signed: the book isn't connected yet. Try again in a moment.",
       signed: 'Signed. Thank you.',
     },
     notFound: {

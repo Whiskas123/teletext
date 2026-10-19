@@ -10,7 +10,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 
-import { ManageWorkspace } from './ManageWorkspace';
+import { ManageWorkspace, type ManageDeps } from './ManageWorkspace';
 import { fakeCapture, useFakeManageDeps, type FakeSeed } from './testing/useFakeManageDeps';
 import { useArchiveQuery } from './useArchiveQuery';
 import { useManageTab } from './useManageTab';
@@ -584,5 +584,59 @@ describe('the tabs', () => {
     expect(blue).toHaveValue('SPORT');
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
     expect(await screen.findByRole('button', { name: 'Re-publish 202' })).toBeInTheDocument();
+  });
+});
+
+// The live document can fail to arrive at all. "Reading the live pages…" for
+// ever is a wait that never ends; the screen has to say it is not coming, and
+// the daily read — which connects from the server — says whether it is the
+// room or this browser.
+describe('when the live pages cannot be reached', () => {
+  function renderUnreachable(daily: ManageDeps['mirror']['daily']) {
+    function Unreachable() {
+      const tab = useManageTab();
+      const query = useArchiveQuery(tab.initialArchive);
+      const deps = useFakeManageDeps(SEED, query.queryFilters);
+      return (
+        <ManageWorkspace
+          deps={{ ...deps, connected: false, unreachable: true, mirror: { ...deps.mirror, daily } }}
+          tab={tab}
+          query={query}
+        />
+      );
+    }
+    render(
+      <MemoryRouter initialEntries={['/manage']}>
+        <Unreachable />
+      </MemoryRouter>,
+    );
+  }
+
+  it('says so instead of reading for ever, and blames the room when the daily read failed too', () => {
+    renderUnreachable({
+      ranAt: '2026-10-19T04:41:00Z',
+      ok: false,
+      detail: 'timeout: The live document did not arrive within 25 s.',
+      lastOkAt: '2026-10-15T04:41:00Z',
+      stale: false,
+    });
+
+    const banner = screen.getByText(/playhtml has not answered/);
+    expect(banner).toHaveTextContent(/daily backup cannot read them either/i);
+    expect(banner).toHaveTextContent(/did not arrive within 25 s/);
+    expect(screen.getByText('Unreachable')).toBeInTheDocument();
+    expect(screen.queryByText(/reading the live pages/i)).not.toBeInTheDocument();
+  });
+
+  it('points at this browser when the daily read still works', () => {
+    renderUnreachable({
+      ranAt: '2026-10-19T04:41:00Z',
+      ok: true,
+      detail: null,
+      lastOkAt: '2026-10-19T04:41:00Z',
+      stale: false,
+    });
+
+    expect(screen.getByText(/playhtml has not answered/)).toHaveTextContent(/this browser/i);
   });
 });

@@ -472,7 +472,9 @@ export default async function handler(
         select count(*)::int as pages, max(updated_at) as latest from live_pages
       `;
       const runs = await db()`
-        select ran_at, ok, stored, lingering, detail from backup_runs
+        select ran_at, ok, stored, lingering, detail,
+               (select max(ran_at) from backup_runs where ok) as last_ok_at
+        from backup_runs
         order by ran_at desc limit 1
       `;
       res.setHeader('Cache-Control', 'no-store');

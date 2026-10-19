@@ -4432,6 +4432,13 @@ button.yellow-pages-number:hover {
   color: #0ff;
 }
 
+.guestbook-unreachable {
+  margin: 0 0 clamp(1.5rem, 4vh, 2.5rem);
+  font-family: monospace;
+  font-size: 0.85rem;
+  color: #ff0;
+}
+
 .guestbook-placeholder-name {
   display: block;
   width: 8rem;

@@ -85,6 +85,7 @@ function ConnectedWorkspace() {
         setKind,
         mirror,
         connected: connection.status === 'connected',
+        unreachable: connection.unreachable,
       }}
     />
   );

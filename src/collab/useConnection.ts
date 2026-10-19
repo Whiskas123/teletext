@@ -35,7 +35,19 @@
  * reports status.
  */
 
+import { useEffect, useState } from 'react';
 import { usePlayContext } from '@playhtml/react';
+
+/**
+ * How long syncing may take before a screen stops promising it is a moment.
+ *
+ * A cold load of the shared document takes about ten seconds at its current
+ * size; a room playhtml's server cannot open takes forever, with the provider
+ * reconnecting every few seconds and never syncing (October 2026: the document
+ * grew to ~8 MB and the room crashed on every connect). Ten seconds is past the
+ * first by enough and early enough in the second that nobody has given up yet.
+ */
+export const STALL_MS = 10_000;
 
 export type ConnectionStatus = 'connected' | 'disconnected';
 
@@ -47,6 +59,11 @@ export interface ConnectionApi {
    * when no provider is mounted.
    */
   status: ConnectionStatus;
+  /**
+   * Still not synced after {@link STALL_MS}. A screen waiting on the document
+   * says it cannot be reached instead of showing a wait that will not end.
+   */
+  unreachable: boolean;
 }
 
 /**
@@ -60,8 +77,17 @@ export interface ConnectionApi {
 export function useConnection(): ConnectionApi {
   const { isLoading, isProviderMissing } = usePlayContext();
 
-  const status: ConnectionStatus =
-    isProviderMissing || isLoading ? 'disconnected' : 'connected';
+  const syncing = isProviderMissing || isLoading;
+  const status: ConnectionStatus = syncing ? 'disconnected' : 'connected';
 
-  return { status };
+  // Only ever set to true, and only read through `syncing`, so the flag cannot
+  // outlive the wait it describes.
+  const [timedOut, setTimedOut] = useState(false);
+  useEffect(() => {
+    if (!syncing) return;
+    const timer = setTimeout(() => setTimedOut(true), STALL_MS);
+    return () => clearTimeout(timer);
+  }, [syncing]);
+
+  return { status, unreachable: syncing && timedOut };
 }

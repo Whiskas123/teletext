@@ -584,6 +584,7 @@ export function useFakeManageDeps(
       }),
     mirror,
     connected: true,
+    unreachable: false,
     captures: allCaptures,
   };
 }

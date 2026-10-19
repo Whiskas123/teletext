@@ -37,6 +37,7 @@ import {
   type SignatureValidation,
 } from '../domain/guestbook';
 import { getSessionMemberId } from './session';
+import { useConnection } from './useConnection';
 import type { GuestbookData } from './types';
 import type { TeletextPage } from '../types/teletext';
 
@@ -59,6 +60,9 @@ const CACHE_KEY = 'teletext.guestbook.entries';
  * supply the rest of the scroll.
  */
 const CACHE_LIMIT = 8;
+
+/** What signing returns: the book's own verdict, or that it is not connected. */
+export type SignResult = SignatureValidation | { ok: false; reason: 'offline' };
 
 /** The cached book, repaired on the way out like any other stored entry. */
 function readCache(): GuestbookEntry[] {
@@ -103,13 +107,22 @@ export interface GuestbookApi {
    * a spinner never sits over signatures that are already on the screen.
    */
   loading: boolean;
+  /**
+   * Whether the book has been syncing for longer than `useConnection`'s `STALL_MS`.
+   *
+   * The page says so instead of showing a skeleton that will never resolve —
+   * and, over cached signatures, that what is shown may be out of date.
+   */
+  unreachable: boolean;
   /** This session's own id, so the page can mark the reader's own entries. */
   memberId: string;
   /**
    * Sign the book. Returns the validation result: `ok` when the signature was
-   * appended, otherwise the reason it was refused and a book left unchanged.
+   * appended, otherwise the reason it was refused and a book left unchanged —
+   * `offline` while the book has not synced, because playhtml drops a write
+   * made before then with nothing but a console warning.
    */
-  sign(name: string, cells: TeletextPage): SignatureValidation;
+  sign(name: string, cells: TeletextPage): SignResult;
 }
 
 export function useGuestbook(): GuestbookApi {
@@ -124,6 +137,7 @@ export function useGuestbook(): GuestbookApi {
   // "empty".
   const { isLoading, isProviderMissing } = usePlayContext();
   const syncing = isProviderMissing || isLoading;
+  const { unreachable } = useConnection();
 
   // Repaired and ordered on the way out, not on the way in: what the document
   // holds was written by a client, and an entry that arrived malformed should
@@ -162,7 +176,11 @@ export function useGuestbook(): GuestbookApi {
   const memberId = getSessionMemberId();
 
   const sign = useCallback(
-    (name: string, cells: TeletextPage): SignatureValidation => {
+    (name: string, cells: TeletextPage): SignResult => {
+      // Checked first: the name and the page are not the problem, and telling
+      // someone their signature landed when it went nowhere is the one outcome
+      // this screen must never have.
+      if (syncing) return { ok: false, reason: 'offline' };
       const validation = validateSignature(name, cells);
       if (!validation.ok) return validation;
 
@@ -186,10 +204,16 @@ export function useGuestbook(): GuestbookApi {
 
       return validation;
     },
-    [setData],
+    [setData, syncing],
   );
 
-  return { entries, loading: syncing && entries.length === 0, memberId, sign };
+  return {
+    entries,
+    loading: syncing && entries.length === 0,
+    unreachable,
+    memberId,
+    sign,
+  };
 }
 
 export default useGuestbook;

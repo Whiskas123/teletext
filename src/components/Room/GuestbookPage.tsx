@@ -53,7 +53,7 @@ import { useCurrentLanguage } from './languageContext';
 export function GuestbookPage() {
   const copy = useCopy();
   const language = useCurrentLanguage();
-  const { entries, loading, memberId, sign } = useGuestbook();
+  const { entries, loading, unreachable, memberId, sign } = useGuestbook();
 
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
@@ -112,7 +112,9 @@ export function GuestbookPage() {
         ? copy.guestbook.errorNoName
         : result.reason === 'name-too-long'
           ? copy.guestbook.errorNameTooLong(DISPLAY_NAME_MAX)
-          : copy.guestbook.errorBlank,
+          : result.reason === 'offline'
+            ? copy.guestbook.errorOffline
+            : copy.guestbook.errorBlank,
     );
   }, [cells, copy.guestbook, name, sign]);
 
@@ -260,11 +262,17 @@ export function GuestbookPage() {
           <section
             className="guestbook-list"
             aria-labelledby="guestbook-list-heading"
-            aria-busy={loading}
+            aria-busy={loading && !unreachable}
           >
             <h2 id="guestbook-list-heading" className="guestbook-heading teletext-fg-cyan">
               {copy.guestbook.entries}
             </h2>
+
+            {unreachable && (
+              <p className="guestbook-unreachable" role="status">
+                {copy.guestbook.unreachable}
+              </p>
+            )}
 
             {/*
               * Three states, and the order matters: "still coming" has to be
@@ -273,7 +281,9 @@ export function GuestbookPage() {
               * placeholder bands are the shape of the entries that will replace
               * them, so the column does not jump when they do.
               */}
-            {loading ? (
+            {/* Past the wait the skeleton goes: it promises entries that are
+                not coming, and the line above already says why. */}
+            {loading && unreachable ? null : loading ? (
               <div className="guestbook-loading" role="status">
                 <p className="guestbook-loading-text">{copy.guestbook.loading}</p>
                 <ul className="guestbook-entries" aria-hidden="true">
