@@ -22,6 +22,7 @@
 
 import { useCallback, useState } from 'react';
 import { usePageData } from '@playhtml/react';
+import { writeEntries } from './archiveStore';
 
 import { isValidCell } from '../domain/cellEdit';
 import { chunkEntries } from '../domain/liveWrites';
@@ -87,10 +88,12 @@ export function useImportPages(): ImportPagesApi {
           }
           return [String(pageKey(pageNumber, subpage ?? MIN_SUBPAGE)), cellMap] as const;
         });
+        // Curated pages go to the database, the rest to playhtml — each
+        // chunk split by `writeEntries`.
         for (const write of chunkEntries(entries)) {
-          setPages((draft) => {
-            for (const [key, cellMap] of write) (draft as Record<string, unknown>)[key] = cellMap;
-          });
+          if (!writeEntries(PAGES_CHANNEL, Object.fromEntries(write), setPages)) {
+            throw new Error('The curated pages are still loading from the database.');
+          }
         }
         setSaveError(null);
         return writable.length;

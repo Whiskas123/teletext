@@ -599,7 +599,7 @@ describe('when the live pages cannot be reached', () => {
       const deps = useFakeManageDeps(SEED, query.queryFilters);
       return (
         <ManageWorkspace
-          deps={{ ...deps, connected: false, unreachable: true, mirror: { ...deps.mirror, daily } }}
+          deps={{ ...deps, live: false, unreachable: true, mirror: { ...deps.mirror, daily } }}
           tab={tab}
           query={query}
         />
@@ -612,7 +612,7 @@ describe('when the live pages cannot be reached', () => {
     );
   }
 
-  it('says so instead of reading for ever, and blames the room when the daily read failed too', () => {
+  it('says the playground is offline, keeps the list, and blames the room when the daily read failed too', () => {
     renderUnreachable({
       ranAt: '2026-10-19T04:41:00Z',
       ok: false,
@@ -622,10 +622,12 @@ describe('when the live pages cannot be reached', () => {
     });
 
     const banner = screen.getByText(/playhtml has not answered/);
-    expect(banner).toHaveTextContent(/daily backup cannot read them either/i);
+    expect(banner).toHaveTextContent(/curated pages .* unaffected/i);
+    expect(banner).toHaveTextContent(/daily backup cannot read playhtml either/i);
     expect(banner).toHaveTextContent(/did not arrive within 25 s/);
-    expect(screen.getByText('Unreachable')).toBeInTheDocument();
-    expect(screen.queryByText(/reading the live pages/i)).not.toBeInTheDocument();
+    expect(screen.getByText('Playground offline')).toBeInTheDocument();
+    // The curated archive does not wait on playhtml: the list is still there.
+    expect(screen.queryByText(/reading the pages/i)).not.toBeInTheDocument();
   });
 
   it('points at this browser when the daily read still works', () => {

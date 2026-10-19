@@ -26,7 +26,7 @@
 
 import { useCallback } from 'react';
 import { usePageData } from '@playhtml/react';
-import { usePageDataWithBoot } from './bootData';
+import { useContentChannel, writeEntries } from './archiveStore';
 
 import {
   MAX_SUBPAGE,
@@ -63,7 +63,8 @@ export interface SubpagesApi {
 }
 
 export function useSubpages(): SubpagesApi {
-  const [counts, setCounts] = usePageDataWithBoot<SubpageCounts>(SUBPAGE_COUNTS_CHANNEL, {});
+  const counts = useContentChannel<SubpageCounts>(SUBPAGE_COUNTS_CHANNEL, {});
+  const [, setCounts] = usePageData<SubpageCounts>(SUBPAGE_COUNTS_CHANNEL, {});
   const [, setPages] = usePageData<PagesData>(PAGES_CHANNEL, {});
 
   const countOf = useCallback(
@@ -74,9 +75,7 @@ export function useSubpages(): SubpagesApi {
   const setCount = useCallback(
     (pageNumber: number, count: number) => {
       const clamped = Math.min(MAX_SUBPAGE, Math.max(MIN_SUBPAGE, Math.trunc(count)));
-      setCounts((draft) => {
-        draft[pageNumber] = clamped;
-      });
+      writeEntries(SUBPAGE_COUNTS_CHANNEL, { [pageNumber]: clamped }, setCounts);
     },
     [setCounts],
   );
@@ -86,16 +85,12 @@ export function useSubpages(): SubpagesApi {
       const next = subpageCountOf(counts, pageNumber) + 1;
       if (next > MAX_SUBPAGE) return null;
 
-      setCounts((draft) => {
-        draft[pageNumber] = next;
-      });
+      if (!writeEntries(SUBPAGE_COUNTS_CHANNEL, { [pageNumber]: next }, setCounts)) return null;
       // Seeded empty so the key exists the moment the count claims it does.
       // Without this the editor would write into an absent key on its first
       // keystroke, which works — but the snapshot would miss a subpage that had
       // been added and not yet typed on.
-      setPages((draft) => {
-        draft[pageKey(pageNumber, next) as number] = {};
-      });
+      writeEntries(PAGES_CHANNEL, { [pageKey(pageNumber, next)]: {} }, setPages);
       return next;
     },
     [counts, setCounts, setPages],
@@ -108,12 +103,8 @@ export function useSubpages(): SubpagesApi {
 
       // Blanked, not deleted: `delete` throws on playhtml's draft, and every
       // reader treats an empty cell map and an absent key identically.
-      setPages((draft) => {
-        draft[pageKey(pageNumber, current) as number] = {};
-      });
-      setCounts((draft) => {
-        draft[pageNumber] = current - 1;
-      });
+      if (!writeEntries(PAGES_CHANNEL, { [pageKey(pageNumber, current)]: {} }, setPages)) return null;
+      writeEntries(SUBPAGE_COUNTS_CHANNEL, { [pageNumber]: current - 1 }, setCounts);
       return current - 1;
     },
     [counts, setCounts, setPages],

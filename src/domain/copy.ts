@@ -177,6 +177,8 @@ export interface Copy {
     notSaving: string;
     notSaved(reason: string): string;
     titleTooLong(max: number): string;
+    /** A curated page's title, refused because the archive is still loading. */
+    titleNotSaved: string;
     reservedPages(min: number, max: number): string;
     pagesNumbered(min: number, max: number): string;
     recent: string;
@@ -429,6 +431,7 @@ export const COPY: Record<Language, Copy> = {
       notSaving: 'Não guardado',
       notSaved: (reason) => `Alteração não guardada: ${reason}`,
       titleTooLong: (max) => `O título tem de ter ${max} caracteres ou menos.`,
+      titleNotSaved: 'Ainda não ficou guardado: as páginas ainda estão a carregar.',
       reservedPages: (min, max) => `As páginas ${min}–${max} estão reservadas.`,
       pagesNumbered: (min, max) => `As páginas vão de ${min} a ${max}.`,
       recent: 'Recentes',
@@ -630,6 +633,7 @@ export const COPY: Record<Language, Copy> = {
       notSaving: 'Not saved',
       notSaved: (reason) => `Change not saved: ${reason}`,
       titleTooLong: (max) => `Title must be ${max} characters or fewer.`,
+      titleNotSaved: 'Not saved yet: the pages are still loading.',
       reservedPages: (min, max) => `Pages ${min}–${max} are reserved.`,
       pagesNumbered: (min, max) => `Pages are numbered ${min}–${max}.`,
       recent: 'Recent',

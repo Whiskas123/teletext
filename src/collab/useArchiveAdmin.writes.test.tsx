@@ -49,16 +49,16 @@ const screen = (char: string) =>
 beforeEach(() => {
   writes.length = 0;
   for (const key of Object.keys(channels)) delete channels[key];
-  // 100, a gap at 101, then 44 pages — the second with a three-screen carousel.
-  channels.pages = { 100: screen('I') };
-  channels.titles = { 100: 'Index' };
-  channels['subpage-counts'] = { 103: 3 };
-  for (let page = 102; page < 146; page += 1) {
+  // 700, a gap at 701, then 44 pages — the second with a three-screen carousel.
+  channels.pages = { 700: screen('I') };
+  channels.titles = { 700: 'Index' };
+  channels['subpage-counts'] = { 703: 3 };
+  for (let page = 702; page < 746; page += 1) {
     channels.pages[page] = screen(String.fromCharCode(0x30 + (page % 40)));
     channels.titles[page] = `Page ${page}`;
   }
-  channels.pages['103.2'] = screen('2');
-  channels.pages['103.3'] = screen('3');
+  channels.pages['703.2'] = screen('2');
+  channels.pages['703.3'] = screen('3');
   vi.stubGlobal(
     'fetch',
     vi.fn(async () => new Response(JSON.stringify({ published: [], menus: [], rows: [] }), { status: 200 })),
@@ -70,24 +70,24 @@ it('closes a gap in front of 44 pages in writes that each fit, ending where one 
     useArchiveAdmin({ admin: true, archiveEnabled: false, filters: {} as never, offset: 0 }),
   );
   const expected = Object.fromEntries(
-    Array.from({ length: 44 }, (_, index) => [101 + index, channels.pages[102 + index]]),
+    Array.from({ length: 44 }, (_, index) => [701 + index, channels.pages[702 + index]]),
   );
 
   let outcome: unknown;
   await act(async () => {
     outcome = await result.current.arrange(
-      Array.from({ length: 44 }, (_, index) => ({ from: 102 + index, to: 101 + index })),
+      Array.from({ length: 44 }, (_, index) => ({ from: 702 + index, to: 701 + index })),
     );
   });
 
   expect(outcome).toEqual({ ok: true });
   for (const [page, cells] of Object.entries(expected)) expect(channels.pages[page]).toEqual(cells);
-  expect(channels.pages['102.2']).toEqual(screen('2'));
-  expect(channels.pages['102.3']).toEqual(screen('3'));
-  expect(channels.pages[145]).toEqual({});
-  expect(channels.pages['103.3']).toEqual({});
-  expect(channels.titles[101]).toBe('Page 102');
-  expect(channels['subpage-counts'][102]).toBe(3);
+  expect(channels.pages['702.2']).toEqual(screen('2'));
+  expect(channels.pages['702.3']).toEqual(screen('3'));
+  expect(channels.pages[745]).toEqual({});
+  expect(channels.pages['703.3']).toEqual({});
+  expect(channels.titles[701]).toBe('Page 702');
+  expect(channels['subpage-counts'][702]).toBe(3);
 
   const pageWrites = writes.filter(({ channel }) => channel === 'pages');
   expect(pageWrites.length).toBeGreaterThan(5);

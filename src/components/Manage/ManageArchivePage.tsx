@@ -11,6 +11,7 @@
 import { Link } from 'react-router-dom';
 
 import { useArchiveAdmin } from '../../collab/useArchiveAdmin';
+import { useArchiveStatus } from '../../collab/archiveStore';
 import { useConnection } from '../../collab/useConnection';
 import { useAdminStatus } from '../../collab/useIsModerator';
 import { usePageKinds } from '../../collab/usePageKinds';
@@ -61,6 +62,7 @@ function ConnectedWorkspace() {
   const tab = useManageTab();
   const query = useArchiveQuery(tab.initialArchive);
   const connection = useConnection();
+  const archive = useArchiveStatus();
 
   const data = useArchiveAdmin({
     admin: true,
@@ -84,7 +86,8 @@ function ConnectedWorkspace() {
         kindOf,
         setKind,
         mirror,
-        connected: connection.status === 'connected',
+        archive,
+        live: connection.status === 'connected',
         unreachable: connection.unreachable,
       }}
     />

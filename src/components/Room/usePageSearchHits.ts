@@ -10,7 +10,7 @@
  */
 
 import { useMemo } from 'react';
-import { usePageData } from '@playhtml/react';
+import { useContentChannel } from '../../collab/archiveStore';
 
 import { useGuide } from '../../collab/useGuide';
 import { PAGES_CHANNEL } from '../../collab/useEditPage';
@@ -32,7 +32,7 @@ import { searchPages, type SearchHit } from '../../domain/pageSearch';
  */
 export function usePageSearchHits(query: string): SearchHit[] {
   const { entries } = useGuide();
-  const [pages] = usePageData<PagesData>(PAGES_CHANNEL, {});
+  const pages = useContentChannel<PagesData>(PAGES_CHANNEL, {});
   const { countOf } = useSubpages();
 
   return useMemo(

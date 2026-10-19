@@ -6,7 +6,7 @@
  *
  * ## Why two hosts have two sets of pages
  *
- * `GlobalProvider` mounts playhtml with a fixed room name, `teletext-house`.
+ * `GlobalProvider` mounts playhtml with a fixed room name, `teletext-house-2`.
  * That is *not* the room playhtml actually connects to. Inside the library the
  * effective name is built from the browser's own hostname (see the `Fn` helper
  * in `playhtml/dist/playhtml.es.js`, and {@link roomNameFor} below, which is a
@@ -74,7 +74,7 @@ const PARTYKIT_HOST = 'playhtml.spencerc99.workers.dev';
  * Kept as a literal rather than imported: that module pulls in React and
  * react-router, which have no business being loaded by a CLI script.
  */
-const DEFAULT_ROOM = 'teletext-house';
+const DEFAULT_ROOM = 'teletext-house-2';
 
 /**
  * Where playhtml keeps `usePageData` channels inside the document: the synced

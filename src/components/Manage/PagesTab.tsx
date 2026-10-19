@@ -66,10 +66,10 @@ export interface PagesTabProps {
   kindOf(pageNumber: number): PageKind;
   isShowcased(pageNumber: number, subpage: number): boolean;
   query: ArchiveQuery;
-  /** Whether the live document has synced; until then the list is unknown. */
-  connected: boolean;
-  /** Not synced long past a cold load: the banner above says why. */
-  unreachable: boolean;
+  /** Whether the curated archive has been read fresh; until then the list is unknown. */
+  ready: boolean;
+  /** Why it could not be read, or null while it is still on its way. */
+  loadError: string | null;
   confirm(spec: ConfirmSpec): void;
 }
 
@@ -87,8 +87,8 @@ export function PagesTab({
   kindOf,
   isShowcased,
   query,
-  connected,
-  unreachable,
+  ready,
+  loadError,
   confirm,
 }: PagesTabProps) {
   const selection = useLineupSelection();
@@ -748,10 +748,8 @@ export function PagesTab({
   }
 
   const shownCount = order.length;
-  const emptyMessage = !connected
-    ? unreachable
-      ? 'The live pages cannot be reached.'
-      : 'Reading the live pages…'
+  const emptyMessage = !ready
+    ? loadError ?? 'Reading the pages…'
     : occupied.length === 0
       ? 'No page holds anything yet. Add some from the archive.'
       : filtering && shownCount === 0
@@ -855,7 +853,7 @@ export function PagesTab({
         <LegacyPanel data={data} actions={actions} locked={locked} confirm={confirm} />
 
         <LineupTable
-          sections={connected ? sections : []}
+          sections={ready ? sections : []}
           rowOf={rowOf}
           order={order}
           selection={selection}

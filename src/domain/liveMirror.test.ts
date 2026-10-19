@@ -91,6 +91,21 @@ describe('planning a mirror', () => {
     expect(plan.held).toEqual([]);
   });
 
+  // The curated archive lives in the database and the playground in playhtml.
+  // Each side's mirror sees only its own pages, so a page the other store owns
+  // is never written over, and its absence is never read as a deletion.
+  it('leaves pages outside its scope alone, on both sides', () => {
+    const copy = mirrored(channels());
+    const playgroundOnly = channels({ pages: { 700: drawn('E') }, titles: {}, counts: {} });
+    const plan = planMirror(liveScreens(playgroundOnly), copy, {
+      scope: (page) => page >= 700,
+    });
+    expect(plan.upserts).toEqual(['700.1']);
+    expect(plan.removed).toEqual([]);
+    expect(plan.held).toEqual([]);
+    expect(plan.truncate).toEqual([]);
+  });
+
   it('writes rows stored before fingerprints existed', () => {
     const live = channels();
     const copy = new Map([...mirrored(live)].map(([key]) => [key, null]));

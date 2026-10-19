@@ -1,6 +1,9 @@
 /**
  * The live mirror: a signed-in moderator's browser keeps the database's copy of
- * the pages (`live_pages`) in step with playhtml, a few seconds behind.
+ * the playground pages (`live_pages`, 700+) in step with playhtml, a few
+ * seconds behind. The curated archive is not mirrored — the database is its
+ * store — but it is saved by the same engine (`createMirror`), scoped to its
+ * own pages, from `archiveStore.ts`.
  *
  * The rules, in `domain/liveMirror.ts`, decide *what* to send. This decides
  * *when*, and refuses in the cases where sending would do harm:
@@ -34,6 +37,7 @@ import {
   type LiveChannels,
   type MirrorPlan,
 } from '../domain/liveMirror';
+import { isArchivePage } from '../domain/access';
 import type { PageKinds } from '../domain/directory';
 import { SOURCES_CHANNEL, readSource, type PageSources } from '../domain/pageSource';
 import { SITE_URL } from '../domain/seo';
@@ -44,7 +48,7 @@ import { PAGES_CHANNEL } from './useEditPage';
 import { PAGE_KINDS_CHANNEL } from './usePageKinds';
 import { DESCRIPTIONS_CHANNEL } from './usePageText';
 
-const QUIET_MS = 3_000;
+export const QUIET_MS = 3_000;
 const MAX_WAIT_MS = 20_000;
 const REFRESH_MS = 5 * 60_000;
 const RETRY_MS = 30_000;
@@ -231,7 +235,14 @@ async function sendPlan(plan: MirrorPlan, live: LiveChannels, digests: Map<strin
  * as a plain object: timers and in-flight flags are not React state, and
  * nothing on screen renders from them except through `setStatus`.
  */
-function createMirror() {
+export interface MirrorEngineOptions {
+  /** The pages this mirror owns; see `planMirror`'s `scope`. */
+  scope: (pageNumber: number) => boolean;
+  /** Where its progress goes. The playground mirror's is the shared status. */
+  report?: (patch: Partial<MirrorStatus>) => void;
+}
+
+export function createMirror({ scope, report = setStatus }: MirrorEngineOptions) {
   const m = {
     live: { pages: {}, titles: {}, kinds: {}, descriptions: {}, counts: {}, sources: {} } as LiveChannels,
     copy: null as CopyIndex | null,
@@ -256,6 +267,11 @@ function createMirror() {
     stop() {
       if (m.timer != null) clearTimeout(m.timer);
       m.timer = null;
+    },
+
+    /** Whether anything is waiting to be sent, or being sent. */
+    busy() {
+      return m.timer != null || m.running;
     },
 
     /** Hold the latest channels, to be read when the timer fires. */
@@ -284,24 +300,24 @@ function createMirror() {
         m.copy ??= await fetchIndex();
         const snapshot = m.live;
         const screens = liveScreens(snapshot);
-        const plan = planMirror(screens, m.copy, { confirmed: m.confirmed });
+        const plan = planMirror(screens, m.copy, { confirmed: m.confirmed, scope });
 
         if (isEmptyPlan(plan)) {
-          setStatus({ phase: 'synced', pending: 0, held: plan.held, lastSynced: Date.now(), error: null });
+          report({ phase: 'synced', pending: 0, held: plan.held, lastSynced: Date.now(), error: null });
           return;
         }
 
-        setStatus({ phase: 'saving', pending: plan.upserts.length, held: plan.held, error: null });
+        report({ phase: 'saving', pending: plan.upserts.length, held: plan.held, error: null });
         const digests = new Map([...screens].map(([key, screen]) => [key, screen.digest]));
         await sendPlan(plan, snapshot, digests);
         m.copy = applyMirrorPlan(m.copy, plan, screens);
         for (const page of plan.removed) m.confirmed.delete(page);
-        setStatus({ phase: 'synced', pending: 0, held: plan.held, lastSynced: Date.now(), error: null });
+        report({ phase: 'synced', pending: 0, held: plan.held, lastSynced: Date.now(), error: null });
       } catch (error) {
         // What landed is unknown, so the copy's list is read again next time
         // rather than trusted.
         m.copy = null;
-        setStatus({
+        report({
           phase: 'error',
           error: error instanceof Error ? error.message : 'The backup could not be reached.',
         });
@@ -329,7 +345,9 @@ export function LiveMirror() {
   const [descriptions] = usePageData<Record<string, unknown>>(DESCRIPTIONS_CHANNEL, {});
   const [counts] = usePageData<SubpageCounts>(SUBPAGE_COUNTS_CHANNEL, {});
   const [sources] = usePageData<PageSources>(SOURCES_CHANNEL, {});
-  const [mirror] = useState(createMirror);
+  // The playground only: the curated archive is the database's own now, and
+  // its absence from playhtml must not read as a deletion.
+  const [mirror] = useState(() => createMirror({ scope: (page) => !isArchivePage(page) }));
 
   const onLiveHost = typeof location !== 'undefined' && location.hostname === LIVE_HOST;
   const active = onLiveHost && !isLoading;

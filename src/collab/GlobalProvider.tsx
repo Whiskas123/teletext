@@ -31,8 +31,16 @@ import { type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { PlayProvider } from '@playhtml/react';
 
-/** Fixed playhtml namespace for the app's single shared document. */
-export const GLOBAL_ROOM = 'teletext-house';
+/**
+ * Fixed playhtml namespace for the app's single shared document.
+ *
+ * `-2` since 2026-10: the first room, `teletext-house`, grew to ~8 MB with the
+ * whole archive in it and playhtml's server could no longer open it. The
+ * archive now lives in the database (`archiveStore.ts`), and this room holds
+ * only the playground and the rooms' own state. The old room is left as it
+ * was, for reading back what only it had.
+ */
+export const GLOBAL_ROOM = 'teletext-house-2';
 
 export interface GlobalProviderProps {
   children: ReactNode;

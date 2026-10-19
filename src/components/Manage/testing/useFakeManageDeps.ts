@@ -423,6 +423,8 @@ export function useFakeManageDeps(
     liveOccupied.has(record.page_number) && state.cells.has(key(record.page_number, record.subpage ?? 1));
 
   const data: ArchiveAdminApi = {
+    playgroundToRestore: 0,
+    restorePlayground: () => ({ ok: true }),
     captures,
     total: captures.length,
     published,
@@ -583,7 +585,8 @@ export function useFakeManageDeps(
         return draft;
       }),
     mirror,
-    connected: true,
+    archive: { ready: true, phase: 'ready', error: null },
+    live: true,
     unreachable: false,
     captures: allCaptures,
   };

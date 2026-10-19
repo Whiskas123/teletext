@@ -49,8 +49,8 @@ function withPages(entries: Record<number, Cell>): void {
 
 describe('dialling a page with nothing on it', () => {
   it('lands on the next page that shows something', () => {
-    withPages({ 200: LETTER, 726: YELLOW_SPACE, 730: LETTER });
-    const { result } = renderHook(() => useSoloView(200));
+    withPages({ 720: LETTER, 726: YELLOW_SPACE, 730: LETTER });
+    const { result } = renderHook(() => useSoloView(720));
 
     act(() => {
       result.current.dialPage(726);
@@ -60,8 +60,8 @@ describe('dialling a page with nothing on it', () => {
   });
 
   it('goes straight to a number that has a picture on it', () => {
-    withPages({ 200: LETTER, 730: LETTER });
-    const { result } = renderHook(() => useSoloView(200));
+    withPages({ 720: LETTER, 730: LETTER });
+    const { result } = renderHook(() => useSoloView(720));
 
     act(() => {
       result.current.dialPage(730);
@@ -74,7 +74,7 @@ describe('dialling a page with nothing on it', () => {
     // An unsynced document looks exactly like an empty one, and moving the
     // reader somewhere else on that evidence would be a guess.
     withPages({});
-    const { result } = renderHook(() => useSoloView(200));
+    const { result } = renderHook(() => useSoloView(720));
 
     act(() => {
       result.current.dialPage(726);
@@ -84,8 +84,8 @@ describe('dialling a page with nothing on it', () => {
   });
 
   it('refuses a number that is not a page, and stays put', () => {
-    withPages({ 200: LETTER, 730: LETTER });
-    const { result } = renderHook(() => useSoloView(200));
+    withPages({ 720: LETTER, 730: LETTER });
+    const { result } = renderHook(() => useSoloView(720));
 
     let rejection: string | null = null;
     act(() => {
@@ -93,13 +93,13 @@ describe('dialling a page with nothing on it', () => {
     });
 
     expect(rejection).toBe('out-of-range');
-    expect(result.current.displayedPageNumber).toBe(200);
+    expect(result.current.displayedPageNumber).toBe(720);
   });
 });
 
 describe('opening on a page with nothing on it', () => {
   it('moves off the blank number the URL asked for', () => {
-    withPages({ 200: LETTER, 726: YELLOW_SPACE, 730: LETTER });
+    withPages({ 720: LETTER, 726: YELLOW_SPACE, 730: LETTER });
     const { result } = renderHook(() => useSoloView(726));
 
     expect(result.current.displayedPageNumber).toBe(730);
@@ -108,15 +108,15 @@ describe('opening on a page with nothing on it', () => {
   it('stays on the screen a carousel link named', () => {
     // A link into the middle of a carousel is somebody's choice of screen, and
     // the dial's rule can only see the first screen of a page.
-    withPages({ 200: LETTER, 726: YELLOW_SPACE, 730: LETTER });
+    withPages({ 720: LETTER, 726: YELLOW_SPACE, 730: LETTER });
     const { result } = renderHook(() => useSoloView(726, 3));
 
     expect(result.current.displayedPageNumber).toBe(726);
   });
 
   it('leaves the opening page alone once the reader is driving', () => {
-    withPages({ 200: LETTER, 730: LETTER });
-    const { result } = renderHook(() => useSoloView(200));
+    withPages({ 720: LETTER, 730: LETTER });
+    const { result } = renderHook(() => useSoloView(720));
 
     act(() => {
       result.current.setDisplayedPage(726);
@@ -130,8 +130,8 @@ describe('opening on a page with nothing on it', () => {
 
 describe('stepping with the PAGE keys', () => {
   it('skips a page that draws nothing', () => {
-    withPages({ 200: LETTER, 726: YELLOW_SPACE, 730: LETTER });
-    const { result } = renderHook(() => useSoloView(200));
+    withPages({ 720: LETTER, 726: YELLOW_SPACE, 730: LETTER });
+    const { result } = renderHook(() => useSoloView(720));
 
     act(() => {
       result.current.gotoNextNonEmpty();
@@ -141,6 +141,6 @@ describe('stepping with the PAGE keys', () => {
     act(() => {
       result.current.gotoPrevNonEmpty();
     });
-    expect(result.current.displayedPageNumber).toBe(200);
+    expect(result.current.displayedPageNumber).toBe(720);
   });
 });

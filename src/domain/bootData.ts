@@ -17,16 +17,21 @@
  *
  * ## Only ever read
  *
- * It is fetched from the database's copy (`BOOT_LIVE_PATH`), which the live
- * mirror keeps a few seconds behind playhtml and the edge caches for a minute,
- * and from the build's file only if that fails — so it is a picture of the
- * pages at most a minute or so old, rather than as old as the last deploy. Nothing writes it back: the hooks
- * that write (the editor, publishing, the backup itself) keep reading the live
- * document and nothing else.
+ * It is fetched from the database's copy (`BOOT_LIVE_PATH`), which the edge
+ * caches for a minute, and from the build's file only if that fails — so it is
+ * a picture of the pages at most a minute or so old, rather than as old as the
+ * last deploy.
+ *
+ * For the curated archive (100..699) it is no longer a stand-in at all: those
+ * pages live in the database, and this is how every screen reads them (see
+ * `collab/archiveStore.ts`, which also writes them, from a fresh read rather
+ * than this cached one). For the playground it is still only what is shown
+ * until playhtml syncs.
  */
 
 import { TOTAL_CELLS, type TeletextPage } from '../types/teletext';
 import type { PageKinds } from './directory';
+import type { PageSources } from './pageSource';
 import { isEmptyCell, normalizePage } from './pageOps';
 import type { PageCellMap } from './pageEncoding';
 import type { SubpageCounts } from './subpages';
@@ -51,6 +56,12 @@ export interface BootData {
   'subpage-counts': SubpageCounts;
   titles: Record<number, string>;
   'page-kinds': PageKinds;
+  /**
+   * Optional: added when the curated archive moved to the database, so a
+   * build file written before then still parses.
+   */
+  descriptions?: Record<number, string>;
+  'page-sources'?: PageSources;
 }
 
 export type BootChannel = keyof BootData;

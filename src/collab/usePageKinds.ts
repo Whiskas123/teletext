@@ -18,7 +18,8 @@
  */
 
 import { useCallback } from 'react';
-import { usePageDataWithBoot } from './bootData';
+import { usePageData } from '@playhtml/react';
+import { useContentChannel, writeEntries } from './archiveStore';
 
 import {
   isPageKind,
@@ -40,7 +41,8 @@ export interface PageKindsApi {
 }
 
 export function usePageKinds(): PageKindsApi {
-  const [kinds, setKinds] = usePageDataWithBoot<PageKinds>(PAGE_KINDS_CHANNEL, {});
+  const kinds = useContentChannel<PageKinds>(PAGE_KINDS_CHANNEL, {});
+  const [, setKinds] = usePageData<PageKinds>(PAGE_KINDS_CHANNEL, {});
 
   const kindOf = useCallback(
     (pageNumber: number): PageKind => kindAt(kinds, pageNumber),
@@ -53,14 +55,12 @@ export function usePageKinds(): PageKindsApi {
       // One key per page, so two people marking different pages never collide
       // and two marking the same one converge last-writer-wins — the same
       // reason titles are stored this way.
-      setKinds((draft) => {
-        // The default is written rather than the key removed: playhtml's draft
-        // is a Proxy with no `deleteProperty` trap, so `delete` throws and
-        // aborts the mutation. `kindAt` reads a stored `page` and a missing
-        // key identically, and `useOccupiedPages` counts only headings, so
-        // nothing downstream can tell the difference.
-        draft[pageNumber] = kind;
-      });
+      // The default is written rather than the key removed: playhtml's draft
+      // is a Proxy with no `deleteProperty` trap, so `delete` throws and
+      // aborts the mutation. `kindAt` reads a stored `page` and a missing
+      // key identically, and `useOccupiedPages` counts only headings, so
+      // nothing downstream can tell the difference.
+      writeEntries(PAGE_KINDS_CHANNEL, { [pageNumber]: kind }, setKinds);
     },
     [setKinds],
   );

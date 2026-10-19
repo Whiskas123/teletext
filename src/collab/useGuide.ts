@@ -37,7 +37,8 @@
  */
 
 import { useCallback, useMemo } from 'react';
-import { usePageDataWithBoot } from './bootData';
+import { usePageData } from '@playhtml/react';
+import { useContentChannel, writeEntries } from './archiveStore';
 
 import { guideEntries, type GuideEntry } from '../domain/guide';
 import { readTitle, validateTitle } from '../domain/titles';
@@ -48,7 +49,11 @@ import type { PagesData, TitlesData } from './types';
 export const TITLES_CHANNEL = 'titles';
 
 /** Result of {@link GuideApi.setTitle} (delegates to `validateTitle`). */
-export type SetTitleResult = 'ok' | 'too-long';
+/**
+ * `not-saved` when the page is a curated one and the archive has not been read
+ * from the database yet — nothing was written, and the editor says so.
+ */
+export type SetTitleResult = 'ok' | 'too-long' | 'not-saved';
 
 /**
  * Public TV_Guide API surface (see design.md "Shared-state hooks: useGuide").
@@ -106,10 +111,9 @@ const DEFAULT_PAGES_DATA: PagesData = {};
  * `pages` channel at all.
  */
 export function usePageTitles(): Pick<GuideApi, 'title' | 'setTitle'> {
-  const [titles, setTitles] = usePageDataWithBoot<TitlesData>(
-    TITLES_CHANNEL,
-    DEFAULT_TITLES_DATA,
-  );
+  const titles = useContentChannel<TitlesData>(TITLES_CHANNEL, DEFAULT_TITLES_DATA);
+  // Only for writing playground titles; curated ones go to the archive store.
+  const [, setTitles] = usePageData<TitlesData>(TITLES_CHANNEL, DEFAULT_TITLES_DATA);
 
   // Read the current Page_Title, '' when unset (Req 9.2).
   const title = useCallback(
@@ -126,10 +130,9 @@ export function usePageTitles(): Pick<GuideApi, 'title' | 'setTitle'> {
       }
       // Write a single title key so concurrent edits converge via Yjs LWW
       // (Req 9.4, 9.12). The trimmed value may be '' — a length-0 title.
-      setTitles((draft) => {
-        draft[pageNumber] = result.value;
-      });
-      return 'ok';
+      return writeEntries(TITLES_CHANNEL, { [pageNumber]: result.value }, setTitles)
+        ? 'ok'
+        : 'not-saved';
     },
     [setTitles],
   );
@@ -138,8 +141,8 @@ export function usePageTitles(): Pick<GuideApi, 'title' | 'setTitle'> {
 }
 
 export function useGuide(): GuideApi {
-  const [titles] = usePageDataWithBoot<TitlesData>(TITLES_CHANNEL, DEFAULT_TITLES_DATA);
-  const [pages] = usePageDataWithBoot<PagesData>(PAGES_CHANNEL, DEFAULT_PAGES_DATA);
+  const titles = useContentChannel<TitlesData>(TITLES_CHANNEL, DEFAULT_TITLES_DATA);
+  const pages = useContentChannel<PagesData>(PAGES_CHANNEL, DEFAULT_PAGES_DATA);
   const { title, setTitle } = usePageTitles();
 
   // The qualifying, ascending-ordered listing (Req 9.7, 9.11, 9.13).

@@ -131,6 +131,13 @@ export interface MirrorOptions {
   maxRemovals?: number;
   /** Deletions to send even if they would otherwise be held. */
   confirmed?: ReadonlySet<number>;
+  /**
+   * The pages this mirror is responsible for. Both sides are cut to it before
+   * comparing, so a page another store owns is neither written nor deleted —
+   * the curated archive lives in the database and the playground in playhtml,
+   * and each side's mirror must leave the other's rows alone.
+   */
+  scope?: (pageNumber: number) => boolean;
 }
 
 /**
@@ -142,8 +149,12 @@ export interface MirrorOptions {
 export function planMirror(
   live: ReadonlyMap<string, LiveScreen>,
   copy: ReadonlyMap<string, string | null>,
-  { maxRemovals = 10, confirmed = new Set() }: MirrorOptions = {},
+  { maxRemovals = 10, confirmed = new Set(), scope }: MirrorOptions = {},
 ): MirrorPlan {
+  if (scope != null) {
+    live = new Map([...live].filter(([, screen]) => scope(screen.pageNumber)));
+    copy = new Map([...copy].filter(([key]) => scope(Number(key.split('.')[0]))));
+  }
   const upserts: string[] = [];
   for (const [key, screen] of live) {
     if (copy.get(key) !== screen.digest) upserts.push(key);

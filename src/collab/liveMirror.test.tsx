@@ -36,8 +36,8 @@ beforeEach(() => {
   copyRows = [];
   posts = [];
   for (const key of Object.keys(channels)) delete channels[key];
-  channels.pages = { 100: drawn('A'), 101: drawn('B') };
-  channels.titles = { 100: 'Index' };
+  channels.pages = { 700: drawn('A'), 701: drawn('B') };
+  channels.titles = { 700: 'Index' };
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
@@ -77,8 +77,8 @@ describe('the live mirror', () => {
     await settle();
 
     expect(posts).toHaveLength(1);
-    expect(Object.keys(posts[0].pages as object).sort()).toEqual(['100', '101']);
-    expect(Object.keys(posts[0].digests as object).sort()).toEqual(['100', '101']);
+    expect(Object.keys(posts[0].pages as object).sort()).toEqual(['700', '701']);
+    expect(Object.keys(posts[0].digests as object).sort()).toEqual(['700', '701']);
     expect(status.phase).toBe('synced');
   });
 
@@ -89,8 +89,8 @@ describe('the live mirror', () => {
     unmount();
 
     copyRows = [
-      [100, 1, digests['100']],
-      [101, 1, digests['101']],
+      [700, 1, digests['700']],
+      [701, 1, digests['701']],
     ];
     posts = [];
     render(<Harness />);
@@ -100,14 +100,14 @@ describe('the live mirror', () => {
   });
 
   it('deletes a page that left the service', async () => {
-    copyRows = [[102, 1, 'old']];
+    copyRows = [[702, 1, 'old']];
     render(<Harness />);
     await settle();
-    expect(posts.at(-1)?.removed).toEqual([102]);
+    expect(posts.at(-1)?.removed).toEqual([702]);
   });
 
   it('holds back deletions that look like a broken document', async () => {
-    copyRows = Array.from({ length: 25 }, (_, i) => [300 + i, 1, 'old'] as [number, number, string]);
+    copyRows = Array.from({ length: 25 }, (_, i) => [750 + i, 1, 'old'] as [number, number, string]);
     render(<Harness />);
     await settle();
     expect(posts.flatMap((post) => (post.removed as number[]) ?? [])).toEqual([]);
@@ -124,7 +124,7 @@ describe('the live mirror', () => {
 
   it('does nothing until playhtml has synced — an empty document is not a deleted one', async () => {
     isLoading = true;
-    copyRows = [[100, 1, 'x']];
+    copyRows = [[700, 1, 'x']];
     render(<Harness />);
     await settle();
     expect(fetch).not.toHaveBeenCalled();

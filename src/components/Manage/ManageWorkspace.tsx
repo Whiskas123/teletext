@@ -12,6 +12,7 @@ import { Link } from 'react-router-dom';
 
 import type { ArchiveAdminApi } from '../../collab/useArchiveAdmin';
 import type { ShowcaseApi } from '../../collab/useShowcase';
+import type { ArchiveSaveStatus } from '../../collab/archiveStore';
 import { LIVE_HOST, type MirrorApi } from '../../collab/liveMirror';
 import type { PageKind } from '../../domain/directory';
 import { TAB_KEYS, tabForKey, type TabKey, type TabNavKey } from '../../domain/manageTabs';
@@ -32,8 +33,14 @@ export interface ManageDeps {
   setKind(pageNumber: number, kind: PageKind): void;
   /** The live mirror keeping the database's copy of the pages current. */
   mirror: MirrorApi;
-  /** Whether the live document has synced. */
-  connected: boolean;
+  /**
+   * The curated archive (100..699), read fresh from the database and saved
+   * back to it. Once it is `ready` the pages can be listed and changed — with
+   * or without playhtml.
+   */
+  archive: ArchiveSaveStatus;
+  /** Whether playhtml has synced: only the playground (700+) needs it. */
+  live: boolean;
   /** Not synced long past a cold load (`useConnection`'s `unreachable`). */
   unreachable: boolean;
 }
@@ -53,7 +60,8 @@ const TAB_NAMES: Record<TabKey, string> = {
 const NAV_KEYS: readonly string[] = ['ArrowRight', 'ArrowLeft', 'Home', 'End'];
 
 export function ManageWorkspace({ deps, tab, query }: ManageWorkspaceProps) {
-  const { data, showcase, kindOf, setKind, mirror, connected, unreachable } = deps;
+  const { data, showcase, kindOf, setKind, mirror, archive, live, unreachable } = deps;
+  const ready = archive.ready;
   const actions = useManageActions({ data, showcase, setKind });
   const [confirming, setConfirming] = useState<ConfirmSpec | null>(null);
   const tabRefs = useRef(new Map<TabKey, HTMLButtonElement | null>());
@@ -70,7 +78,7 @@ export function ManageWorkspace({ deps, tab, query }: ManageWorkspaceProps) {
   );
 
   const counts: Record<TabKey, string | null> = {
-    pages: connected ? String(data.occupiedPages.length) : null,
+    pages: ready ? String(data.occupiedPages.length) : null,
     front: showcase.loading ? null : String(showcase.entries.length),
     bars: String(data.menus.length),
   };
@@ -107,8 +115,20 @@ export function ManageWorkspace({ deps, tab, query }: ManageWorkspaceProps) {
           ))}
         </nav>
         <span className="mg-grow" />
-        <span className={`mg-live${connected ? ' mg-live-on' : ''}`} role="status">
-          {connected ? 'Live' : unreachable ? 'Unreachable' : 'Connecting…'}
+        {archive.phase === 'saving' && (
+          <span className="mg-live" role="status">Saving…</span>
+        )}
+        {archive.phase === 'error' && archive.ready && (
+          <span className="mg-mirror-badge mg-mirror-bad" role="status" title={archive.error ?? undefined}>
+            Not saved
+          </span>
+        )}
+        <span
+          className={`mg-live${live ? ' mg-live-on' : ''}`}
+          role="status"
+          title="The playground (700+) is edited live through playhtml."
+        >
+          {live ? 'Playground live' : unreachable ? 'Playground offline' : 'Connecting…'}
         </span>
         <MirrorBadge mirror={mirror} onConfirmHeld={() => setConfirming({
           title: `Remove ${mirror.held.length} pages from the backup?`,
@@ -133,6 +153,32 @@ export function ManageWorkspace({ deps, tab, query }: ManageWorkspaceProps) {
         </div>
       )}
 
+      {data.playgroundToRestore > 0 && (
+        <div className="mg-banner mg-host-banner" role="status">
+          The playground (700+) is empty here, but the backup holds {data.playgroundToRestore} of its
+          screens — what a move to a new playhtml room leaves behind.
+          <button
+            type="button"
+            className="mg-btn mg-btn-small"
+            onClick={() =>
+              setConfirming({
+                title: 'Restore the playground from the backup?',
+                confirmLabel: `Restore ${data.playgroundToRestore} screens`,
+                body: (
+                  <p>
+                    Writes the playground screens the database holds into the live document, with their titles,
+                    roles and descriptions. Curated pages are not touched.
+                  </p>
+                ),
+                onConfirm: () => void data.restorePlayground(),
+              })
+            }
+          >
+            Restore playground
+          </button>
+        </div>
+      )}
+
       {unreachable && (
         <div className="mg-banner mg-host-banner" role="alert">
           {unreachableText(mirror.daily)}
@@ -147,8 +193,8 @@ export function ManageWorkspace({ deps, tab, query }: ManageWorkspaceProps) {
             kindOf={kindOf}
             isShowcased={showcase.has}
             query={query}
-            connected={connected}
-            unreachable={unreachable}
+            ready={ready}
+            loadError={ready ? null : archive.error}
             confirm={setConfirming}
           />
         ) : tab.selected === 'front' ? (
@@ -294,13 +340,14 @@ function MirrorBadge({ mirror, onConfirmHeld }: { mirror: MirrorApi; onConfirmHe
 function unreachableText(daily: MirrorApi['daily']): string {
   const when = (iso: string) => new Date(iso).toLocaleString();
   const head =
-    'The live pages cannot be reached: playhtml has not answered for over 10 seconds, ' +
-    'so nothing here can be read or changed until it does.';
+    'The playground (700+) and the rooms cannot be reached: playhtml has not answered for over ' +
+    '10 seconds, so playground pages are shown from the backup and cannot be changed. ' +
+    'Curated pages (100–699) live in the database and are unaffected.';
   if (daily == null) return head;
   if (!daily.ok) {
     const since = daily.lastOkAt == null ? '' : ` It last worked ${when(daily.lastOkAt)}.`;
-    return `${head} The daily backup cannot read them either.${since} Latest attempt, ${when(daily.ranAt)}: ${daily.detail ?? 'failed'}`;
+    return `${head} The daily backup cannot read playhtml either.${since} Latest attempt, ${when(daily.ranAt)}: ${daily.detail ?? 'failed'}`;
   }
   if (daily.stale) return `${head} The daily backup has not run since ${when(daily.ranAt)}.`;
-  return `${head} The daily backup read them ${when(daily.ranAt)}, so this started after that — it may be this browser's connection.`;
+  return `${head} The daily backup read playhtml ${when(daily.ranAt)}, so this started after that — it may be this browser's connection.`;
 }

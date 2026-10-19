@@ -637,13 +637,15 @@ export function useManageActions({
         // Refused before either store was written, so nothing is half-saved.
         return result.ok
           ? { ok: true as const }
-          : {
-              ok: false as const,
-              error: textTooLong(
-                result.field,
-                result.field === 'title' ? MAX_TITLE_LENGTH : MAX_DESCRIPTION_LENGTH,
-              ).text,
-            };
+          : result.field == null
+            ? { ok: false as const, error: result.error }
+            : {
+                ok: false as const,
+                error: textTooLong(
+                  result.field,
+                  result.field === 'title' ? MAX_TITLE_LENGTH : MAX_DESCRIPTION_LENGTH,
+                ).text,
+              };
       }),
     [runPageAction, data],
   );

@@ -1,5 +1,11 @@
 /**
- * `POST /api/snapshot` — store the current playhtml state in `live_pages`.
+ * `POST /api/snapshot` — store pages in `live_pages`.
+ *
+ * Since October 2026 `live_pages` is two things. For the curated archive
+ * (100..699) it is the store itself: `/manage` and the editor write those pages
+ * here and nowhere else (`src/collab/archiveStore.ts`), after the one playhtml
+ * document holding everything grew too large for playhtml's server to open.
+ * For the rest — the playground — it is still the backup described below.
  *
  * This is the backup that makes collaborative edits survivable. playhtml keeps
  * the live document on PartyKit, which is a third-party service this project
@@ -61,6 +67,7 @@ import {
 } from '../src/domain/subpages';
 import { liveScreens, planMirror } from '../src/domain/liveMirror';
 import { SITE_URL } from '../src/domain/seo';
+import { isArchivePage } from '../src/domain/access';
 import { db, transaction } from './_lib/db';
 import { LiveDocumentError, readLiveDocument, type LiveDocumentRead } from './_lib/liveDocument';
 import { bodyObject, fail, json, methodIs, queryValue, serverError } from './_lib/http';
@@ -235,20 +242,34 @@ function deletions(body: Record<string, unknown>): {
 /** The pages file visitors draw from until playhtml syncs, from the backup. */
 async function bootData(): Promise<BootData> {
   const rows = await db()`
-    select page_number, subpage, subpage_count, title, kind, cells
+    select page_number, subpage, subpage_count, title, kind, description, source, cells
     from live_pages
     order by page_number, subpage
   `;
-  const data: BootData = { pages: {}, 'subpage-counts': {}, titles: {}, 'page-kinds': {} };
+  const data: Required<BootData> = {
+    pages: {},
+    'subpage-counts': {},
+    titles: {},
+    'page-kinds': {},
+    descriptions: {},
+    'page-sources': {},
+  };
   for (const row of rows) {
     const pageNumber = Number(row.page_number);
     const subpage = Number(row.subpage);
-    data.pages[String(pageKey(pageNumber, subpage))] = bootPage(row.cells);
+    const key = String(pageKey(pageNumber, subpage));
+    data.pages[key] = bootPage(row.cells);
+    if (row.source != null && typeof row.source === 'object') {
+      data['page-sources'][key] = row.source;
+    }
     const count = Number(row.subpage_count ?? subpage);
     data['subpage-counts'][pageNumber] = Math.max(data['subpage-counts'][pageNumber] ?? 1, count);
     if (subpage === MIN_SUBPAGE) {
       if (typeof row.title === 'string' && row.title !== '') data.titles[pageNumber] = row.title;
       if (isPageKind(row.kind)) data['page-kinds'][pageNumber] = row.kind;
+      if (typeof row.description === 'string' && row.description !== '') {
+        data.descriptions[pageNumber] = row.description;
+      }
     }
   }
   return data;
@@ -350,7 +371,12 @@ async function dailyRead(
   const copy = new Map(
     index.map((row) => [`${row.page_number}.${row.subpage}`, (row.digest as string | null) ?? null]),
   );
-  const plan = planMirror(screens, copy, { maxRemovals: 0 });
+  // The curated archive (100..699) is the database's own: the live document
+  // no longer holds it, and must never write over it or count it as lingering.
+  const plan = planMirror(screens, copy, {
+    maxRemovals: 0,
+    scope: (page) => !isArchivePage(page),
+  });
 
   let stored = 0;
   for (let at = 0; at < plan.upserts.length; at += DAILY_CHUNK) {
@@ -407,8 +433,15 @@ export default async function handler(
       res.setHeader('Content-Encoding', 'gzip');
       res.setHeader('Vary', 'Accept-Encoding');
       // At most a minute old at the edge; a stale copy is served while it
-      // refreshes, since any fallback beats a blank screen.
-      res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=600');
+      // refreshes, since any fallback beats a blank screen. `fresh` skips the
+      // cache: /manage edits the curated pages from this, and must not start
+      // from a copy that predates its own last save.
+      res.setHeader(
+        'Cache-Control',
+        queryValue(req, 'fresh') != null
+          ? 'no-store'
+          : 'public, max-age=0, s-maxage=60, stale-while-revalidate=600',
+      );
       res.status(200).send(body);
     } catch (error) {
       serverError(res, 'snapshot/boot', error);

@@ -1,20 +1,22 @@
 /**
  * useArchiveAdmin — the management screen's data layer.
  *
- * ## One store for the service
+ * ## Two stores, one view
  *
- * Everything that describes what is on air lives in playhtml: the cells, the
- * titles, the roles, the screen counts — and, since the publication map moved
- * out of the database, where each archive screen came from (`page-sources`, see
- * `domain/pageSource.ts`). A publish, a renumbering, a merge or a delete is a
- * set of writes to that one document made in the same moment, so no step can
- * finish while another is left undone.
+ * What describes a page on air — its cells, title, role, screen count, and
+ * where each screen came from (`page-sources`, see `domain/pageSource.ts`) —
+ * lives in the database for the curated archive (100..699) and in playhtml for
+ * the playground (`domain/contentStores.ts`). This hook sees both as one set of
+ * channels (`useRoutedChannel`), so a publish, a renumbering, a merge or a
+ * delete is written as before and each change lands in the store that owns
+ * its page. An operation is refused whole, up front, when a store it would
+ * touch is not ready (`refusalFor`), so none is left half done.
  *
  * The server is still asked two things: to *render* a capture (its cells with
  * the shift and bottom bar applied — `PUT /api/published`, which records
- * nothing), and to browse the corpus. The database's copy of the pages is kept
- * by the live mirror (`collab/liveMirror.ts`), which follows playhtml; nothing
- * here writes it.
+ * nothing), and to browse the corpus. The curated archive is saved by the
+ * archive store (`collab/archiveStore.ts`); the playground's backup is kept by
+ * the live mirror (`collab/liveMirror.ts`), which follows playhtml.
  *
  * The old table, `published_pages`, is read once, so its records can be moved
  * into playhtml (`legacy` below). After that it is history.
@@ -25,8 +27,8 @@
  * query is driven by the caller's filters — one owner per value.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { usePageData } from '@playhtml/react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { usePlayContext } from '@playhtml/react';
 
 import { applyMenu, type CustomMenu, type MenuDraft } from '../domain/menu';
 import { pageToArray } from '../domain/pageEncoding';
@@ -44,6 +46,9 @@ import {
   type PageSources,
 } from '../domain/pageSource';
 import { planArrange, type PageMove, type ReorderPlan } from '../domain/reorder';
+import { loadArchiveFresh, refusalFor, useRoutedChannel } from './archiveStore';
+import { getBoot, subscribeBoot } from './bootData';
+import { pickStore } from '../domain/contentStores';
 import { usePageTitles } from './useGuide';
 import { useImportPages } from './useImportPages';
 import { PAGES_CHANNEL } from './useEditPage';
@@ -151,7 +156,8 @@ export interface CaptureFilters {
 /** Saving a page's text refuses before it writes anything. */
 export type SavePageTextResult =
   | { ok: true }
-  | { ok: false; field: 'title' | 'description'; limit: number };
+  | { ok: false; field: 'title' | 'description'; limit: number }
+  | { ok: false; field?: undefined; error: string };
 
 async function getJson<T>(url: string): Promise<T> {
   const response = await fetch(url, {
@@ -313,6 +319,14 @@ export interface ArchiveAdminApi {
   handMadePages: number[];
   /** The old publication table, while it still has records to move in. */
   legacy: LegacyRecords;
+  /**
+   * Playground screens (700+) the database's copy holds and the live document
+   * does not have at all — what a move to a new, empty playhtml room leaves.
+   * Zero otherwise, including until playhtml has synced.
+   */
+  playgroundToRestore: number;
+  /** Write those screens, with their titles and the rest, into the live document. */
+  restorePlayground(): Result;
 }
 
 const PAGE_SIZE = 60;
@@ -334,25 +348,49 @@ export function useArchiveAdmin({
   // The live document, so the screen can show what is on a page right now
   // rather than what the database says was published to it — and so a
   // renumbering can move the content, not just the records.
-  const [livePages, setPages] = usePageData<PagesData>(PAGES_CHANNEL, {});
-  const [liveTitles, setTitles] = usePageData<TitlesData>(TITLES_CHANNEL, {});
-  const [, setKinds] = usePageData<PageKinds>(PAGE_KINDS_CHANNEL, {});
+  //
+  // Each channel is the curated archive (from the database) and the playground
+  // (from playhtml) as one, and each setter sends what a write changed to the
+  // store that owns it (`archiveStore.ts`).
+  const [livePages, setPages] = useRoutedChannel<PagesData>(PAGES_CHANNEL, {});
+  const [liveTitles, setTitles] = useRoutedChannel<TitlesData>(TITLES_CHANNEL, {});
+  const [, setKinds] = useRoutedChannel<PageKinds>(PAGE_KINDS_CHANNEL, {});
   // Descriptions live beside titles rather than only on the publication record,
   // so a page made by hand can have one too.
-  const [liveDescriptions, setDescriptions] = usePageData<DescriptionsData>(
+  const [liveDescriptions, setDescriptions] = useRoutedChannel<DescriptionsData>(
     DESCRIPTIONS_CHANNEL,
     {},
   );
   // How many screens each page holds. Read here for renumbering (a carousel
   // travels with its page) and written through `useSubpages`, which owns the
   // add / remove rules.
-  const [liveSubpageCounts, setSubpageCounts] = usePageData<SubpageCounts>(
+  const [liveSubpageCounts, setSubpageCounts] = useRoutedChannel<SubpageCounts>(
     SUBPAGE_COUNTS_CHANNEL,
     {},
   );
   const subpages = useSubpages();
   // Where each archive screen came from, keyed like `pages` and moved with it.
-  const [liveSources, setSources] = usePageData<PageSources>(SOURCES_CHANNEL, {});
+  const [liveSources, setSources] = useRoutedChannel<PageSources>(SOURCES_CHANNEL, {});
+
+  const { isLoading, isProviderMissing } = usePlayContext();
+  const liveSynced = !isLoading && !isProviderMissing;
+  /**
+   * Checked before an operation writes anything, so it is refused whole rather
+   * than half-done when one of the stores it spans is not ready.
+   */
+  const refuse = useCallback(
+    (pages: readonly number[]): Result | null => {
+      const error = refusalFor(pages, liveSynced);
+      return error == null ? null : { ok: false, error };
+    },
+    [liveSynced],
+  );
+
+  // The curated archive is edited from a fresh read of the database, never
+  // from the edge's minute-old copy.
+  useEffect(() => {
+    if (admin) void loadArchiveFresh();
+  }, [admin]);
 
   /** The query as a string; also the identity of the result that answers it. */
   const queryKey = queryString(filters, PAGE_SIZE, offset);
@@ -690,6 +728,8 @@ export function useArchiveAdmin({
 
   const publish = useCallback<ArchiveAdminApi['publish']>(
     async ({ pageNumber, subpage = MIN_SUBPAGE, captureId, title, description, transforms }) => {
+      const refused = refuse([pageNumber]);
+      if (refused != null) return refused;
       try {
         const response = await fetch('/api/published', {
           method: 'PUT',
@@ -735,20 +775,20 @@ export function useArchiveAdmin({
         return { ok: false, error: 'Could not reach the server.' };
       }
     },
-    [writeScreen, liveSubpageCounts, setSubpageCounts, setTitle, setDescriptions],
+    [refuse, writeScreen, liveSubpageCounts, setSubpageCounts, setTitle, setDescriptions],
   );
 
   /** Take a page's last screen off air, with where it came from. */
   const removeLastSubpage = useCallback<ArchiveAdminApi['removeLastSubpage']>(
     async (pageNumber) => {
       const count = subpageCountOf(liveSubpageCounts, pageNumber);
-      if (count <= MIN_SUBPAGE) return null;
+      if (count <= MIN_SUBPAGE || refuse([pageNumber]) != null) return null;
       setSources((draft) => {
         draft[String(pageKey(pageNumber, count))] = {};
       });
       return subpages.removeLastSubpage(pageNumber);
     },
-    [liveSubpageCounts, setSources, subpages],
+    [refuse, liveSubpageCounts, setSources, subpages],
   );
 
   const isEdited = useCallback(
@@ -928,6 +968,11 @@ export function useArchiveAdmin({
               : 'That renumbering is not possible.',
         };
       }
+      const refused = refuse([
+        ...plan.lifts,
+        ...[...plan.moves, ...plan.drops].flatMap(({ from, to }) => [from, to]),
+      ]);
+      if (refused != null) return refused;
       const strays = plan.drops.filter(
         ({ from, to }) => publishedByPage.has(from) && to >= PLAYGROUND_MIN_PAGE,
       );
@@ -940,7 +985,7 @@ export function useArchiveAdmin({
       replayPlan(plan);
       return { ok: true };
     },
-    [occupiedPages, publishedByPage, replayPlan],
+    [refuse, occupiedPages, publishedByPage, replayPlan],
   );
 
   const savePageText = useCallback<ArchiveAdminApi['savePageText']>(
@@ -955,6 +1000,8 @@ export function useArchiveAdmin({
       if (description.length > MAX_DESCRIPTION_LENGTH) {
         return { ok: false, field: 'description', limit: MAX_DESCRIPTION_LENGTH };
       }
+      const refused = refuse([pageNumber]);
+      if (refused != null && !refused.ok) return { ok: false, error: refused.error };
 
       // One key per page in each channel, so two people editing different
       // pages never collide — the same shape titles already had.
@@ -966,7 +1013,7 @@ export function useArchiveAdmin({
       });
       return { ok: true };
     },
-    [setTitle, setDescriptions],
+    [refuse, setTitle, setDescriptions],
   );
 
   /**
@@ -984,6 +1031,8 @@ export function useArchiveAdmin({
    */
   const absorbPage = useCallback<ArchiveAdminApi['absorbPage']>(
     async (target, source) => {
+      const refused = refuse([target, source]);
+      if (refused != null) return refused;
       const from = subpageCountOf(liveSubpageCounts, target);
       const moving = subpageCountOf(liveSubpageCounts, source);
       const carry = (live: Readonly<Record<string, unknown>> | undefined) => {
@@ -1013,12 +1062,14 @@ export function useArchiveAdmin({
       clearPageText(source);
       return { ok: true };
     },
-    [livePages, liveSources, liveSubpageCounts, setPages, setSources, setSubpageCounts, clearPageText],
+    [refuse, livePages, liveSources, liveSubpageCounts, setPages, setSources, setSubpageCounts, clearPageText],
   );
 
   /** Remove a page entirely: every screen, where each came from, and its text. */
   const deletePage = useCallback<ArchiveAdminApi['deletePage']>(
     async (pageNumber) => {
+      const refused = refuse([pageNumber]);
+      if (refused != null) return refused;
       const keys = pageKeys(pageNumber, subpageCountOf(liveSubpageCounts, pageNumber)).map(String);
       setPages((draft) => {
         for (const key of keys) (draft as Record<string, unknown>)[key] = {};
@@ -1029,7 +1080,7 @@ export function useArchiveAdmin({
       clearPageText(pageNumber);
       return { ok: true };
     },
-    [liveSubpageCounts, setPages, setSources, clearPageText],
+    [refuse, liveSubpageCounts, setPages, setSources, clearPageText],
   );
 
   /* --- the old table ------------------------------------------------------- */
@@ -1092,6 +1143,53 @@ export function useArchiveAdmin({
     [],
   );
 
+  /* --- after a move to a new room ------------------------------------------ */
+
+  const boot = useSyncExternalStore(subscribeBoot, getBoot, getBoot);
+  const backupPlayground = useMemo(
+    () => pickStore(boot?.pages as Record<string, unknown> | undefined, false),
+    [boot],
+  );
+  const playgroundOnAir = occupiedPages.some((page) => page >= PLAYGROUND_MIN_PAGE);
+  const playgroundToRestore =
+    liveSynced && !playgroundOnAir ? Object.keys(backupPlayground).length : 0;
+
+  const restorePlayground = useCallback((): Result => {
+    const refused = refuse([PLAYGROUND_MIN_PAGE]);
+    if (refused != null) return refused;
+    if (boot == null) return { ok: false, error: 'The backup has not loaded yet.' };
+    const playground = (record: unknown) => pickStore(record as Record<string, unknown> | undefined, false);
+    // Screens in pieces small enough for playhtml's server, as every bulk write.
+    for (const write of orderedWrites(changedEntries(backupPlayground, livePages as Record<string, unknown>))) {
+      setPages((draft) => {
+        for (const [key, value] of write) (draft as Record<string, unknown>)[key] = value;
+      });
+    }
+    const sources = playground(boot['page-sources']);
+    for (const write of orderedWrites(changedEntries(sources, liveSources))) {
+      setSources((draft) => {
+        for (const [key, value] of write) draft[key] = value;
+      });
+    }
+    setTitles((draft) => Object.assign(draft, playground(boot.titles)));
+    setKinds((draft) => Object.assign(draft, playground(boot['page-kinds'])));
+    setDescriptions((draft) => Object.assign(draft, playground(boot.descriptions)));
+    setSubpageCounts((draft) => Object.assign(draft, playground(boot['subpage-counts'])));
+    return { ok: true };
+  }, [
+    refuse,
+    boot,
+    backupPlayground,
+    livePages,
+    liveSources,
+    setPages,
+    setSources,
+    setTitles,
+    setKinds,
+    setDescriptions,
+    setSubpageCounts,
+  ]);
+
   const legacy = useMemo<LegacyRecords>(
     () => ({
       adoptable: legacySplit.adoptable,
@@ -1137,5 +1235,7 @@ export function useArchiveAdmin({
     occupiedPages,
     handMadePages,
     legacy,
+    playgroundToRestore,
+    restorePlayground,
   };
 }

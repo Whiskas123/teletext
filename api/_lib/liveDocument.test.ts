@@ -26,7 +26,7 @@ function documentWith(channels: Record<string, Record<string, unknown>>): Y.Doc 
 
 describe('where the live document is', () => {
   it('names the room as playhtml does: the host without www, then the room', () => {
-    expect(roomName('teletext.joaobernardo.me')).toBe('teletext.joaobernardo.me-teletext-house');
+    expect(roomName('teletext.joaobernardo.me')).toBe('teletext.joaobernardo.me-teletext-house-2');
     expect(roomName('www.example.com', 'r')).toBe('example.com-r');
   });
 });

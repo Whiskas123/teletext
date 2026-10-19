@@ -65,12 +65,14 @@ export function loadBootData(): void {
     });
 }
 
-function subscribe(listener: () => void): () => void {
+export function subscribeBoot(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
+const subscribe = subscribeBoot;
 
-const getBoot = (): BootData | null => boot;
+/** The fetched file, or null until it lands (or if it never does). */
+export const getBoot = (): BootData | null => boot;
 const getNoBoot = (): BootData | null => null;
 
 type SetData<T> = ReturnType<typeof usePageData<T>>[1];

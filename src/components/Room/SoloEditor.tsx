@@ -276,7 +276,11 @@ export function SoloEditor() {
       // Show a validation message inline when the title is too long; the current
       // title is retained by setTitle (Req 9.6).
       setTitleError(
-        result === 'too-long' ? copy.editor.titleTooLong(TITLE_MAX_LENGTH) : null,
+        result === 'too-long'
+          ? copy.editor.titleTooLong(TITLE_MAX_LENGTH)
+          : result === 'not-saved'
+            ? copy.editor.titleNotSaved
+            : null,
       );
     },
     [setTitle, pageNumber, copy],

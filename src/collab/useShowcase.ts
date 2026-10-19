@@ -16,7 +16,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { usePageData } from '@playhtml/react';
+import { useContentChannel } from './archiveStore';
 
 import { normalizePage } from '../domain/pageOps';
 import {
@@ -156,8 +156,8 @@ export interface ShowcaseOptions {
 }
 
 export function useShowcase({ fresh = false }: ShowcaseOptions = {}): ShowcaseApi {
-  const [pages] = usePageData<PagesData>(PAGES_CHANNEL, {});
-  const [counts] = usePageData<SubpageCounts>(SUBPAGE_COUNTS_CHANNEL, {});
+  const pages = useContentChannel<PagesData>(PAGES_CHANNEL, {});
+  const counts = useContentChannel<SubpageCounts>(SUBPAGE_COUNTS_CHANNEL, {});
   const { title } = usePageTitles();
 
   // Seeded from the build, so the strip is on screen in the first frame rather

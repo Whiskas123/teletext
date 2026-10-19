@@ -35,6 +35,8 @@
  * Requirements covered: 6.1, 6.2, 6.3, 6.4, 6.7, 7.2, 7.3, 7.4, 7.7, 7.8, 7.9.
  */
 
+import { isArchiveKey } from '../domain/contentStores';
+import { loadArchiveFresh, setArchiveEntry, useContentChannel } from './archiveStore';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePageData } from '@playhtml/react';
 
@@ -112,7 +114,8 @@ export function useEditPage(
   pageNumber: number,
   subpage: number = MIN_SUBPAGE,
 ): EditPageApi {
-  const [pages, setPages] = usePageData<PagesData>(PAGES_CHANNEL, {});
+  const pages = useContentChannel<PagesData>(PAGES_CHANNEL, {});
+  const [, setPages] = usePageData<PagesData>(PAGES_CHANNEL, {});
 
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -216,6 +219,17 @@ export function useEditPage(
     const pending = { key: localKeyRef.current, cells };
     if (cells.size === 0) return;
 
+    // A curated page is saved to the database (`archiveStore.ts`). Refused
+    // until the archive has been read fresh; the edits stay in `localRef`, on
+    // screen, and go with the next flush.
+    if (isArchiveKey(pending.key)) {
+      const saved = setArchiveEntry<Record<number, Cell>>(PAGES_CHANNEL, String(pending.key), (cellMap) => {
+        for (const [index, cell] of pending.cells) cellMap[index] = { ...cell };
+      });
+      setSaveError(saved ? null : 'Not saved yet: the curated pages are still loading.');
+      return;
+    }
+
     try {
       // Still one key per cell, so the merge guarantees above are untouched:
       // concurrent edits to different cells write different keys and both
@@ -290,6 +304,11 @@ export function useEditPage(
     },
     [key, writePending],
   );
+
+  // Editing a curated page means editing the database's copy, read fresh.
+  useEffect(() => {
+    if (isArchiveKey(key)) void loadArchiveFresh();
+  }, [key]);
 
   // Nothing in hand when the editor goes away, or when it moves to another
   // page: an unflushed stroke would simply be lost.

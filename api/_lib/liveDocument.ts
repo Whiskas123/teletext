@@ -39,7 +39,7 @@ import { SUBPAGE_COUNTS_CHANNEL } from '../../src/domain/subpages';
 export const PLAYHTML_HOST = 'playhtml.spencerc99.workers.dev';
 
 /** The room `GlobalProvider` joins; playhtml prefixes the site's host. */
-export const PLAYHTML_ROOM = 'teletext-house';
+export const PLAYHTML_ROOM = 'teletext-house-2';
 
 /**
  * Channel ids, as the collab hooks name them. Restated rather than imported:
