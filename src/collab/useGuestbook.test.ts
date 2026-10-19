@@ -64,6 +64,20 @@ describe('useGuestbook before the book has synced', () => {
     expect(setData).not.toHaveBeenCalled();
   });
 
+  it('keeps a cache with signatures when the synced book is empty', () => {
+    const cached = JSON.stringify([
+      { id: 'old-1', name: 'Ana', authorId: 'x', ts: 1, cells: inkedSnippet() },
+    ]);
+    localStorage.setItem('teletext.guestbook.entries', cached);
+    isLoading = false;
+
+    const { result } = renderHook(() => useGuestbook());
+
+    // The empty book is what is shown, and the cache is left as it was.
+    expect(result.current.entries).toEqual([]);
+    expect(localStorage.getItem('teletext.guestbook.entries')).toBe(cached);
+  });
+
   it('signs once synced', () => {
     isLoading = false;
     const { result } = renderHook(() => useGuestbook());

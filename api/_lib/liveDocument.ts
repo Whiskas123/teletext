@@ -197,18 +197,21 @@ function connectOnce(
 
 /**
  * Connect, follow the reset handshake if the server asks for it, receive the
- * document, disconnect, and return its page channels.
+ * whole document, and disconnect. `room` defaults to the one the site uses;
+ * `scripts/salvageRoom.ts` names an older one.
  */
-export async function readLiveDocument({
+export async function receiveLiveDocument({
   siteHost,
+  room: roomId = PLAYHTML_ROOM,
   host = PLAYHTML_HOST,
   timeoutMs = 25_000,
 }: {
   siteHost: string;
+  room?: string;
   host?: string;
   timeoutMs?: number;
-}): Promise<LiveDocumentRead> {
-  const room = roomName(siteHost);
+}): Promise<{ doc: Y.Doc; ms: number }> {
+  const room = roomName(siteHost, roomId);
   const started = Date.now();
   let epoch: number | null = null;
 
@@ -229,11 +232,21 @@ export async function readLiveDocument({
       epoch = outcome.epoch;
       continue;
     }
-    return {
-      channels: readChannels(outcome.doc),
-      bytes: Y.encodeStateAsUpdate(outcome.doc).length,
-      ms: Date.now() - started,
-    };
+    return { doc: outcome.doc, ms: Date.now() - started };
   }
   throw new LiveDocumentError('reset-loop', 'The live document kept asking to be reset.');
+}
+
+/** {@link receiveLiveDocument}, reduced to its page channels. */
+export async function readLiveDocument(options: {
+  siteHost: string;
+  host?: string;
+  timeoutMs?: number;
+}): Promise<LiveDocumentRead> {
+  const { doc, ms } = await receiveLiveDocument(options);
+  return {
+    channels: readChannels(doc),
+    bytes: Y.encodeStateAsUpdate(doc).length,
+    ms,
+  };
 }

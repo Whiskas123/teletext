@@ -164,6 +164,12 @@ export function useGuestbook(): GuestbookApi {
   const cachedSignature = useRef<string | null>(null);
   useEffect(() => {
     if (syncing) return;
+    // An empty book never replaces a cache that has signatures in it. The
+    // page still shows the empty book — that is what the document says — but
+    // the cache may be the only copy left of signatures from a room that can
+    // no longer be opened: moving to a new playhtml room (October 2026) meant
+    // every visitor's next sync would otherwise have erased theirs.
+    if (synced.length === 0) return;
     const signature = synced
       .slice(0, CACHE_LIMIT)
       .map((entry) => `${entry.id}:${entry.ts}`)

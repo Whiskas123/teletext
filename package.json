@@ -18,6 +18,7 @@
     "db:verify-decoder": "bun run scripts/verifyDecoder.ts",
     "backup:read": "bun run scripts/readLiveDocument.ts",
     "room:migrate": "bun run scripts/migrateRoom.ts",
+    "room:salvage": "bun run scripts/salvageRoom.ts",
     "og:image": "bun run scripts/makeOgImage.ts"
   },
   "dependencies": {
