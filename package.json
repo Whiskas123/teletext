@@ -15,6 +15,7 @@
     "db:import-seed": "bun run --env-file=.env.local scripts/importSeedPages.ts",
     "db:backfill-images": "bun run --env-file=.env.local scripts/backfillImages.ts",
     "db:restore": "bun run --env-file=.env.local scripts/restoreFromSnapshot.ts",
+    "db:import-guestbook": "bun run --env-file=.env.local scripts/importGuestbook.ts",
     "db:verify-decoder": "bun run scripts/verifyDecoder.ts",
     "backup:read": "bun run scripts/readLiveDocument.ts",
     "room:migrate": "bun run scripts/migrateRoom.ts",

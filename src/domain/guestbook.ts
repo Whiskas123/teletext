@@ -25,7 +25,7 @@
  */
 
 import { COLS, type Cell, type TeletextPage } from '../types/teletext';
-import { normalizeCell } from './pageOps';
+import { isEmptyCell, normalizeCell } from './pageOps';
 import { DISPLAY_NAME_MAX, DISPLAY_NAME_MIN } from './identity';
 
 /** How many rows a snippet has: a third of a page's 24. */
@@ -50,6 +50,19 @@ export interface GuestbookEntry {
 /** The empty cell, matching `types/teletext.ts` and `domain/pageOps.ts`. */
 function emptyCell(): Cell {
   return { char: ' ', fg: 'white', bg: 'black', graphics: null };
+}
+
+/**
+ * A snippet as stored: only the cells with something in them, keyed by index.
+ * Most of a snippet is black, and every reader repairs a missing cell into the
+ * empty one ({@link normalizeSnippet}), so nothing is lost.
+ */
+export function compactSnippet(cells: TeletextPage): Record<number, Cell> {
+  const stored: Record<number, Cell> = {};
+  cells.forEach((cell, index) => {
+    if (!isEmptyCell(cell)) stored[index] = cell;
+  });
+  return stored;
 }
 
 /** A blank snippet, which is what the signing form opens on. */

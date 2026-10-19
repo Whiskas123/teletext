@@ -97,8 +97,8 @@ export function GuestbookPage() {
     setNotice(null);
   }, []);
 
-  const handleSign = useCallback(() => {
-    const result = sign(name, cells);
+  const handleSign = useCallback(async () => {
+    const result = await sign(name, cells);
     if (result.ok) {
       // The snippet goes, the name stays: signing twice is allowed, and
       // retyping your own name to do it would be a small insult.
@@ -114,7 +114,9 @@ export function GuestbookPage() {
           ? copy.guestbook.errorNameTooLong(DISPLAY_NAME_MAX)
           : result.reason === 'offline'
             ? copy.guestbook.errorOffline
-            : copy.guestbook.errorBlank,
+            : result.reason === 'too-soon'
+              ? copy.guestbook.errorTooSoon
+              : copy.guestbook.errorBlank,
     );
   }, [cells, copy.guestbook, name, sign]);
 
@@ -240,7 +242,7 @@ export function GuestbookPage() {
                 <button type="button" className="guestbook-clear" onClick={handleClear}>
                   {copy.guestbook.clear}
                 </button>
-                <button type="button" className="guestbook-submit" onClick={handleSign}>
+                <button type="button" className="guestbook-submit" onClick={() => void handleSign()}>
                   {copy.guestbook.submit}
                 </button>
               </div>

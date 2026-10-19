@@ -1,22 +1,16 @@
-// Feature: the guestbook's binding to the shared document, while it is not
-// there. Verifies: the page is told the book is unreachable once syncing has
-// gone on past `STALL_MS`, and a signature made before the sync is refused
-// rather than handed to playhtml, which would drop it without saying so.
+// Feature: the guestbook's binding to `/api/guestbook`. Verifies: the page is
+// told the book is unreachable once loading has gone on past `STALL_MS`, the
+// book comes from the server, a cache with signatures is never replaced by an
+// empty book, and signing reports what the server said.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 
 import { useGuestbook } from './useGuestbook';
 import { STALL_MS } from './useConnection';
 import { createEmptySnippet } from '../domain/guestbook';
 
-let isLoading = true;
-const setData = vi.fn();
-
-vi.mock('@playhtml/react', () => ({
-  usePageData: (_channel: string, fallback: unknown) => [fallback, setData],
-  usePlayContext: () => ({ isLoading, isProviderMissing: false }),
-}));
+const CACHE_KEY = 'teletext.guestbook.entries';
 
 function inkedSnippet() {
   const cells = createEmptySnippet();
@@ -24,18 +18,21 @@ function inkedSnippet() {
   return cells;
 }
 
-describe('useGuestbook before the book has synced', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-    isLoading = true;
-    setData.mockReset();
-  });
+const entry = (id: string, ts: number) => ({ id, name: 'Ana', authorId: 'x', ts, cells: { 0: inkedSnippet()[0] } });
 
+const answer = (status: number, body: unknown) =>
+  Promise.resolve(new Response(JSON.stringify(body), { status }));
+
+describe('useGuestbook', () => {
+  beforeEach(() => localStorage.clear());
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
   it('is loading, then unreachable once the wait is over', () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
     const { result } = renderHook(() => useGuestbook());
     expect(result.current.loading).toBe(true);
     expect(result.current.unreachable).toBe(false);
@@ -44,45 +41,53 @@ describe('useGuestbook before the book has synced', () => {
     expect(result.current.unreachable).toBe(true);
   });
 
-  it('stops being unreachable the moment the book arrives', () => {
-    const { result, rerender } = renderHook(() => useGuestbook());
-    act(() => vi.advanceTimersByTime(STALL_MS));
-
-    isLoading = false;
-    rerender();
-    expect(result.current.unreachable).toBe(false);
+  it('shows the book the server holds, newest first', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => answer(200, { entries: [entry('a', 1), entry('b', 2)] })));
+    const { result } = renderHook(() => useGuestbook());
+    await waitFor(() => expect(result.current.entries.map((e) => e.id)).toEqual(['b', 'a']));
     expect(result.current.loading).toBe(false);
+    expect(result.current.unreachable).toBe(false);
   });
 
-  it('refuses to sign rather than letting playhtml drop the write', () => {
+  it('keeps a cache with signatures when the book is empty', async () => {
+    const cached = JSON.stringify([{ ...entry('old', 1), cells: inkedSnippet() }]);
+    localStorage.setItem(CACHE_KEY, cached);
+    vi.stubGlobal('fetch', vi.fn(() => answer(200, { entries: [] })));
+
+    const { result } = renderHook(() => useGuestbook());
+    await waitFor(() => expect(result.current.entries).toEqual([]));
+    expect(localStorage.getItem(CACHE_KEY)).toBe(cached);
+  });
+
+  it('signs through the server and shows the signature at once', async () => {
+    const fetchMock = vi.fn((_url: string, init?: RequestInit) =>
+      init?.method === 'POST' ? answer(201, { entry: entry('new', 5) }) : answer(200, { entries: [] }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
     const { result } = renderHook(() => useGuestbook());
 
-    expect(result.current.sign('Ana', inkedSnippet())).toEqual({
-      ok: false,
-      reason: 'offline',
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await result.current.sign('Ana', inkedSnippet());
     });
-    expect(setData).not.toHaveBeenCalled();
+    expect(outcome).toEqual({ ok: true, name: 'Ana' });
+    expect(result.current.entries.map((e) => e.id)).toEqual(['new']);
   });
 
-  it('keeps a cache with signatures when the synced book is empty', () => {
-    const cached = JSON.stringify([
-      { id: 'old-1', name: 'Ana', authorId: 'x', ts: 1, cells: inkedSnippet() },
-    ]);
-    localStorage.setItem('teletext.guestbook.entries', cached);
-    isLoading = false;
-
+  it('says why a signature did not land', async () => {
+    let status = 429;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, init?: RequestInit) =>
+        init?.method === 'POST' ? answer(status, {}) : answer(200, { entries: [] }),
+      ),
+    );
     const { result } = renderHook(() => useGuestbook());
 
-    // The empty book is what is shown, and the cache is left as it was.
-    expect(result.current.entries).toEqual([]);
-    expect(localStorage.getItem('teletext.guestbook.entries')).toBe(cached);
-  });
-
-  it('signs once synced', () => {
-    isLoading = false;
-    const { result } = renderHook(() => useGuestbook());
-
-    expect(result.current.sign('Ana', inkedSnippet())).toEqual({ ok: true, name: 'Ana' });
-    expect(setData).toHaveBeenCalledTimes(1);
+    await expect(result.current.sign('Ana', inkedSnippet())).resolves.toEqual({ ok: false, reason: 'too-soon' });
+    status = 500;
+    await expect(result.current.sign('Ana', inkedSnippet())).resolves.toEqual({ ok: false, reason: 'offline' });
+    // Refused before anything is sent, by the same rules the server applies.
+    await expect(result.current.sign('', inkedSnippet())).resolves.toEqual({ ok: false, reason: 'no-name' });
   });
 });

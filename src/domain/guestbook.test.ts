@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 
 import {
+  compactSnippet,
   SNIPPET_CELLS,
   SNIPPET_ROWS,
   appendEntry,
@@ -84,6 +85,19 @@ describe('the snippet', () => {
     const coloured = createEmptySnippet();
     coloured[3] = { char: ' ', fg: 'white', bg: 'blue', graphics: null };
     expect(isBlankSnippet(coloured)).toBe(true);
+  });
+});
+
+describe('a stored snippet', () => {
+  // Only the inked cells are stored; reading it back must give the same
+  // snippet, empty cells and all.
+  it('loses nothing between storing and reading back', () => {
+    const cells = createEmptySnippet();
+    cells[5] = { char: 'X', fg: 'yellow', bg: 'blue', graphics: null };
+    cells[300] = { ...cells[300], bg: 'red' };
+    const stored = compactSnippet(cells);
+    expect(Object.keys(stored).sort()).toEqual(['300', '5']);
+    expect(normalizeSnippet(JSON.parse(JSON.stringify(stored)))).toEqual(cells);
   });
 });
 

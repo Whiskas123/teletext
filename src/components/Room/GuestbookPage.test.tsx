@@ -85,7 +85,7 @@ async function typeOnGrid(user: ReturnType<typeof userEvent.setup>, text: string
 describe('the guestbook', () => {
   beforeEach(() => {
     signMock.mockReset();
-    signMock.mockReturnValue({ ok: true, name: 'Ana' });
+    signMock.mockResolvedValue({ ok: true, name: 'Ana' });
     entries = [];
     loading = false;
     unreachable = false;
@@ -232,7 +232,7 @@ describe('the guestbook', () => {
 
   it('says why a signature was refused instead of swallowing it', async () => {
     const user = userEvent.setup();
-    signMock.mockReturnValue({ ok: false, reason: 'blank' });
+    signMock.mockResolvedValue({ ok: false, reason: 'blank' });
     renderGuestbook();
     await openForm(user);
 
@@ -244,7 +244,7 @@ describe('the guestbook', () => {
 
   it('says a signature did not land while the book is not connected', async () => {
     const user = userEvent.setup();
-    signMock.mockReturnValue({ ok: false, reason: 'offline' });
+    signMock.mockResolvedValue({ ok: false, reason: 'offline' });
     renderGuestbook();
     await openForm(user);
 
@@ -256,7 +256,7 @@ describe('the guestbook', () => {
 
   it('reports a missing name against the field, not the page', async () => {
     const user = userEvent.setup();
-    signMock.mockReturnValue({ ok: false, reason: 'no-name' });
+    signMock.mockResolvedValue({ ok: false, reason: 'no-name' });
     renderGuestbook();
     await openForm(user);
 
