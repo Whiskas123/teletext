@@ -355,8 +355,9 @@ export function SoloEditor() {
             onClick={() => stepPage(-1)}
             disabled={pageNumber <= lowestEditable}
           >
+            {/* U+FE0E: plain glyph, not the emoji iOS draws for ◀ / ▶ by default */}
             <span className="rc-glyph" aria-hidden>
-              ◀
+              {"◀\uFE0E"}
             </span>
           </button>
           <button
@@ -368,7 +369,7 @@ export function SoloEditor() {
             disabled={pageNumber >= MAX_PAGE}
           >
             <span className="rc-glyph" aria-hidden>
-              ▶
+              {"▶\uFE0E"}
             </span>
           </button>
         </div>

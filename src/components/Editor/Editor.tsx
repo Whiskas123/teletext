@@ -1207,8 +1207,9 @@ export function Editor({
           },
         )}
         {padCap("", () => typeCharacter(" "), { wide: "4", aria: "Space" })}
-        {padCap("◀", () => applyControlKey("ArrowLeft"), { aria: "Cursor left" })}
-        {padCap("▶", () => applyControlKey("ArrowRight"), { aria: "Cursor right" })}
+        {/* U+FE0E keeps iOS from drawing these as emoji */}
+        {padCap("◀\uFE0E", () => applyControlKey("ArrowLeft"), { aria: "Cursor left" })}
+        {padCap("▶\uFE0E", () => applyControlKey("ArrowRight"), { aria: "Cursor right" })}
         {padCap("↵", () => applyControlKey("Enter"), {
           wide: "1.4",
           aria: "Start of next line",
