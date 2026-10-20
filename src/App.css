@@ -1292,6 +1292,29 @@ button.frontpage-watch-kind:focus-visible {
 }
 
 /*
+ * EN's lamp when there is no English to show: three quick red flashes, then
+ * out — a short "no", not a fault to read. Three 200ms cycles, ending dark;
+ * `EN_FAULT_MS` in useSubtitles is the same 600ms. Under reduced motion the
+ * lamp is a steady red for that time instead.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .crt-lamp-flash {
+    animation: crt-lamp-flash 200ms steps(1) 3 forwards;
+  }
+}
+
+@keyframes crt-lamp-flash {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  50.01%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/*
  * What the tube says when the input MIX asked for has nothing on it.
  *
  * Over the page rather than instead of it, and in the page's own typeface: the

@@ -26,6 +26,7 @@ import CrtTelevision from './CrtTelevision';
  */
 vi.mock('../../features', () => ({
   MIX_ENABLED: true,
+  SUB_ENABLED: false,
   flagOn: () => true,
 }));
 

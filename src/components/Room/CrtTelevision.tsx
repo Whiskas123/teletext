@@ -73,6 +73,15 @@
  * Switching the set off gives the camera back, the same way it drops every other
  * key: an unplugged television is not watching anybody.
  *
+ * ## EN
+ *
+ * The page's words in English, written into its own cells. The set does not
+ * translate anything or know which pages can be: like the keypad, the key is
+ * wired from outside (`onEnglish`) and the lamp reports what it is told
+ * (`english`), because the picture it changes is the viewer's. See
+ * {@link useSubtitles}. It borrows MIX's lamp, and sits under POWER on the
+ * front panel and in the function row on the handset.
+ *
  * ## Power
  *
  * The power button collapses the raster the way a CRT does: the picture
@@ -94,7 +103,7 @@ import {
 
 import { INDEX_LINE } from '../../domain/indexLine';
 import { isSignalFault, type SignalState } from '../../domain/signal';
-import { MIX_ENABLED } from '../../features';
+import { MIX_ENABLED, SUB_ENABLED } from '../../features';
 import { SevenSegment } from '../chrome/SevenSegment';
 import { useMediaQuery } from '../../utils/useMediaQuery';
 import { useCameraSignal } from './useCameraSignal';
@@ -164,6 +173,10 @@ export interface CrtTelevisionProps {
    * Snow on the tube while there is no page to draw yet. See {@link TubeStatic}.
    */
   tuning?: boolean;
+  /** Switch the English layer. Only drawn on a build with `VITE_SUB`. */
+  onEnglish?: () => void;
+  /** What the EN lamp reports: `live` while English is on the glass. */
+  english?: SignalState;
 }
 
 /* ── static ────────────────────────────────────────────────────────────────── */
@@ -527,6 +540,14 @@ const REMOTE_FT_HIT_PADDING = 10;
 const REMOTE_MIX = { x: 20, y: 346, width: 145, height: 44 };
 const REMOTE_MIX_LAMP = { cx: 196, cy: 368 };
 
+/**
+ * EN, after MIX's lamp — or in MIX's place on a build without it. The same
+ * cap and lamp one slot along, ending well short of the wordmark.
+ */
+const REMOTE_EN_SHIFT = MIX_ENABLED ? 210 : 0;
+const REMOTE_EN = { ...REMOTE_MIX, x: REMOTE_MIX.x + REMOTE_EN_SHIFT };
+const REMOTE_EN_LAMP = { ...REMOTE_MIX_LAMP, cx: REMOTE_MIX_LAMP.cx + REMOTE_EN_SHIFT };
+
 /** The rockers and the power key, in a row beside the LED window. */
 const REMOTE_ROCKER_W = 76;
 const REMOTE_ROCKER_H = 56;
@@ -594,6 +615,8 @@ function KeyCap({
 
 /**
  * The lamp beside the MIX key, which is the only thing that reports the camera.
+ * EN borrows it: amber while the English is on, three quick red flashes when
+ * there is none to show (`flash`).
  *
  * Amber rather than the power key's green: this is a function that is engaged,
  * not a set that is alive, and every television with two lamps on it made that
@@ -614,6 +637,7 @@ function MixLamp({
   ring,
   strokeWidth = 1,
   state,
+  flash = false,
 }: {
   cx: number;
   cy: number;
@@ -621,6 +645,8 @@ function MixLamp({
   ring: number;
   strokeWidth?: number;
   state: SignalState;
+  /** Answer a fault with three quick flashes rather than a steady red (EN). */
+  flash?: boolean;
 }) {
   const fill = isSignalFault(state)
     ? 'url(#ledR)'
@@ -630,7 +656,13 @@ function MixLamp({
   return (
     <>
       <circle
-        className={state === 'tuning' ? 'crt-lamp-tuning' : undefined}
+        className={
+          state === 'tuning'
+            ? 'crt-lamp-tuning'
+            : flash && isSignalFault(state)
+              ? 'crt-lamp-flash'
+              : undefined
+        }
         cx={cx}
         cy={cy}
         r={r}
@@ -668,6 +700,9 @@ export interface RemoteHandsetProps {
   onMix?: () => void;
   /** What the MIX lamp is reporting; see {@link SignalState}. */
   signal: SignalState;
+  /** Switch the English layer; see {@link CrtTelevisionProps.onEnglish}. */
+  onEnglish?: () => void;
+  english: SignalState;
 }
 
 /**
@@ -695,6 +730,8 @@ function RemoteHandset({
   onPower,
   onMix,
   signal,
+  onEnglish,
+  english,
 }: RemoteHandsetProps) {
   const copy = useCopy();
 
@@ -1024,6 +1061,28 @@ function RemoteHandset({
               <MixLamp {...REMOTE_MIX_LAMP} r={7.5} ring={11} strokeWidth={1.6} state={signal} />
             </>
           )}
+          {SUB_ENABLED && (
+            <>
+              <PanelKey
+                id="rc-en"
+                label={english === 'live' ? copy.tv.englishOff : copy.tv.englishOn}
+                onPress={onEnglish}
+                hit={REMOTE_EN}
+                pad={REMOTE_HIT_PADDING}
+              >
+                <KeyCap {...REMOTE_EN} />
+                <text
+                  className="lg"
+                  fill="#dcdcda"
+                  x={REMOTE_EN.x + REMOTE_EN.width / 2}
+                  y={REMOTE_EN.y + 30}
+                >
+                  EN
+                </text>
+              </PanelKey>
+              <MixLamp {...REMOTE_EN_LAMP} r={7.5} ring={11} strokeWidth={1.6} state={english} flash />
+            </>
+          )}
           {/* Ranged right off the body's edge rather than centred on a guessed
               width — `.cap` is set in a face that is not loaded on every device,
               and a wordmark that overflows the plastic on the one machine
@@ -1083,6 +1142,21 @@ const FASTEXT_X0 = 380;
 const MIX_KEY = { x: 610, y: 641, width: 26, height: 26 };
 const MIX_LAMP = { cx: 623, cy: 702 };
 
+/**
+ * The right-hand column: POWER on the PAGE row, EN on the SUBPAGE row, each a
+ * 34×26 cap centred on its row, with its lamp beside it.
+ *
+ * The PAGE rockers run 634–668 and the SUBPAGE ones 698–724, so the caps sit at
+ * 638 and 698; the column is 766–832, so a cap at 772 and a lamp at 819 leave
+ * the same few units of plastic either side of the pair. The hit areas split
+ * the column between the rows at 688, the way the rockers' do.
+ */
+const POWER_KEY = { x: 772, y: 638, cx: 789, cy: 651 };
+const EN_KEY = { x: 772, y: 698, cx: 789, cy: 711 };
+const COLUMN_LAMP_X = 819;
+const POWER_HIT = { x: 766, y: 630, width: 66, height: 58 };
+const EN_HIT = { x: 766, y: 688, width: 66, height: 40 };
+
 export function CrtTelevision({
   children,
   pageNumber,
@@ -1097,6 +1171,8 @@ export function CrtTelevision({
   handsetHead,
   handsetInstead,
   tuning = false,
+  onEnglish,
+  english = 'off',
 }: CrtTelevisionProps) {
   const copy = useCopy();
   const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
@@ -1187,6 +1263,8 @@ export function CrtTelevision({
   // a set that is switched off: the key is a piece of plastic and then, one step
   // further on, not there at all. See `MIX_ENABLED` in `features.ts`.
   const mix = lit && MIX_ENABLED ? signal.toggle : undefined;
+  const englishPress = lit && SUB_ENABLED ? onEnglish : undefined;
+  const englishLamp = lit ? english : 'off';
 
   // The holes in the page, and the picture behind them. Both are the same fact
   // and it is stated once: `data-mix` opens the black cells (see `App.css`) and
@@ -1965,19 +2043,29 @@ export function CrtTelevision({
                   </text>
                 </g>
 
-                {/* power */}
+                {/*
+                  * Power over EN, in rows with PAGE over SUBPAGE beside them.
+                  *
+                  * The column is a second pair of rows rather than one key with
+                  * its lamp hung under it: POWER sits on the PAGE row with its
+                  * caption on PAGE's line, EN on the SUBPAGE row with its caption
+                  * on SUBPAGE's, and each lamp to the right of its own key —
+                  * green for a set that is alive, amber for a function that is
+                  * on. Without VITE_SUB the column is POWER alone, and the space
+                  * below is blank plastic, as it was.
+                  */}
                 <g id="power">
                   <PanelKey
                     id="btn-power"
                     label={lit ? copy.tv.switchOff : copy.tv.switchOn}
                     onPress={togglePower}
-                    hit={{ x: 766, y: 638, width: 66, height: 48 }}
+                    hit={POWER_HIT}
                   >
-                    <use href="#k34" x="782" y="647" filter="url(#castKey)" />
+                    <use href="#k34" x={POWER_KEY.x} y={POWER_KEY.y} filter="url(#castKey)" />
                     <circle
                       className="lg"
-                      cx="799"
-                      cy="660"
+                      cx={POWER_KEY.cx}
+                      cy={POWER_KEY.cy}
                       r="6.5"
                       fill="none"
                       stroke="#dcdcda"
@@ -1985,27 +2073,69 @@ export function CrtTelevision({
                     />
                     <line
                       className="lg"
-                      x1="799"
-                      y1="651"
-                      x2="799"
-                      y2="659"
+                      x1={POWER_KEY.cx}
+                      y1={POWER_KEY.cy - 9}
+                      x2={POWER_KEY.cx}
+                      y2={POWER_KEY.cy - 1}
                       stroke="#dcdcda"
                       strokeWidth="1.8"
                       strokeLinecap="round"
                     />
                   </PanelKey>
-                  <text className="cap" x="799" y="693">
+                  <text className="cap" x={POWER_KEY.cx} y="683">
                     POWER
                   </text>
                   <circle
                     id="led-power"
-                    cx="799"
-                    cy="715"
+                    cx={COLUMN_LAMP_X}
+                    cy={POWER_KEY.cy}
                     r="4.5"
                     fill={lit ? 'url(#ledG)' : 'url(#ledR)'}
                   />
-                  <circle cx="799" cy="715" r="7" fill="none" stroke="#000" strokeOpacity=".7" />
+                  <circle
+                    cx={COLUMN_LAMP_X}
+                    cy={POWER_KEY.cy}
+                    r="7"
+                    fill="none"
+                    stroke="#000"
+                    strokeOpacity=".7"
+                  />
                 </g>
+                {SUB_ENABLED && (
+                  <g id="en">
+                    <PanelKey
+                      id="btn-en"
+                      label={english === 'live' ? copy.tv.englishOff : copy.tv.englishOn}
+                      onPress={englishPress}
+                      hit={EN_HIT}
+                    >
+                      <use href="#k34" x={EN_KEY.x} y={EN_KEY.y} filter="url(#castKey)" />
+                      {/* A subtitle box — two lines of text in a frame. */}
+                      <rect
+                        className="lg"
+                        x={EN_KEY.cx - 8}
+                        y={EN_KEY.cy - 6}
+                        width="16"
+                        height="12"
+                        rx="1.5"
+                        fill="none"
+                        stroke="#dcdcda"
+                        strokeWidth="1.4"
+                      />
+                      <path
+                        className="lg"
+                        d={`M${EN_KEY.cx - 5} ${EN_KEY.cy - 1.5} H${EN_KEY.cx + 5} M${EN_KEY.cx - 3.5} ${EN_KEY.cy + 2} H${EN_KEY.cx + 3.5}`}
+                        stroke="#dcdcda"
+                        strokeWidth="1.4"
+                        strokeLinecap="round"
+                      />
+                    </PanelKey>
+                    <text className="cap" x={EN_KEY.cx} y="741">
+                      EN
+                    </text>
+                    <MixLamp cx={COLUMN_LAMP_X} cy={EN_KEY.cy} r={4.5} ring={7} state={englishLamp} flash />
+                  </g>
+                )}
               </g>
             </g>
           )}
@@ -2093,6 +2223,8 @@ export function CrtTelevision({
               onPower={togglePower}
               onMix={mix}
               signal={signal.state}
+              onEnglish={englishPress}
+              english={englishLamp}
             />
           )}
         </div>

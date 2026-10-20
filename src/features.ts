@@ -60,3 +60,14 @@ export function flagOn(raw: string | undefined): boolean {
  * has said it should be, and the published site does not ask.
  */
 export const MIX_ENABLED = flagOn(import.meta.env.VITE_MIX);
+
+/**
+ * Whether this build has the EN key: an English layer written into a
+ * Portuguese page's own cells, from the translations made in /manage.
+ * See `domain/subtitles.ts` and `useSubtitles`.
+ *
+ * Off unless the build sets `VITE_SUB=on`, and absent rather than inert like
+ * MIX, while only a handful of pages have a translation: a key that does
+ * nothing on almost every page reads as broken.
+ */
+export const SUB_ENABLED = flagOn(import.meta.env.VITE_SUB);

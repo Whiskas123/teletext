@@ -53,6 +53,7 @@ import ChatSidebar from './ChatSidebar';
 import VotePanel from './VotePanel';
 import YellowPagesDrawer from './YellowPagesDrawer';
 import { usePageRoll } from './usePageRoll';
+import { useSubtitles } from './useSubtitles';
 import { useCopy } from './useCopy';
 
 /**
@@ -126,7 +127,10 @@ function RoomViewerContent({
 
   // The header rolls to the room's displayed page whenever it changes, and the
   // page content is revealed only once the roll lands.
-  const { displayNumber, shownPage } = usePageRoll(displayedPageNumber, page);
+  // EN swaps the words before the roll sees the page, so a page dialled with
+  // EN on comes up in English rather than turning English after it lands.
+  const subtitles = useSubtitles(displayedPageNumber, displayedSubpage, page);
+  const { displayNumber, shownPage } = usePageRoll(displayedPageNumber, subtitles.page);
 
   /*
    * How many times the room has said no to this set.
@@ -313,6 +317,8 @@ function RoomViewerContent({
           refusals={refusals}
           compact={phone}
           tuning={tuning}
+          onEnglish={subtitles.toggle}
+          english={subtitles.lamp}
           handsetHead={phone ? phoneTabs : undefined}
           handsetInstead={phonePanel}
         >

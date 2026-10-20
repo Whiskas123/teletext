@@ -460,6 +460,20 @@
 .mg-pill-subcategory { color: #00ffff; }
 .mg-pill-subsubcategory { color: #ff66ff; }
 
+/* Has English: the EN key's amber, so the list and the set say it the same way. */
+.mg-en {
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  color: #ffb340;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  vertical-align: 1px;
+}
+.mg-en-partial { border-style: dashed; color: var(--mg-muted); }
+
 .mg-screens-toggle {
   min-height: 24px;
   padding: 0 8px;

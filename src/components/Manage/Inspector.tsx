@@ -23,6 +23,7 @@ import type { DropVerdict } from './LineupTable';
 import { KIND_NAMES, type PageRow } from './lineupModel';
 import { MenuStrip } from './MenuStrip';
 import { PageThumb } from './PageThumb';
+import type { ScreenTranslation, TranslateOutcome } from './useTranslations';
 
 
 export interface InspectorProps {
@@ -36,6 +37,13 @@ export interface InspectorProps {
   /** A structural action is running. */
   locked: boolean;
   isShowcased(pageNumber: number, subpage: number): boolean;
+  /** The current screen's English, or `null` when it has no text to translate. */
+  translation: ScreenTranslation | null;
+  /** The current screen as the EN key shows it, for the preview. */
+  englishPage: TeletextPage | null;
+  /** A translation is running, here or for a selection. */
+  translating: boolean;
+  onTranslate(): Promise<TranslateOutcome>;
   titleRef: RefObject<HTMLInputElement | null>;
   checkMove(target: number): DropVerdict;
   onMove(target: number): void;
@@ -64,6 +72,10 @@ export function Inspector({
   busy,
   locked,
   isShowcased,
+  translation,
+  englishPage,
+  translating,
+  onTranslate,
   titleRef,
   checkMove,
   onMove,
@@ -95,6 +107,9 @@ export function Inspector({
   const [description, setDescription] = useState<string | null>(null);
   const [number, setNumber] = useState('');
   const [fold, setFold] = useState('');
+  const [showEnglish, setShowEnglish] = useState(false);
+  // Kept with the screen it was for, so moving to another screen drops it.
+  const [outcome, setOutcome] = useState<{ screen: number; result: TranslateOutcome } | null>(null);
 
   const commitText = (nextTitle: string | null, nextDescription: string | null) => {
     const t = (nextTitle ?? row.title).trim();
@@ -299,12 +314,12 @@ export function Inspector({
 
         <div className="mg-preview">
           <PageThumb
-            page={livePage(pageNumber, screen)}
+            page={showEnglish && englishPage != null ? englishPage : livePage(pageNumber, screen)}
             pageNumber={pageNumber}
             subpage={screen}
             subpageCount={row.screens}
             scale={1}
-            alt={`Page ${pageNumber}, screen ${screen}`}
+            alt={`Page ${pageNumber}, screen ${screen}${showEnglish && englishPage != null ? ', in English' : ''}`}
           />
         </div>
 
@@ -382,6 +397,46 @@ export function Inspector({
           )}
         </form>
       </section>
+
+      {translation != null && (
+        <section className="mg-insp-section" aria-label="English">
+          <div className="mg-insp-subhead">
+            <h3 className="mg-h3">
+              English <span className="mg-muted">screen {screen}</span>
+            </h3>
+            <button
+              type="button"
+              className={`mg-btn mg-btn-small${translation.status === 'full' ? ' mg-btn-ghost' : ''}`}
+              disabled={locked || translating}
+              title="Translate this screen with Claude, as it reads now"
+              onClick={() => {
+                setOutcome(null);
+                void onTranslate().then((result) => setOutcome({ screen, result }));
+              }}
+            >
+              {translating ? 'Translating…' : translation.status === 'none' ? 'Translate' : 'Translate again'}
+            </button>
+          </div>
+          <p className={`mg-note${translation.status === 'partial' ? ' mg-note-warn' : ''}`}>
+            {translation.status === 'none'
+              ? 'Not translated: the EN key shows this screen in Portuguese.'
+              : translation.status === 'full'
+                ? 'Translated: the EN key shows this screen in English.'
+                : `Partly translated: ${translation.matched} of ${translation.total} lines still match what the screen says now. Translate again to catch up.`}
+          </p>
+          {englishPage != null && (
+            <label className="mg-check">
+              <input type="checkbox" checked={showEnglish} onChange={(event) => setShowEnglish(event.target.checked)} />
+              <span>Show English in the preview</span>
+            </label>
+          )}
+          {outcome?.screen === screen && (
+            <p className={`mg-note${outcome.result.ok ? '' : ' mg-note-bad'}`} role="status">
+              {outcome.result.text}
+            </p>
+          )}
+        </section>
+      )}
 
       <section className="mg-insp-section" aria-label="Bottom bar">
         <h3 className="mg-h3">Bottom bar</h3>

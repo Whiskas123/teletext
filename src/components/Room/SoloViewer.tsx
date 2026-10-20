@@ -42,6 +42,7 @@ import RoomLayout from './RoomLayout';
 import YellowPagesDrawer from './YellowPagesDrawer';
 import { useExhibitMode } from './useExhibitMode';
 import { usePageRoll } from './usePageRoll';
+import { useSubtitles } from './useSubtitles';
 
 /**
  * Below this the set is drawn as a tube in a thin bezel and its front panel
@@ -94,7 +95,10 @@ export function SoloViewer({ pageNumber: pageNumberProp, kiosk = false }: SoloVi
     Number.isFinite(parsedSubpage) ? parsedSubpage : undefined,
   );
 
-  const { displayNumber, shownPage, skipRoll } = usePageRoll(displayedPageNumber, page);
+  // EN swaps the words before the roll sees the page, so a page dialled with
+  // EN on comes up in English rather than turning English after it lands.
+  const subtitles = useSubtitles(displayedPageNumber, subpage, page);
+  const { displayNumber, shownPage, skipRoll } = usePageRoll(displayedPageNumber, subtitles.page);
 
   // Stepping is not dialling: going back one page should not count up through
   // 998 numbers to get there.
@@ -216,6 +220,8 @@ export function SoloViewer({ pageNumber: pageNumberProp, kiosk = false }: SoloVi
           onFastext={handleSelectPage}
           compact={phone}
           tuning={tuning}
+          onEnglish={subtitles.toggle}
+          english={subtitles.lamp}
         >
           <TeletextGrid
             page={shownPage}

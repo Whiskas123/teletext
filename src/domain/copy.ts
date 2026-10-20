@@ -136,6 +136,9 @@ export interface Copy {
      */
     mixOn: string;
     mixOff: string;
+    /** The EN key: the page's words in English, in the page's own cells. */
+    englishOn: string;
+    englishOff: string;
     /** What the tube says when there is no picture to mix with. */
     noSignal: string;
     cameraRefused: string;
@@ -395,6 +398,8 @@ export const COPY: Record<Language, Copy> = {
       switchOn: 'Ligar o televisor',
       mixOn: 'MIX: pôr o teletexto por cima da imagem da câmara',
       mixOff: 'MIX: voltar ao fundo preto e desligar a câmara',
+      englishOn: 'EN: mostrar esta página em inglês',
+      englishOff: 'EN: voltar ao português',
       noSignal: 'SEM SINAL',
       cameraRefused: 'A câmara foi recusada',
       cameraMissing: 'Não há câmara neste aparelho',
@@ -598,6 +603,8 @@ export const COPY: Record<Language, Copy> = {
       switchOn: 'Switch the television on',
       mixOn: 'MIX: lay the teletext over the camera picture',
       mixOff: 'MIX: back to the black background, camera off',
+      englishOn: 'EN: show this page in English',
+      englishOff: 'EN: back to the Portuguese',
       noSignal: 'NO SIGNAL',
       cameraRefused: 'The camera was refused',
       cameraMissing: 'There is no camera on this device',

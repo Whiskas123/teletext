@@ -48,6 +48,10 @@
  *   loading. Public, compressed, and cached at the edge for a minute, so the
  *   fallback is at most about a minute behind rather than as old as the last
  *   deploy. See `src/domain/bootData.ts`.
+ *
+ * And the English for curated pages — `GET ?sub`, `GET ?subs`, `POST
+ * ?translate` — which is here only because of the function cap. See
+ * `_lib/translations.ts`.
  */
 
 import { gzipSync } from 'node:zlib';
@@ -72,6 +76,7 @@ import { db, transaction } from './_lib/db';
 import { LiveDocumentError, readLiveDocument, type LiveDocumentRead } from './_lib/liveDocument';
 import { bodyObject, fail, json, methodIs, queryValue, serverError } from './_lib/http';
 import { isAdmin, isVercelCron } from './_lib/auth';
+import { handleTranslations } from './_lib/translations';
 
 /** Page numbers the playground occupies, below `MIN_PAGE`, are still backed up. */
 const MIN_SNAPSHOT_PAGE = 1;
@@ -421,6 +426,9 @@ export default async function handler(
   res: VercelResponse,
 ): Promise<void> {
   if (!methodIs(req, res, 'POST', 'GET')) return;
+
+  // English for the EN key and /manage; see `_lib/translations.ts`.
+  if (await handleTranslations(req, res)) return;
 
   // The fallback is public: it is the same pages the site shows anyone.
   if (req.method === 'GET' && queryValue(req, 'boot') != null) {

@@ -11,4 +11,6 @@
 interface ImportMetaEnv {
   /** `off` builds the site without MIX. See `MIX_ENABLED` in `features.ts`. */
   readonly VITE_MIX?: string;
+  /** `on` builds the site with the EN key. See `SUB_ENABLED` in `features.ts`. */
+  readonly VITE_SUB?: string;
 }

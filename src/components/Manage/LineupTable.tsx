@@ -29,6 +29,7 @@ import { beginDrag, currentDrag, endDrag } from './dnd';
 import { describeBar, type PageRow } from './lineupModel';
 import { PageThumb } from './PageThumb';
 import type { LineupSelection } from './useLineupSelection';
+import type { PageTranslation } from './useTranslations';
 
 /** Where a drag would land. */
 export type DropSpot =
@@ -55,6 +56,8 @@ export interface LineupTableProps {
   order: readonly number[];
   selection: LineupSelection;
   livePage(pageNumber: number, subpage?: number): TeletextPage | null;
+  /** Whether the page's screens have English; `null` with nothing to translate. */
+  translationOf(pageNumber: number, screens: number): PageTranslation | null;
   publicationAt(pageNumber: number, subpage: number): PublishedEntry | null;
   pageBusy(pageNumber: number): PageActionName | null;
   outcomes: ReadonlyMap<number, Notice>;
@@ -91,6 +94,7 @@ export function LineupTable({
   order,
   selection,
   livePage,
+  translationOf,
   publicationAt,
   pageBusy,
   outcomes,
@@ -401,6 +405,7 @@ export function LineupTable({
                     busy={pageBusy(item.pageNumber)}
                     outcome={outcomes.get(item.pageNumber) ?? null}
                     livePage={livePage}
+                    translation={translationOf(item.pageNumber, rowOf(item.pageNumber).screens)}
                     publicationAt={publicationAt}
                     locked={locked}
                     onClick={(event) =>
@@ -462,6 +467,7 @@ interface PageRowViewProps {
   busy: PageActionName | null;
   outcome: Notice | null;
   livePage(pageNumber: number, subpage?: number): TeletextPage | null;
+  translation: PageTranslation | null;
   publicationAt(pageNumber: number, subpage: number): PublishedEntry | null;
   locked: boolean;
   onClick(event: React.MouseEvent): void;
@@ -487,6 +493,7 @@ function PageRowView({
   busy,
   outcome,
   livePage,
+  translation,
   publicationAt,
   locked,
   onClick,
@@ -565,6 +572,19 @@ function PageRowView({
               </button>
             )}
             <span className="mg-title">{row.title || <em className="mg-muted">Untitled</em>}</span>
+            {translation === 'full' && (
+              <span className="mg-en" title="Has English: the EN key shows it translated">
+                EN
+              </span>
+            )}
+            {translation === 'partial' && (
+              <span
+                className="mg-en mg-en-partial"
+                title="Partly in English: a screen is untranslated, or changed since it was translated"
+              >
+                EN
+              </span>
+            )}
             {collapse?.collapsed && (
               <span className="mg-collapsed-count">
                 {collapse.owned} {collapse.owned === 1 ? 'page' : 'pages'}

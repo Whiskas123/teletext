@@ -55,6 +55,7 @@ import {
   type PageRow,
 } from './lineupModel';
 import { SelectionInspector } from './SelectionInspector';
+import { useTranslations } from './useTranslations';
 import { LegacyPanel } from './LegacyPanel';
 import type { ManageActionsApi, TransformPatch } from './useManageActions';
 import type { ArchiveQuery } from './useArchiveQuery';
@@ -92,6 +93,7 @@ export function PagesTab({
   confirm,
 }: PagesTabProps) {
   const selection = useLineupSelection();
+  const translations = useTranslations(data.livePage);
   const [filter, setFilter] = useState<LineupFilter>(EMPTY_FILTER);
   const [picked, setPicked] = useState<CaptureSummary[]>([]);
   const [destination, setDestination] = useState<AddDestination>({ mode: 'pages', at: '' });
@@ -681,6 +683,13 @@ export function PagesTab({
         onSetShift={(shiftDown) => changeTransforms(selectedPages, { shiftDown, menuId: 'keep' })}
         onMove={() => setMoving(selectedPages)}
         onFillTitles={() => actions.fillTitles(selectedPages)}
+        untranslated={translations.missing(selectedRows.map(({ pageNumber, screens }) => ({ pageNumber, screens }))).length}
+        translating={translations.progress}
+        onTranslate={() =>
+          translations.translate(
+            translations.missing(selectedRows.map(({ pageNumber, screens }) => ({ pageNumber, screens }))),
+          )
+        }
         onMerge={() => askMerge(selectedPages[0], selectedPages.slice(1))}
         onDelete={() => askDelete(selectedPages)}
         onClear={selection.clear}
@@ -700,6 +709,12 @@ export function PagesTab({
         busy={actions.inFlight.pageBusy(active)}
         locked={locked}
         isShowcased={isShowcased}
+        translation={translations.screen(active, Math.min(selection.screen, row.screens))}
+        englishPage={translations.english(active, Math.min(selection.screen, row.screens))}
+        translating={translations.progress != null}
+        onTranslate={() =>
+          translations.translate([{ pageNumber: active, subpage: Math.min(selection.screen, row.screens) }])
+        }
         titleRef={titleRef}
         checkMove={(target) => {
           if (target === active) return no(`Page ${active} is already there.`);
@@ -858,6 +873,7 @@ export function PagesTab({
           order={order}
           selection={selection}
           livePage={data.livePage}
+          translationOf={translations.page}
           publicationAt={data.publicationAt}
           pageBusy={actions.inFlight.pageBusy}
           outcomes={actions.outcomes}

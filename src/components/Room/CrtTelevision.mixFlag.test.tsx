@@ -23,6 +23,7 @@ import { useCameraSignal } from './useCameraSignal';
 
 vi.mock('../../features', () => ({
   MIX_ENABLED: false,
+  SUB_ENABLED: false,
   flagOn: () => false,
 }));
 

@@ -8,10 +8,13 @@
  * left alone changes nothing.
  */
 
+import { useState } from 'react';
+
 import { PAGE_KINDS, type PageKind } from '../../domain/directory';
 import { describeRange } from '../../domain/lineup';
 import type { CustomMenu } from '../../domain/menu';
 import { KIND_NAMES, type PageRow } from './lineupModel';
+import type { TranslateOutcome } from './useTranslations';
 
 export interface SelectionInspectorProps {
   rows: readonly PageRow[];
@@ -22,6 +25,11 @@ export interface SelectionInspectorProps {
   onSetShift(shift: boolean): void;
   onMove(): void;
   onFillTitles(): void;
+  /** Screens among the selection with text and no English yet. */
+  untranslated: number;
+  /** Done of total while a batch translation runs. */
+  translating: { done: number; total: number } | null;
+  onTranslate(): Promise<TranslateOutcome>;
   onMerge(): void;
   onDelete(): void;
   onClear(): void;
@@ -42,6 +50,9 @@ export function SelectionInspector({
   onSetShift,
   onMove,
   onFillTitles,
+  untranslated,
+  translating,
+  onTranslate,
   onMerge,
   onDelete,
   onClear,
@@ -57,6 +68,7 @@ export function SelectionInspector({
   const shift = common(archive.map((row) => row.shift));
   const handMade = rows.length - archive.length;
   const untitled = rows.filter((row) => row.title.trim() === '').length;
+  const [outcome, setOutcome] = useState<TranslateOutcome | null>(null);
 
   return (
     <aside className="mg-inspector" aria-label={`${rows.length} pages selected`}>
@@ -86,6 +98,32 @@ export function SelectionInspector({
               Fill in from page text
             </button>
           </div>
+        )}
+        {(untranslated > 0 || translating != null) && (
+          <div className="mg-inline mg-wrap">
+            <span className="mg-note mg-grow">
+              {translating != null
+                ? `Translating ${translating.done + 1} of ${translating.total}…`
+                : `${untranslated} ${untranslated === 1 ? 'screen has' : 'screens have'} no English.`}
+            </span>
+            <button
+              type="button"
+              className="mg-btn mg-btn-small"
+              disabled={locked || translating != null}
+              title="Translate each of them with Claude, one after another. Screens that already have English are left alone."
+              onClick={() => {
+                setOutcome(null);
+                void onTranslate().then(setOutcome);
+              }}
+            >
+              Translate {untranslated === 1 ? 'it' : `all ${untranslated}`}
+            </button>
+          </div>
+        )}
+        {outcome != null && (
+          <p className={`mg-note${outcome.ok ? '' : ' mg-note-bad'}`} role="status">
+            {outcome.text}
+          </p>
         )}
         <label className="mg-field">
           <span className="mg-label">Directory role</span>
