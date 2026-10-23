@@ -127,6 +127,15 @@ export function useGuestbook(): GuestbookApi {
   const [book, setBook] = useState<GuestbookEntry[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
+  /**
+   * Signatures stored from this page that the server's book has not shown yet.
+   *
+   * The book is cached at the edge for a few seconds and served stale for up
+   * to a minute while it revalidates, and a load can already be in flight when
+   * the reader signs — so the next book to arrive can predate their signature.
+   * Without these, it would vanish from the page until a later refresh.
+   */
+  const signedHere = useRef<GuestbookEntry[]>([]);
 
   const load = useCallback(async () => {
     try {
@@ -135,7 +144,10 @@ export function useGuestbook(): GuestbookApi {
       const body = (await response.json()) as { entries?: unknown };
       // Repaired on the way in, like anything stored: an entry that cannot be
       // read is skipped rather than drawn as an empty band.
-      setBook(readEntries(body.entries));
+      const loaded = readEntries(body.entries);
+      const ids = new Set(loaded.map((entry) => entry.id));
+      signedHere.current = signedHere.current.filter((entry) => !ids.has(entry.id));
+      setBook(signedHere.current.length === 0 ? loaded : sortEntries([...signedHere.current, ...loaded]));
       setFailed(false);
     } catch {
       setFailed(true);
@@ -194,6 +206,7 @@ export function useGuestbook(): GuestbookApi {
         const stored = normalizeEntry(((await response.json()) as { entry?: unknown }).entry);
         // On the page at once, without waiting for the next refresh.
         if (stored != null) {
+          signedHere.current = [...signedHere.current, stored];
           setBook((current) =>
             sortEntries([stored, ...(current ?? cached).filter((entry) => entry.id !== stored.id)]),
           );

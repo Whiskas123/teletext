@@ -1,7 +1,8 @@
 // Feature: the guestbook's binding to `/api/guestbook`. Verifies: the page is
 // told the book is unreachable once loading has gone on past `STALL_MS`, the
 // book comes from the server, a cache with signatures is never replaced by an
-// empty book, and signing reports what the server said.
+// empty book, signing reports what the server said, and a new signature
+// survives a book that predates it.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
@@ -72,6 +73,27 @@ describe('useGuestbook', () => {
     });
     expect(outcome).toEqual({ ok: true, name: 'Ana' });
     expect(result.current.entries.map((e) => e.id)).toEqual(['new']);
+  });
+
+  it('keeps a new signature when a stale book arrives after it', async () => {
+    // The first load is still in flight when the reader signs, and answers
+    // with the book from before — as an edge-cached book does.
+    let answerStale: (response: Response) => void = () => {};
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, init?: RequestInit) =>
+        init?.method === 'POST'
+          ? answer(201, { entry: entry('new', 5) })
+          : new Promise<Response>((resolve) => (answerStale = resolve)),
+      ),
+    );
+    const { result } = renderHook(() => useGuestbook());
+
+    await act(async () => {
+      await result.current.sign('Ana', inkedSnippet());
+    });
+    await act(async () => answerStale(new Response(JSON.stringify({ entries: [entry('old', 1)] }))));
+    expect(result.current.entries.map((e) => e.id)).toEqual(['new', 'old']);
   });
 
   it('says why a signature did not land', async () => {
