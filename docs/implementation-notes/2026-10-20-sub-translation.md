@@ -156,3 +156,23 @@ the unit check had missed:
   dependencies fail to `require()` an ES module. Under Node 24 — what
   `.claude/launch.json` already pins — all 776 pass. Earlier entries calling
   them pre-existing failures were wrong about the cause.
+
+## 2026-10-23 — the Node 24 pin took every API function down
+
+- **`"engines": { "node": "24.x" }` moved the functions off Bun.** With an
+  engines field, Vercel ran every function on `nodejs24.x` instead of the
+  `bun1.x` runtime that `"bunVersion": "1.x"` in `vercel.json` had given them
+  (`vercel inspect --json` on the deploys before and after shows it). Node's ESM
+  loader can't resolve the extensionless relative imports in `api/`
+  (`'./_lib/db'`), so every function exited with `ERR_MODULE_NOT_FOUND` at load
+  — `FUNCTION_INVOCATION_FAILED`, a 500 with no handler involved. Since the
+  deploy of 2026-10-20 16:58 the guestbook said it couldn't reach the book, and
+  `/api/health`, snapshot, showcase and the rest were down with it.
+- **Removed the engines field; kept `.nvmrc`.** The pin was only ever for local
+  tests (jsdom 29), and the tracked `.nvmrc` already covers that. Adding `.js`
+  to every relative import would also have worked on Node, but it's a large
+  diff to keep a runtime nobody chose.
+- **Finding it:** CLI 49's `vercel logs` only streams and showed nothing;
+  `bunx vercel@65 logs --since 30m` returned the stack traces at once. Hobby
+  keeps runtime logs only briefly, so there was no history for the older
+  deploy.
