@@ -18,9 +18,6 @@
  * archive store (`collab/archiveStore.ts`); the playground's backup is kept by
  * the live mirror (`collab/liveMirror.ts`), which follows playhtml.
  *
- * The old table, `published_pages`, is read once, so its records can be moved
- * into playhtml (`legacy` below). After that it is history.
- *
  * ## The queries are gated, not unconditional
  *
  * The corpus and the saved menus wait until they are needed, and the capture
@@ -208,25 +205,6 @@ export interface ArchiveAdminInput {
 
 type Result = { ok: true } | { ok: false; error: string };
 
-/** The old publication table, and moving its records into playhtml. */
-export interface LegacyRecords {
-  /** Records whose screen is on air but has no source yet: to be moved in. */
-  adoptable: PublishedEntry[];
-  /** Records whose screen is empty: restore from the archive, or discard. */
-  stranded: PublishedEntry[];
-  loading: boolean;
-  error: string | null;
-  reload(): void;
-  /**
-   * Store where a screen came from, in playhtml, from its old record — with
-   * the fingerprint of the capture as it would be published, so a screen
-   * edited since shows as edited.
-   */
-  adopt(record: PublishedEntry, rendered: PublishedRender): void;
-  /** Mark records as dealt with, so they stop being offered. */
-  resolve(records: readonly PublishedEntry[]): Promise<Result>;
-}
-
 /** A capture as `PUT /api/published` renders it. */
 export interface PublishedRender {
   cells: Record<string, unknown>;
@@ -317,8 +295,6 @@ export interface ArchiveAdminApi {
   occupiedPages: number[];
   /** Live pages with no archive screen. */
   handMadePages: number[];
-  /** The old publication table, while it still has records to move in. */
-  legacy: LegacyRecords;
   /**
    * Playground screens (700+) the database's copy holds for pages the live
    * document does not have — what a move to a new, empty playhtml room leaves.
@@ -343,10 +319,6 @@ export function useArchiveAdmin({
   const { importPages } = useImportPages();
   const { setTitle } = usePageTitles();
 
-  // The old publication table, read once to move its records into playhtml.
-  const [legacyRows, setLegacyRows] = useState<PublishedEntry[]>([]);
-  const [legacyLoading, setLegacyLoading] = useState(true);
-  const [legacyError, setLegacyError] = useState<string | null>(null);
   const [menus, setMenus] = useState<CustomMenu[]>([]);
   // The live document, so the screen can show what is on a page right now
   // rather than what the database says was published to it — and so a
@@ -465,23 +437,6 @@ export function useArchiveAdmin({
   }, [queryKey, attempt, capturesEnabled]);
 
   const retryCaptures = useCallback(() => setAttempt((n) => n + 1), []);
-
-  const reloadLegacy = useCallback(() => {
-    if (!admin) return;
-    getJson<{ published: PublishedEntry[] }>('/api/published')
-      .then((body) => {
-        setLegacyRows(body.published);
-        setLegacyError(null);
-      })
-      .catch((cause: unknown) => {
-        setLegacyError(
-          cause instanceof Error ? cause.message : 'Could not read the old publication records.',
-        );
-      })
-      .finally(() => setLegacyLoading(false));
-  }, [admin]);
-
-  useEffect(reloadLegacy, [reloadLegacy]);
 
   // Loaded for both tabs, unlike the corpus: the on-air side offers a bulk change
   // of the menu strip, so it needs the list of saved menus to offer. It is a
@@ -1088,64 +1043,6 @@ export function useArchiveAdmin({
 
   /* --- the old table ------------------------------------------------------- */
 
-  /**
-   * Its records, split by what can be done with them. A record whose screen
-   * already has a source for the same capture has been moved in; one whose
-   * screen is on air is ready to move in; one whose screen is empty needs a
-   * decision.
-   */
-  const legacySplit = useMemo(() => {
-    const adoptable: PublishedEntry[] = [];
-    const stranded: PublishedEntry[] = [];
-    for (const record of legacyRows) {
-      const subpage = record.subpage ?? MIN_SUBPAGE;
-      if (sourceAt(record.page_number, subpage)?.captureId === record.capture_id) continue;
-      const onAir =
-        occupiedSet.has(record.page_number) && livePage(record.page_number, subpage) != null;
-      (onAir ? adoptable : stranded).push(record);
-    }
-    return { adoptable, stranded };
-  }, [legacyRows, sourceAt, occupiedSet, livePage]);
-
-  const adopt = useCallback<LegacyRecords['adopt']>(
-    (record, rendered) => {
-      const subpage = record.subpage ?? MIN_SUBPAGE;
-      const source: PageSource = {
-        ...rendered.source,
-        // When it was published, not now: this is history being carried over.
-        publishedAt: record.published_at,
-        cellsDigest: cellsDigest(rendered.cells),
-      };
-      setSources((draft) => {
-        draft[String(pageKey(record.page_number, subpage))] = source;
-      });
-    },
-    [setSources],
-  );
-
-  const resolve = useCallback<LegacyRecords['resolve']>(
-    async (records) => {
-      if (records.length === 0) return { ok: true };
-      try {
-        const response = await fetch('/api/published', {
-          method: 'DELETE',
-          credentials: 'same-origin',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            records: records.map((r) => [r.page_number, r.subpage ?? MIN_SUBPAGE]),
-          }),
-        });
-        if (!response.ok) return { ok: false, error: `The old records could not be updated (${response.status}).` };
-        const done = new Set(records.map((r) => `${r.page_number}.${r.subpage ?? MIN_SUBPAGE}`));
-        setLegacyRows((rows) => rows.filter((r) => !done.has(`${r.page_number}.${r.subpage ?? MIN_SUBPAGE}`)));
-        return { ok: true };
-      } catch {
-        return { ok: false, error: 'Could not reach the server.' };
-      }
-    },
-    [],
-  );
-
   /* --- after a move to a new room ------------------------------------------ */
 
   const boot = useSyncExternalStore(subscribeBoot, getBoot, getBoot);
@@ -1210,19 +1107,6 @@ export function useArchiveAdmin({
     setSubpageCounts,
   ]);
 
-  const legacy = useMemo<LegacyRecords>(
-    () => ({
-      adoptable: legacySplit.adoptable,
-      stranded: legacySplit.stranded,
-      loading: legacyLoading,
-      error: legacyError,
-      reload: reloadLegacy,
-      adopt,
-      resolve,
-    }),
-    [legacySplit, legacyLoading, legacyError, reloadLegacy, adopt, resolve],
-  );
-
   return {
     captures,
     total,
@@ -1254,7 +1138,6 @@ export function useArchiveAdmin({
     savePageText,
     occupiedPages,
     handMadePages,
-    legacy,
     playgroundToRestore,
     restorePlayground,
   };

@@ -97,6 +97,11 @@ export default async function handler(
 
     json(res, 200, { menu: rows[0] });
   } catch (error) {
+    // Renaming a menu to a name another menu has: unique_violation.
+    if ((error as { code?: unknown }).code === '23505') {
+      fail(res, 409, 'Another menu already has that name.');
+      return;
+    }
     serverError(res, 'menus', error);
   }
 }

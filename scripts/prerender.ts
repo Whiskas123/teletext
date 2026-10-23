@@ -17,8 +17,8 @@
  *
  * ## Why a build step and not a serverless function
  *
- * `api/` holds exactly twelve functions, which is the Hobby plan's cap — the
- * same wall `api/published.ts` describes. A thirteenth fails the deploy. Static
+ * The Hobby plan caps `api/` at twelve functions — the wall `api/auth.ts`
+ * describes — and a page per address would be far past it. Static
  * files avoid the question entirely, and Vercel checks the filesystem before
  * applying rewrites, so `dist/watch/220/index.html` is served at `/watch/220`
  * and the SPA catch-all never sees it.

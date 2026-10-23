@@ -50,7 +50,7 @@
  *   deploy. See `src/domain/bootData.ts`.
  *
  * And the English for curated pages — `GET ?sub`, `GET ?subs`, `POST
- * ?translate` — which is here only because of the function cap. See
+ * ?translate` — which came here because of the function cap. See
  * `_lib/translations.ts`.
  */
 

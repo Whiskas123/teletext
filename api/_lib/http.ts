@@ -6,6 +6,8 @@
  * read when the plumbing is a handful of named functions rather than a layer.
  */
 
+import { createHmac } from 'node:crypto';
+
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 /** Send a JSON body with `status`. */
@@ -89,6 +91,24 @@ export function queryInt(
   const parsed = Number(raw);
   if (!Number.isInteger(parsed) || parsed < min || parsed > max) return fallback;
   return parsed;
+}
+
+/**
+ * Who is asking, as a key to count requests by: the client's address, keyed
+ * with `SESSION_SECRET` so the database holds no addresses, only a value that
+ * cannot be turned back into one.
+ *
+ * Vercel sets `x-real-ip` and overwrites `x-forwarded-for` with the address it
+ * saw, so neither can be supplied by the client. Elsewhere (a local script)
+ * both may be missing, and every request counts as the same one.
+ */
+export function clientKey(req: VercelRequest): string {
+  const header = req.headers['x-real-ip'] ?? req.headers['x-forwarded-for'];
+  const address = (Array.isArray(header) ? header[0] : header ?? '').split(',')[0].trim();
+  return createHmac('sha256', process.env.SESSION_SECRET ?? '')
+    .update(address)
+    .digest('hex')
+    .slice(0, 32);
 }
 
 /**

@@ -2,7 +2,8 @@
 // Verifies: the page opens on the book rather than on a form, the empty book
 // says so, signatures are listed with the reader's own marked, typing on the
 // grid reaches the snippet that gets signed, the pixel tool offers no
-// background, and a refusal is reported rather than swallowed.
+// background, a refusal is reported rather than swallowed, and only a
+// moderator can take a signature out.
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
@@ -30,6 +31,8 @@ function memoryStorage(): Storage {
 }
 
 const signMock = vi.fn<GuestbookApi['sign']>();
+const removeMock = vi.fn<GuestbookApi['remove']>();
+let moderator = false;
 let entries: GuestbookEntry[] = [];
 let loading = false;
 let unreachable = false;
@@ -42,8 +45,11 @@ vi.mock('../../collab/useGuestbook', () => ({
     unreachable,
     memberId: MEMBER_ID,
     sign: signMock,
+    remove: removeMock,
   }),
 }));
+
+vi.mock('../../collab/useIsModerator', () => ({ useIsModerator: () => moderator }));
 
 /** A snippet with one character on it, so it is not blank. */
 function signedSnippet(char = 'A'): TeletextPage {
@@ -89,7 +95,24 @@ describe('the guestbook', () => {
     entries = [];
     loading = false;
     unreachable = false;
+    moderator = false;
+    removeMock.mockReset();
+    removeMock.mockResolvedValue(true);
     vi.stubGlobal('localStorage', memoryStorage());
+  });
+
+  it('lets only a moderator take a signature out, after asking', async () => {
+    const user = userEvent.setup();
+    entries = [entry()];
+    const { unmount } = renderGuestbook();
+    expect(screen.queryByRole('button', { name: /apagar/i })).not.toBeInTheDocument();
+    unmount();
+
+    moderator = true;
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    renderGuestbook();
+    await user.click(screen.getByRole('button', { name: 'Apagar: Ana' }));
+    expect(removeMock).toHaveBeenCalledWith('sig-1');
   });
 
   it('says the book is empty rather than showing an empty area', () => {

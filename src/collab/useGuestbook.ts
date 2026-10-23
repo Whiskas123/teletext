@@ -117,6 +117,8 @@ export interface GuestbookApi {
    * has stored the signature, otherwise why it was not.
    */
   sign(name: string, cells: TeletextPage): Promise<SignResult>;
+  /** Moderators only: take a signature out of the book. Resolves with whether it went. */
+  remove(id: string): Promise<boolean>;
 }
 
 export function useGuestbook(): GuestbookApi {
@@ -136,6 +138,8 @@ export function useGuestbook(): GuestbookApi {
    * Without these, it would vanish from the page until a later refresh.
    */
   const signedHere = useRef<GuestbookEntry[]>([]);
+  /** Signatures removed from this page, kept out of a stale book the same way. */
+  const removedHere = useRef(new Set<string>());
 
   const load = useCallback(async () => {
     try {
@@ -144,7 +148,7 @@ export function useGuestbook(): GuestbookApi {
       const body = (await response.json()) as { entries?: unknown };
       // Repaired on the way in, like anything stored: an entry that cannot be
       // read is skipped rather than drawn as an empty band.
-      const loaded = readEntries(body.entries);
+      const loaded = readEntries(body.entries).filter((entry) => !removedHere.current.has(entry.id));
       const ids = new Set(loaded.map((entry) => entry.id));
       signedHere.current = signedHere.current.filter((entry) => !ids.has(entry.id));
       setBook(signedHere.current.length === 0 ? loaded : sortEntries([...signedHere.current, ...loaded]));
@@ -219,12 +223,29 @@ export function useGuestbook(): GuestbookApi {
     [cached],
   );
 
+  const remove = useCallback(async (id: string): Promise<boolean> => {
+    try {
+      const response = await fetch(`${GUESTBOOK_PATH}?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+      });
+      if (!response.ok) return false;
+    } catch {
+      return false;
+    }
+    removedHere.current.add(id);
+    signedHere.current = signedHere.current.filter((entry) => entry.id !== id);
+    setBook((current) => (current ?? cached).filter((entry) => entry.id !== id));
+    return true;
+  }, [cached]);
+
   return {
     entries,
     loading: waiting && entries.length === 0,
     unreachable: waiting && (failed || timedOut),
     memberId,
     sign,
+    remove,
   };
 }
 

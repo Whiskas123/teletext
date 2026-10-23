@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from './LocalizedLink';
 
 import { useGuestbook } from '../../collab/useGuestbook';
+import { useIsModerator } from '../../collab/useIsModerator';
 import {
   SNIPPET_ROWS,
   createEmptySnippet,
@@ -53,7 +54,9 @@ import { useCurrentLanguage } from './languageContext';
 export function GuestbookPage() {
   const copy = useCopy();
   const language = useCurrentLanguage();
-  const { entries, loading, unreachable, memberId, sign } = useGuestbook();
+  const { entries, loading, unreachable, memberId, sign, remove } = useGuestbook();
+  const moderator = useIsModerator();
+  const [listNotice, setListNotice] = useState<string | null>(null);
 
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
@@ -119,6 +122,14 @@ export function GuestbookPage() {
               : copy.guestbook.errorBlank,
     );
   }, [cells, copy.guestbook, name, sign]);
+
+  const handleRemove = useCallback(
+    async (entry: GuestbookEntry) => {
+      if (!window.confirm(copy.guestbook.removeConfirm(entry.name))) return;
+      setListNotice((await remove(entry.id)) ? null : copy.guestbook.removeFailed);
+    },
+    [copy.guestbook, remove],
+  );
 
   return (
     <div className="guestbook">
@@ -275,6 +286,11 @@ export function GuestbookPage() {
                 {copy.guestbook.unreachable}
               </p>
             )}
+            {listNotice != null && (
+              <p className="guestbook-unreachable" role="alert">
+                {listNotice}
+              </p>
+            )}
 
             {/*
               * Three states, and the order matters: "still coming" has to be
@@ -311,6 +327,8 @@ export function GuestbookPage() {
                     yoursLabel={copy.guestbook.yours}
                     signedBy={copy.guestbook.signedBy}
                     locale={language === 'pt' ? 'pt-PT' : 'en-GB'}
+                    removeLabel={copy.guestbook.remove}
+                    onRemove={moderator ? () => void handleRemove(entry) : undefined}
                   />
                 ))}
               </ul>
@@ -329,12 +347,17 @@ function Entry({
   yoursLabel,
   signedBy,
   locale,
+  removeLabel,
+  onRemove,
 }: {
   entry: GuestbookEntry;
   mine: boolean;
   yoursLabel: string;
   signedBy(name: string): string;
   locale: string;
+  removeLabel: string;
+  /** Only for moderators; without it there is no button. */
+  onRemove?: () => void;
 }) {
   const when =
     entry.ts > 0
@@ -351,6 +374,16 @@ function Entry({
         <span className="guestbook-entry-name teletext-fg-white">{entry.name}</span>
         {mine && <span className="guestbook-entry-mine">{yoursLabel}</span>}
         {when !== '' && <time className="guestbook-entry-date">{when}</time>}
+        {onRemove != null && (
+          <button
+            type="button"
+            className="guestbook-entry-remove"
+            aria-label={`${removeLabel}: ${entry.name}`}
+            onClick={onRemove}
+          >
+            {removeLabel}
+          </button>
+        )}
       </div>
       {/*
         * A picture, not a grid of elements. A signature is only looked at, and

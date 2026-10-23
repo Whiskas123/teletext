@@ -288,6 +288,10 @@ export interface Copy {
     errorTooSoon: string;
     /** Said once a signature has landed. */
     signed: string;
+    /** Moderators only: take a signature out of the book. */
+    remove: string;
+    removeConfirm(name: string): string;
+    removeFailed: string;
   };
   /**
    * The screen for a URL that is not one.
@@ -505,6 +509,9 @@ export const COPY: Record<Language, Copy> = {
       errorOffline: 'Não ficou assinado: não conseguimos chegar ao livro. Tenta daqui a pouco.',
       errorTooSoon: 'Acabaste de assinar. Espera uns segundos antes de assinar outra vez.',
       signed: 'Assinado. Obrigado.',
+      remove: 'Apagar',
+      removeConfirm: (name) => `Apagar a assinatura de ${name}?`,
+      removeFailed: 'Não foi possível apagar a assinatura. Tenta outra vez.',
     },
     notFound: {
       title: 'página não encontrada',
@@ -709,6 +716,9 @@ export const COPY: Record<Language, Copy> = {
       errorOffline: "Not signed: the book couldn't be reached. Try again in a moment.",
       errorTooSoon: 'You just signed. Wait a few seconds before signing again.',
       signed: 'Signed. Thank you.',
+      remove: 'Remove',
+      removeConfirm: (name) => `Remove ${name}'s signature?`,
+      removeFailed: "The signature couldn't be removed. Try again.",
     },
     notFound: {
       title: 'page not found',

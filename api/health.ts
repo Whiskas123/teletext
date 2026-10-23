@@ -16,7 +16,8 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse,
 ): Promise<void> {
-  if (!methodIs(req, res, 'GET')) return;
+  // HEAD too: it is what most uptime monitors send.
+  if (!methodIs(req, res, 'GET', 'HEAD')) return;
 
   if (!isConfigured()) {
     json(res, 200, { ok: true, database: 'unconfigured' });
@@ -43,12 +44,10 @@ export default async function handler(
       },
     });
   } catch (error) {
-    // Report rather than 500: an unmigrated database is a normal state during
-    // setup, and the point of this route is to say which state you are in.
-    json(res, 200, {
-      ok: false,
-      database: 'error',
-      detail: error instanceof Error ? error.message : String(error),
-    });
+    // A 503, so an uptime check sees it as down. The detail stays in the log:
+    // a driver error can name tables, or the connection string (see
+    // `serverError`), and this route is public.
+    console.error('[health]', error);
+    json(res, 503, { ok: false, database: 'error' });
   }
 }

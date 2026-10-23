@@ -96,6 +96,32 @@ describe('useGuestbook', () => {
     expect(result.current.entries.map((e) => e.id)).toEqual(['new', 'old']);
   });
 
+  it('keeps a removed signature out of a stale book', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+    const book = { entries: [entry('a', 1), entry('b', 2)] };
+    const fetchMock = vi.fn((_url: string, init?: RequestInit) =>
+      init?.method === 'DELETE' ? answer(200, { deleted: true }) : answer(200, book),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = renderHook(() => useGuestbook());
+    await waitFor(() => expect(result.current.entries).toHaveLength(2));
+
+    await act(async () => {
+      expect(await result.current.remove('b')).toBe(true);
+    });
+    expect(fetchMock).toHaveBeenCalledWith('/api/guestbook?id=b', expect.objectContaining({ method: 'DELETE' }));
+    expect(result.current.entries.map((e) => e.id)).toEqual(['a']);
+
+    // The edge still serves the book from before the removal.
+    const loads = fetchMock.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(loads);
+    expect(result.current.entries.map((e) => e.id)).toEqual(['a']);
+  });
+
   it('says why a signature did not land', async () => {
     let status = 429;
     vi.stubGlobal(

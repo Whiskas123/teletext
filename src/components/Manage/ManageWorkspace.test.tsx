@@ -422,53 +422,6 @@ describe('working through the archive', () => {
   });
 });
 
-describe('the old publication records', () => {
-  // 250 was published, then emptied in the editor, while the record still sat
-  // in the old table. 203 is on air with its record not yet moved in.
-  const OLD: FakeSeed = {
-    ...SEED,
-    pages: [
-      ...SEED.pages.filter((page) => page.pageNumber !== 203),
-      { pageNumber: 203, title: 'Story three', captureIds: [9003], legacy: true },
-      { pageNumber: 250, title: 'Old story', captureIds: [77], stranded: true },
-    ],
-  };
-
-  it('no longer block numbers: a gap closes straight through an empty record', async () => {
-    // What failed on the live site before: the record at 250 made the server
-    // refuse a move the page list had shown as fine.
-    const { user } = renderWorkspace('/manage', OLD);
-    expect(row(250)).toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Close the gap at 204–299' }));
-    await user.click(
-      within(screen.getByRole('dialog')).getByRole('button', { name: 'Move page up' }),
-    );
-    await waitFor(() => expect(titleAt(204)).toBe('Sport'));
-  });
-
-  it('move in beside their pages, without changing what is on air', async () => {
-    const { user } = renderWorkspace('/manage', OLD);
-    const panel = screen.getByRole('region', { name: 'Old publication records' });
-    expect(within(row(203)).getByText('Hand-made')).toBeInTheDocument();
-
-    await user.click(within(panel).getByRole('button', { name: 'Move 1 in' }));
-    await waitFor(() => expect(within(row(203)).queryByText('Hand-made')).toBeNull());
-    expect(titleAt(203)).toBe('Story three');
-    expect(screen.getByText('1 record moved into the live pages.')).toBeInTheDocument();
-  });
-
-  it('pointing at empty screens can be restored from the archive, or set aside', async () => {
-    const { user } = renderWorkspace('/manage', OLD);
-    const panel = screen.getByRole('region', { name: 'Old publication records' });
-    await user.click(within(panel).getByRole('button', { name: 'Show them' }));
-    expect(within(panel).getByText('Old story')).toBeInTheDocument();
-
-    await user.click(within(panel).getByRole('button', { name: 'Restore' }));
-    await waitFor(() => expect(titleAt(250)).toBe('Old story'));
-    expect(screen.getByText('1 screen restored from the archive.')).toBeInTheDocument();
-  });
-});
-
 describe('pages edited by hand since publishing', () => {
   const EDITED: FakeSeed = {
     ...SEED,

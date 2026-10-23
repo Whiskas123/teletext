@@ -2,10 +2,11 @@
  * English for curated pages — the `?sub`, `?subs` and `?translate` parts of
  * `/api/snapshot`.
  *
- * Here rather than in a function of their own because Vercel's Hobby plan caps
- * a deployment at twelve and `api/` is at twelve. `snapshot` is the right host:
- * translations are made from `live_pages`, and it already has the 60-second
- * `maxDuration` (`vercel.json`) that a call to Claude needs.
+ * Here rather than in a function of their own because, when they were written,
+ * `api/` was at the Hobby plan's cap of twelve functions. It has room now (see
+ * `api/auth.ts`), but `snapshot` is still the right host: translations are made
+ * from `live_pages`, and it already has the 60-second `maxDuration`
+ * (`vercel.json`) that a call to Claude needs.
  *
  * - `GET ?sub=220` / `?sub=220.2` (public) — one screen's translation, for the
  *   EN key. Cached at the edge for a minute, like the boot pages.

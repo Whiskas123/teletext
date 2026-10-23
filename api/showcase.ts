@@ -42,6 +42,9 @@ import { bodyObject, fail, json, methodIs, queryValue, serverError } from './_li
  */
 const MAX_IMAGE_BYTES = 1024 * 1024;
 
+/** The picture types a showcase entry may be stored as. */
+const IMAGE_TYPES = new Set(['image/png', 'image/webp']);
+
 /** Neon returns `bytea` as a `\x…` hex string over the HTTP driver. */
 function toBuffer(raw: unknown): Buffer {
   return Buffer.isBuffer(raw)
@@ -184,7 +187,14 @@ export default async function handler(
       return;
     }
 
-    const imageType = typeof body.imageType === 'string' ? body.imageType : 'image/png';
+    // Served back as the picture's `Content-Type` to every visitor, so only
+    // what the browser actually draws: anything else could make the stored
+    // bytes a page on this origin.
+    const imageType = body.imageType ?? 'image/png';
+    if (typeof imageType !== 'string' || !IMAGE_TYPES.has(imageType)) {
+      fail(res, 415, 'The picture must be a PNG or WebP.');
+      return;
+    }
 
     await db()`
       insert into showcase_pages

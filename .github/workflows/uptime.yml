@@ -1,0 +1,34 @@
+# Is the live API answering? Every half hour, from outside.
+#
+# In October 2026 every function crashed on load for three days and nothing
+# said so: a deploy moved them from the Bun runtime to Node, which cannot
+# resolve the extensionless imports in api/. A failed run here emails whoever
+# last changed this file.
+#
+# health proves the runtime and the database; the others are the public reads
+# visitors depend on, each a separate function that can fail on its own.
+#
+# GitHub pauses scheduled workflows after 60 days without a commit to the
+# repository, and says so by email.
+
+name: uptime
+
+on:
+  schedule:
+    - cron: '7,37 * * * *'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the public API
+        run: |
+          site=https://teletext.joaobernardo.me
+          failed=0
+          for path in /api/health /api/guestbook /api/showcase /api/menus "/api/snapshot?boot=1"; do
+            status=$(curl -s -o /dev/null -w '%{http_code}' --compressed --retry 2 --retry-all-errors --max-time 30 "$site$path")
+            echo "$status $path"
+            [ "$status" = 200 ] || failed=1
+          done
+          exit $failed

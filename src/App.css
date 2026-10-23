@@ -4546,6 +4546,23 @@ button.yellow-pages-number:hover {
   margin-left: auto;
 }
 
+/* Moderators only. Red, like the teletext red it is, and small: it sits on
+   every entry, and the signatures are what the page is for. */
+.guestbook-entry-remove {
+  padding: 0.05rem 0.4rem;
+  font: inherit;
+  font-size: 0.7rem;
+  color: #f00;
+  background: none;
+  border: 1px solid currentColor;
+  cursor: pointer;
+}
+
+.guestbook-entry-remove:focus-visible {
+  outline: 2px solid #ff0;
+  outline-offset: 2px;
+}
+
 /* The snippet as a picture. Full width of the column, and its own aspect ratio
    keeps the eight rows in proportion however wide that is. */
 .guestbook-entry .teletext-thumbnail {

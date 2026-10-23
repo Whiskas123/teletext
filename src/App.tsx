@@ -12,14 +12,10 @@ import { LiveMirror } from './collab/liveMirror';
 import { useIsModerator } from './collab/useIsModerator';
 import { RoomContext } from './collab/RoomContext';
 import { AboutPage } from './components/Room/AboutPage';
-import { GuestbookPage } from './components/Room/GuestbookPage';
 import { LanguageProvider } from './components/Room/LanguageProvider';
 import { Landing } from './components/Room/Landing';
 import { ModeratorLogin } from './components/Room/ModeratorLogin';
 import { NotFound } from './components/Room/NotFound';
-import { RoomViewer } from './components/Room/RoomViewer';
-import { SoloEditor } from './components/Room/SoloEditor';
-import { SoloViewer } from './components/Room/SoloViewer';
 import { validateRoomId } from './domain/roomId';
 import { useNoIndex } from './utils/useNoIndex';
 import './App.css';
@@ -31,6 +27,22 @@ import './styles/exhibit.css';
 // Last, so the editor console's own surface wins over the shared editor
 // layout it borrows from `teletext.css`. See the note at the top of the file.
 import './styles/console.css';
+
+/*
+ * The screens past the front page, each in its own chunk, so the front page —
+ * where most visits start — does not download the editor, the room and the
+ * viewer before it can draw four words. About a quarter of what it used to.
+ *
+ * None of them has a <Suspense> above it, on purpose. On the first render that
+ * leaves the prerendered HTML on screen until the chunk arrives, instead of
+ * swapping it for an empty fallback; after that, React Router navigates inside
+ * a transition, which keeps the screen you are leaving up while the next one
+ * loads. A boundary would show its fallback in both cases.
+ */
+const SoloViewer = lazy(() => import('./components/Room/SoloViewer'));
+const RoomViewer = lazy(() => import('./components/Room/RoomViewer'));
+const SoloEditor = lazy(() => import('./components/Room/SoloEditor'));
+const GuestbookPage = lazy(() => import('./components/Room/GuestbookPage'));
 
 // Lazy: carries the glyph atlas, which only this rarely-visited admin page
 // needs — no reason to put it in the bundle every visitor downloads.

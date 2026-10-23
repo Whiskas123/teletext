@@ -205,22 +205,6 @@
   color: var(--mg-warn);
 }
 
-.mg-legacy {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 8px 12px 0;
-  padding: 10px 12px;
-  border: 1px solid var(--mg-accent-line);
-  border-radius: 8px;
-  background: #0d1a22;
-}
-.mg-legacy-head { display: flex; flex-direction: column; gap: 2px; }
-.mg-legacy-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.mg-legacy-stranded { color: var(--mg-warn); }
-.mg-legacy-list { margin: 0; padding: 0; list-style: none; max-height: 220px; overflow: auto; }
-.mg-legacy-list li { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-top: 1px solid var(--mg-line); }
-.mg-legacy-list .mg-num { width: 56px; }
 
 .mg-empty { margin: 0; padding: 32px 16px; text-align: center; color: var(--mg-muted); }
 .mg-empty p { margin: 0 0 12px; }

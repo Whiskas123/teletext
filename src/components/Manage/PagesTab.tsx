@@ -56,7 +56,6 @@ import {
 } from './lineupModel';
 import { SelectionInspector } from './SelectionInspector';
 import { useTranslations } from './useTranslations';
-import { LegacyPanel } from './LegacyPanel';
 import type { ManageActionsApi, TransformPatch } from './useManageActions';
 import type { ArchiveQuery } from './useArchiveQuery';
 import { useLineupSelection } from './useLineupSelection';
@@ -865,7 +864,6 @@ export function PagesTab({
           </button>
         </div>
 
-        <LegacyPanel data={data} actions={actions} locked={locked} confirm={confirm} />
 
         <LineupTable
           sections={ready ? sections : []}

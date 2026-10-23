@@ -1,18 +1,13 @@
 /**
- * `/api/published` — rendering a capture for publication, and the old records.
+ * `PUT /api/published` (admin) — render a capture as it would be published:
+ * its cells with the shift and the bottom bar applied, returned with the
+ * capture's details. **It records nothing.** The browser writes the cells and
+ * where they came from in one go (`page-sources`, see
+ * `src/domain/pageSource.ts`).
  *
- * - `PUT` (admin) renders a capture as it would be published — its cells with
- *   the shift and the bottom bar applied — and returns them with the capture's
- *   details. **It records nothing.** The browser writes the cells and where they
- *   came from into playhtml in one go (`page-sources`, see
- *   `src/domain/pageSource.ts`), and the live mirror copies both into the
- *   database like every other change.
- * - `GET` (public) lists the records this table held before that — when it was
- *   a second, hand-synchronised map of which capture was on which number. Read
- *   once by `/manage` to move them into playhtml.
- * - `DELETE` (admin, body `{ records: [[page, subpage], …] }`) marks such
- *   records as dealt with. They stay in the table, as history; `GET` stops
- *   offering them.
+ * The `published_pages` table it is named after is history: its records were
+ * moved beside the screens they describe, and the routes that read and resolved
+ * them are gone.
  *
  * ## Why this no longer writes
  *
@@ -22,11 +17,6 @@
  * list showed free numbers the server then refused to use. Keeping the record
  * beside the cells, in one store, is what makes that impossible; the table is
  * kept only as the history it already holds.
- *
- * ## Why DELETE lives here rather than at `/api/published/[page]`
- *
- * Vercel's Hobby plan caps a deployment at twelve functions. One resource, one
- * function.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -35,12 +25,7 @@ import { toInteger } from '../src/domain/coerce';
 import { applyMenu, type MenuItem } from '../src/domain/menu';
 import { pageToArray, pageToCellMap } from '../src/domain/pageEncoding';
 import { shiftPageDown } from '../src/domain/pageTransform';
-import {
-  describeRejection,
-  isPublishablePage,
-  validatePublication,
-} from '../src/domain/publication';
-import { isSubpage } from '../src/domain/subpages';
+import { describeRejection, validatePublication } from '../src/domain/publication';
 import { db } from './_lib/db';
 import { isAdmin } from './_lib/auth';
 import {
@@ -55,60 +40,11 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse,
 ): Promise<void> {
-  if (!methodIs(req, res, 'GET', 'PUT', 'DELETE')) return;
+  if (!methodIs(req, res, 'PUT')) return;
 
   try {
-    if (req.method === 'GET') {
-      const rows = await db()`
-        select
-          p.page_number, p.subpage, p.title, p.description, p.published_at,
-          p.capture_id, p.shift_down, p.menu_id,
-          c.source, c.original_page, c.sub, c.topic, c.scheme,
-          c.first_seen, c.manifest_title,
-          m.name as menu_name
-        from published_pages p
-        join archive_captures c on c.id = p.capture_id
-        left join custom_menus m on m.id = p.menu_id
-        where p.resolved_at is null
-        order by p.page_number, p.subpage
-      `;
-      json(res, 200, { published: rows });
-      return;
-    }
-
     if (!isAdmin(req)) {
       fail(res, 401, 'Sign in to publish.');
-      return;
-    }
-
-    if (req.method === 'DELETE') {
-      // Marks old records as dealt with — moved into playhtml, restored, or
-      // discarded — rather than deleting them: the table is history now, and
-      // `GET` simply stops offering them.
-      const body = bodyObject(req);
-      const raw: unknown[] = Array.isArray(body.records) ? body.records : [];
-      const pairs = raw
-        .map((item) => (Array.isArray(item) ? [toInteger(item[0]), toInteger(item[1])] : [null, null]))
-        .filter(
-          (pair): pair is [number, number] =>
-            pair[0] != null && isPublishablePage(pair[0]) && pair[1] != null && isSubpage(pair[1]),
-        )
-        .slice(0, 1000);
-      if (pairs.length === 0) {
-        fail(res, 400, 'Name the records as [page, subpage] pairs.');
-        return;
-      }
-
-      const resolved = await db()`
-        update published_pages p
-        set resolved_at = now()
-        from unnest(${pairs.map((p) => p[0])}::int[], ${pairs.map((p) => p[1])}::int[])
-          as t(page_number, subpage)
-        where p.page_number = t.page_number and p.subpage = t.subpage
-          and p.resolved_at is null
-        returning p.page_number
-      `;
-      json(res, 200, { resolved: resolved.length });
       return;
     }
 
