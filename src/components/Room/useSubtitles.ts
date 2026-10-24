@@ -1,11 +1,21 @@
 /**
  * useSubtitles — the English layer the EN key puts over a page.
  *
- * The words come from `/api/snapshot?sub=<page>`, a translation made ahead of
+ * The words come from `/api/snapshot?sub=all`, the translations made ahead of
  * time from /manage and kept in `page_translations`; the layout stays the
  * page's own, because the English is written into the cells the Portuguese
  * occupied (see
  * `domain/subtitles.ts`). Nothing is translated in the browser.
+ *
+ * ## All of them at once, the first time EN is wanted
+ *
+ * It used to be one request per page, made as the page came up — so with the
+ * mode on, every page change drew the Portuguese first and swapped in the
+ * English when its answer landed, a flash on every page. Now the first time a
+ * set wants English it asks for every translation in one request, and from
+ * then on each page's English is looked up on the render that shows it. Only
+ * curated pages are translated, so the whole set is small; a visitor who never
+ * presses EN never asks for it.
  *
  * EN is a mode, not a press per page: switched on, it stays on while you change
  * page, and every page that has a translation comes up in English. A page
@@ -35,26 +45,25 @@ import { useCurrentLanguage } from './languageContext';
 /** How long the red lamp says "no": three 200ms flashes (`.crt-lamp-flash`). */
 export const EN_FAULT_MS = 600;
 
-/**
- * One request per page per visit, shared by every set on the screen.
- *
- * A 404 is an answer (`null`), not an error: most pages have no translation.
- * A server with no API (`vite dev`) answers with the app's HTML, which lands
- * there too, through the failed parse.
- */
-const loaded = new Map<string, Promise<SubtitleEntry[] | null>>();
+type Translations = Record<string, SubtitleEntry[]>;
 
-function loadSubtitles(key: string): Promise<SubtitleEntry[] | null> {
-  let request = loaded.get(key);
-  if (request == null) {
-    request = fetch(`/api/snapshot?sub=${key}`)
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data: { runs?: unknown } | null) =>
-        Array.isArray(data?.runs) ? (data.runs as SubtitleEntry[]) : null,
-      )
-      .catch(() => null);
-    loaded.set(key, request);
-  }
+/** Every translation, once loaded: shared by every set on the screen, for the visit. */
+let loaded: Translations | null = null;
+let request: Promise<Translations> | null = null;
+
+/**
+ * Ask once. A failure (no network, or `vite dev`, which answers with the app's
+ * HTML) reads as "no translations" for that attempt and is not kept, so the
+ * next press asks again.
+ */
+function loadTranslations(): Promise<Translations> {
+  request ??= fetch('/api/snapshot?sub=all')
+    .then((response) => (response.ok ? response.json() : Promise.reject(new Error(String(response.status)))))
+    .then((data: { translations?: Translations }) => (loaded = data.translations ?? {}))
+    .catch(() => {
+      request = null;
+      return {};
+    });
   return request;
 }
 
@@ -75,23 +84,23 @@ export function useSubtitles(pageNumber: number, subpage: number, page: Teletext
   // The page EN was last pressed on, which is the only page allowed to answer
   // "nothing here" with a red lamp.
   const [pressedOn, setPressedOn] = useState<string | null>(null);
-  const [answer, setAnswer] = useState<{ key: string; entries: SubtitleEntry[] | null } | null>(
-    null,
-  );
+  // Seeded from what another set already loaded, so a page that mounts with the
+  // mode on is English on its first render too.
+  const [translations, setTranslations] = useState<Translations | null>(() => loaded);
 
   useEffect(() => {
-    if (!wanted) return;
+    if (!wanted || translations != null) return;
     let current = true;
-    void loadSubtitles(key).then((entries) => {
-      if (current) setAnswer({ key, entries });
+    void loadTranslations().then((all) => {
+      if (current) setTranslations(all);
     });
     return () => {
       current = false;
     };
-  }, [wanted, key]);
+  }, [wanted, translations]);
 
-  // `undefined` while the answer for this page is still on its way.
-  const entries = answer?.key === key ? answer.entries : undefined;
+  // `undefined` until the translations have arrived; `null` for a page with none.
+  const entries = translations == null ? undefined : (translations[key] ?? null);
   const english = useMemo(
     () => (wanted && entries != null ? translatePage(page, entries) : null),
     [wanted, entries, page],
@@ -114,6 +123,8 @@ export function useSubtitles(pageNumber: number, subpage: number, page: Teletext
   const toggle = useCallback(() => {
     setPressedOn(showing ? null : key);
     setWanted(!showing);
+    // An earlier attempt that failed answered "nothing"; a press asks again.
+    if (loaded == null) setTranslations(null);
   }, [showing, key]);
 
   const lamp: SignalState = fault

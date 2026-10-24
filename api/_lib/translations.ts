@@ -8,8 +8,11 @@
  * from `live_pages`, and it already has the 60-second `maxDuration`
  * (`vercel.json`) that a call to Claude needs.
  *
- * - `GET ?sub=220` / `?sub=220.2` (public) — one screen's translation, for the
- *   EN key. Cached at the edge for a minute, like the boot pages.
+ * - `GET ?sub=all` (public) — every translation, `{ translations: { "220.2":
+ *   runs } }`, for the EN key: loaded once when a visitor first wants English,
+ *   so each page change finds its English already there. Only curated pages
+ *   are translated, so it stays small. Cached at the edge for a minute, like
+ *   the boot pages.
  * - `GET ?subs` (moderator) — every translation, for /manage to show which
  *   pages have one and whether it still covers what the page says now.
  * - `POST ?translate` (moderator, body `{ pageNumber, subpage }`) — translate
@@ -45,12 +48,13 @@ const TRANSLATE_TIMEOUT_MS = 50_000;
 /** Handle the request if it is one of these; `false` leaves it to the caller. */
 export async function handleTranslations(req: VercelRequest, res: VercelResponse): Promise<boolean> {
   if (req.method === 'GET' && queryValue(req, 'sub') != null) {
-    await readOne(res, queryValue(req, 'sub') ?? '');
+    await readAll(res, 'public, max-age=0, s-maxage=60, stale-while-revalidate=600');
     return true;
   }
   if (req.method === 'GET' && queryValue(req, 'subs') != null) {
+    // The same list, uncached: /manage must see a save the moment it lands.
     if (!isAdmin(req)) fail(res, 401, 'Sign in to read the translations.');
-    else await readAll(res);
+    else await readAll(res, 'no-store');
     return true;
   }
   if (req.method === 'POST' && queryValue(req, 'translate') != null) {
@@ -121,31 +125,12 @@ async function saveByHand(req: VercelRequest, res: VercelResponse, key: string):
   }
 }
 
-async function readOne(res: VercelResponse, key: string): Promise<void> {
-  const parsed = parsePageKey(key);
-  if (parsed == null) {
-    fail(res, 400, 'Not a page.');
-    return;
-  }
-  try {
-    const rows = await db()`
-      select runs from page_translations
-      where page_number = ${parsed.pageNumber} and subpage = ${parsed.subpage}
-    `;
-    res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=600');
-    if (rows.length === 0) fail(res, 404, 'No translation.');
-    else json(res, 200, { runs: rows[0].runs });
-  } catch (error) {
-    serverError(res, 'snapshot/sub', error);
-  }
-}
-
-async function readAll(res: VercelResponse): Promise<void> {
+async function readAll(res: VercelResponse, cacheControl: string): Promise<void> {
   try {
     const rows = await db()`select page_number, subpage, runs from page_translations`;
     const translations: Record<string, SubtitleEntry[]> = {};
     for (const row of rows) translations[String(pageKey(row.page_number, row.subpage))] = row.runs;
-    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Cache-Control', cacheControl);
     json(res, 200, { translations });
   } catch (error) {
     serverError(res, 'snapshot/subs', error);

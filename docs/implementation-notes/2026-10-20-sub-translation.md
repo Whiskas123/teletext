@@ -199,3 +199,23 @@ the unit check had missed:
   an IntersectionObserver that never fires there); checked in
   `manage-preview.html` instead. The first workspace test typed a line longer
   than its run and got it cut — the limit working, so the test now checks it.
+
+## 2026-10-24 — the Portuguese flash on every page change
+
+- **Reported:** with EN on, each page came up in Portuguese for a moment, then
+  turned English. Cause: `useSubtitles` fetched `?sub=<page>` as each page came
+  up, and drew the Portuguese until the answer landed. Even a page already
+  visited flashed for a frame, since its cached answer still arrived through a
+  promise.
+- **Fix:** one request for every translation (`GET ?sub=all`, public, edge
+  cached a minute) the first time a set wants English, kept for the visit;
+  each page then looks its English up on the render that shows it. Only
+  curated pages are translated, so the list stays small, and a visitor who
+  never presses EN never fetches it. The per-page `GET ?sub=<key>` is gone; a
+  tab left open across the deploy would get the list, read no `runs`, and
+  answer EN with the red lamp until reloaded.
+- **Still a wait the first time:** the first press (or the first page for an
+  `/en` visitor) waits for the list — the amber lamp's job, as before.
+- A failed load is not kept: the next press asks again.
+- The regression test re-renders a translated page with the mode on and
+  expects English on that same render, no `waitFor`. It failed before the fix.

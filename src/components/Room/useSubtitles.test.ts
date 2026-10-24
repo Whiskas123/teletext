@@ -1,5 +1,6 @@
 // Feature: the EN key's mode. Verifies: EN shows a translated page in English
-// with the lamp lit, stays on across pages, pressed on a page with nothing to
+// with the lamp lit, stays on across pages — drawing each page in English on
+// the render it arrives, never Portuguese first — pressed on a page with nothing to
 // show flashes red and then switches itself off, and starts on for a visitor
 // who chose English — dark, without a flash, where the first page has none.
 
@@ -26,9 +27,9 @@ vi.stubGlobal(
   'fetch',
   vi.fn((url: string) =>
     Promise.resolve(
-      url === '/api/snapshot?sub=901'
-        ? new Response(JSON.stringify({ runs }))
-        : new Response('{"error":"No translation."}', { status: 404 }),
+      url === '/api/snapshot?sub=all'
+        ? new Response(JSON.stringify({ translations: { 901: runs } }))
+        : new Response('{"error":"Not found."}', { status: 404 }),
     ),
   ),
 );
@@ -49,10 +50,13 @@ describe('useSubtitles', () => {
     expect(firstRow(result.current.page)).toBe('Clima');
 
     rerender({ n: 902 }); // no translation: Portuguese, lamp dark, mode still on
-    await waitFor(() => expect(result.current.lamp).toBe('off'));
+    expect(result.current.lamp).toBe('off');
     expect(firstRow(result.current.page)).toBe('Tempo');
+    // Back to a translated page: English on this very render, not after a
+    // request — otherwise the Portuguese flashes up first.
     rerender({ n: 901 });
-    await waitFor(() => expect(result.current.lamp).toBe('live'));
+    expect(result.current.lamp).toBe('live');
+    expect(firstRow(result.current.page)).toBe('Clima');
   });
 
   it('answers a press on a page with nothing with a red lamp, then off', async () => {

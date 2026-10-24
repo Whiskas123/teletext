@@ -2,7 +2,8 @@
 // Verifies: each line is matched to the screen as the database holds it — the
 // Portuguese is the server's, not the request's — empty lines and positions
 // that are not a line are left out, and a line longer than its cells is
-// refused rather than stored to be cut on the TV.
+// refused rather than stored to be cut on the TV. And the EN key's one read
+// (`GET ?sub=all`) is public and cached at the edge.
 
 import { describe, expect, it, vi } from 'vitest';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -26,10 +27,15 @@ vi.mock('./auth', () => ({ isAdmin: () => true }));
 const { handleTranslations } = await import('./translations');
 
 async function post(runs: unknown) {
-  const req = { method: 'POST', query: { sub: '220' }, body: { runs } } as unknown as VercelRequest;
+  return send({ method: 'POST', query: { sub: '220' }, body: { runs } });
+}
+
+async function send(request: object) {
+  const req = request as unknown as VercelRequest;
   const res = {
     code: 0,
     body: undefined as unknown,
+    headers: {} as Record<string, string>,
     status(code: number) {
       this.code = code;
       return this;
@@ -37,7 +43,9 @@ async function post(runs: unknown) {
     json(body: unknown) {
       this.body = body;
     },
-    setHeader() {},
+    setHeader(name: string, value: string) {
+      this.headers[name] = value;
+    },
   };
   await handleTranslations(req, res as unknown as VercelResponse);
   return res;
@@ -61,5 +69,12 @@ describe('English written by hand', () => {
     const res = await post([{ row: 3, col: 0, en: 'Goal!!' }]);
     expect(res.code).toBe(400);
     expect(writes).toHaveLength(0);
+  });
+
+  it('lists every translation for the EN key, publicly, cached at the edge', async () => {
+    const res = await send({ method: 'GET', query: { sub: 'all' }, headers: {} });
+    expect(res.code).toBe(200);
+    expect(res.body).toEqual({ translations: {} });
+    expect(res.headers['Cache-Control']).toMatch(/^public, .*s-maxage=60/);
   });
 });
