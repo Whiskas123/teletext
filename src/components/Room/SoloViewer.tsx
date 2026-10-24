@@ -40,6 +40,7 @@ import CrtTelevision from './CrtTelevision';
 import ExhibitScreen from './ExhibitScreen';
 import RoomLayout from './RoomLayout';
 import YellowPagesDrawer from './YellowPagesDrawer';
+import { useAddressFollowsPage } from './useAddressFollowsPage';
 import { useExhibitMode } from './useExhibitMode';
 import { usePageRoll } from './usePageRoll';
 import { useSubtitles } from './useSubtitles';
@@ -94,6 +95,9 @@ export function SoloViewer({ pageNumber: pageNumberProp, kiosk = false }: SoloVi
     initialPageNumber,
     Number.isFinite(parsedSubpage) ? parsedSubpage : undefined,
   );
+
+  // Reload or share and you get the page you are on, not the one you came in on.
+  useAddressFollowsPage(displayedPageNumber, subpage, kiosk);
 
   // EN swaps the words before the roll sees the page, so a page dialled with
   // EN on comes up in English rather than turning English after it lands.
