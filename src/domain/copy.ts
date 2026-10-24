@@ -179,6 +179,11 @@ export interface Copy {
     savedHint: string;
     notSaving: string;
     notSaved(reason: string): string;
+    /** The EN key: a curated screen's English, edited in the grid. */
+    englishKey: string;
+    englishKeyHint: string;
+    /** Said while editing in English, because so much of the editor stops applying. */
+    englishOn: string;
     titleTooLong(max: number): string;
     /** A curated page's title, refused because the archive is still loading. */
     titleNotSaved: string;
@@ -440,6 +445,10 @@ export const COPY: Record<Language, Copy> = {
       saved: 'Guardado',
       savedHint: 'As alterações ficam guardadas à medida que editas',
       notSaving: 'Não guardado',
+      englishKey: 'EN',
+      englishKeyHint: 'Editar a versão inglesa deste ecrã',
+      englishOn:
+        'Em inglês só mudam as letras das linhas traduzidas. Cores, gráficos e o resto ficam como na página portuguesa.',
       notSaved: (reason) => `Alteração não guardada: ${reason}`,
       titleTooLong: (max) => `O título tem de ter ${max} caracteres ou menos.`,
       titleNotSaved: 'Ainda não ficou guardado: as páginas ainda estão a carregar.',
@@ -648,6 +657,10 @@ export const COPY: Record<Language, Copy> = {
       saved: 'Saved',
       savedHint: 'Changes are saved as you edit',
       notSaving: 'Not saved',
+      englishKey: 'EN',
+      englishKeyHint: "Edit this screen's English",
+      englishOn:
+        'In English only the letters of translated lines change. Colours, graphics and the rest stay as on the Portuguese page.',
       notSaved: (reason) => `Change not saved: ${reason}`,
       titleTooLong: (max) => `Title must be ${max} characters or fewer.`,
       titleNotSaved: 'Not saved yet: the pages are still loading.',

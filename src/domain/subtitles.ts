@@ -200,19 +200,6 @@ export function translationCoverage(
   return { matched: runs.length, total: all.length };
 }
 
-/**
- * Every run on a page with the English a stored translation gives it, or `''`
- * where it gives none (no entry, or one for Portuguese the run no longer says).
- * What an editor starts from: one line per run, in reading order.
- */
-export function englishLines(
-  page: TeletextPage,
-  entries: readonly SubtitleEntry[],
-): { run: SubtitleRun; en: string }[] {
-  const byPlace = new Map(entries.map((e) => [`${e.row}:${e.col}:${e.pt}`, e.en]));
-  return subtitleRuns(page).map((run) => ({ run, en: byPlace.get(`${run.row}:${run.start}:${run.text}`) ?? '' }));
-}
-
 /** A page's runs and their English, as they are stored. */
 export function toEntries(runs: readonly SubtitleRun[], english: readonly string[]): SubtitleEntry[] {
   return runs.map((run, i) => ({ row: run.row, col: run.start, pt: run.text, en: english[i] }));

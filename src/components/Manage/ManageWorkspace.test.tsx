@@ -423,34 +423,20 @@ describe('working through the archive', () => {
 });
 
 describe('English written by hand', () => {
-  it('edits a screen line by line and saves it', async () => {
-    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      if (url === '/api/snapshot?sub=201' && init?.method === 'POST') {
-        const { runs } = JSON.parse(String(init.body)) as { runs: { row: number; col: number; en: string }[] };
-        const stored = runs.filter((r) => r.en !== '').map((r) => ({ ...r, pt: '' }));
-        return new Response(JSON.stringify({ key: '201', runs: stored, lost: 0 }));
-      }
-      return new Response(JSON.stringify({ translations: {} }));
-    });
-    vi.stubGlobal('fetch', fetchMock);
+  it("links a translated screen to the editor, in English", async () => {
+    // 201's own heading line, so the stored English still matches the page.
+    const runs = [{ row: 2, col: 1, pt: '201 Story one', en: '201 Tale one' }];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ translations: { 201: runs } }))),
+    );
     const { user } = renderWorkspace();
 
     await user.click(row(201));
     const english = within(screen.getByRole('complementary', { name: 'Page 201' })).getByRole('region', { name: 'English' });
-    await user.click(within(english).getByRole('button', { name: 'Edit' }));
-    const [first] = within(english).getAllByRole('textbox');
-    // A line holds only as many letters as its Portuguese had cells.
-    await user.type(first, '201 Tale one, much longer');
-    expect(first).toHaveValue('201 Tale one,');
-    await user.clear(first);
-    await user.type(first, '201 Tale one');
-
-    await user.click(within(english).getByRole('button', { name: 'Save English' }));
-    await waitFor(() => expect(within(english).getByText('Saved.')).toBeInTheDocument());
-    const [, init] = fetchMock.mock.calls.find(([url]) => url === '/api/snapshot?sub=201')!;
-    const sent = (JSON.parse(String(init!.body)) as { runs: { en: string }[] }).runs;
-    expect(sent[0].en).toBe('201 Tale one');
-    expect(sent.slice(1).every((line) => line.en === '')).toBe(true);
+    await waitFor(() =>
+      expect(within(english).getByRole('link', { name: 'Edit English' })).toHaveAttribute('href', '/edit/201/1?lang=en'),
+    );
     vi.unstubAllGlobals();
   });
 });

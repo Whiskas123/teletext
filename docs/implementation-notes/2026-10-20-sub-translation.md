@@ -219,3 +219,29 @@ the unit check had missed:
 - A failed load is not kept: the next press asks again.
 - The regression test re-renders a translated page with the mode on and
   expects English on that same render, no `waitFor`. It failed before the fix.
+
+## 2026-10-24 — English edited in the editor, not in /manage
+
+- **The line-by-line form in /manage was the wrong place.** Rejected after it
+  shipped: the editor already edits curated pages for moderators, and the
+  English belongs in the grid it is drawn in, not in a list of fields beside
+  a thumbnail. The form (`EnglishEditor`, `englishLines`, the hook's
+  `lines`/`save`) is gone; /manage's English section now has an **Edit English**
+  link to `/edit/<page>/<screen>?lang=en`.
+- **The editor's EN key** (`useEnglishDraft`): on a curated screen with a
+  translation, it turns the grid to the English. Only letters inside
+  translated lines change — the English is the Portuguese page with its words
+  swapped, so a brush, a colour or a cell outside a line has nowhere to be
+  stored and is refused. Saved as the editor saves, 800 ms after typing stops or
+  at once on leaving the screen, through the same `POST ?sub=` route. A line
+  still reading its Portuguese is left out unless it already had English, so a
+  partly translated screen stays partly translated rather than counting as
+  done.
+- **The editor remounts per language** (`key="en"|"pt"`) so undo cannot carry
+  a Portuguese edit into the English or back.
+- **Only on screens that already have a translation**, as asked. Writing
+  English from nothing is still Translate, then edit.
+- **Not checked in a browser:** the local dev server has no API and no
+  sign-in, so the key never appears there. `SoloEditor.test.tsx` covers the
+  wiring with the shared-document hooks stubbed; `useEnglishDraft.test.ts`
+  covers what is accepted and saved.

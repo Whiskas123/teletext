@@ -17,14 +17,12 @@ import type { PageActionName } from '../../domain/inFlight';
 import type { CustomMenu } from '../../domain/menu';
 import { MAX_DESCRIPTION_LENGTH, MAX_TITLE_LENGTH } from '../../domain/publication';
 import { MAX_SUBPAGE } from '../../domain/subpages';
-import { applySubtitles, keepsNumbers, type SubtitleRun } from '../../domain/subtitles';
 import { suggestTitle } from '../../domain/suggestTitle';
 import type { TeletextPage } from '../../types/teletext';
 import type { DropVerdict } from './LineupTable';
 import { KIND_NAMES, type PageRow } from './lineupModel';
 import { MenuStrip } from './MenuStrip';
 import { PageThumb } from './PageThumb';
-import { EnglishEditor } from './EnglishEditor';
 import type { ScreenTranslation, TranslateOutcome } from './useTranslations';
 
 
@@ -46,10 +44,6 @@ export interface InspectorProps {
   /** A translation is running, here or for a selection. */
   translating: boolean;
   onTranslate(): Promise<TranslateOutcome>;
-  /** The current screen's lines that can be translated, with their English now. */
-  englishLines: readonly { run: SubtitleRun; en: string }[];
-  /** Store hand-written English for the current screen, one string per line. */
-  onSaveEnglish(english: readonly string[]): Promise<TranslateOutcome>;
   titleRef: RefObject<HTMLInputElement | null>;
   checkMove(target: number): DropVerdict;
   onMove(target: number): void;
@@ -82,8 +76,6 @@ export function Inspector({
   englishPage,
   translating,
   onTranslate,
-  englishLines,
-  onSaveEnglish,
   titleRef,
   checkMove,
   onMove,
@@ -118,24 +110,6 @@ export function Inspector({
   const [showEnglish, setShowEnglish] = useState(false);
   // Kept with the screen it was for, so moving to another screen drops it.
   const [outcome, setOutcome] = useState<{ screen: number; result: TranslateOutcome } | null>(null);
-  // The English being edited, for the screen it was opened on.
-  const [editing, setEditing] = useState<{ screen: number; draft: string[] } | null>(null);
-  const [savingEnglish, setSavingEnglish] = useState(false);
-  const draft = editing?.screen === screen ? editing.draft : null;
-
-  /** The screen with the draft drawn in, as the EN key would show it once saved. */
-  const draftPage = (() => {
-    const cells = livePage(pageNumber, screen);
-    if (draft == null || cells == null) return null;
-    const used = englishLines
-      .map(({ run }, i) => ({ run, en: (draft[i] ?? '').trim() }))
-      .filter(({ run, en }) => en !== '' && keepsNumbers(run.text, en));
-    return applySubtitles(
-      cells,
-      used.map(({ run }) => run),
-      used.map(({ en }) => en),
-    ).page;
-  })();
 
   const commitText = (nextTitle: string | null, nextDescription: string | null) => {
     const t = (nextTitle ?? row.title).trim();
@@ -340,12 +314,12 @@ export function Inspector({
 
         <div className="mg-preview">
           <PageThumb
-            page={draftPage ?? (showEnglish && englishPage != null ? englishPage : livePage(pageNumber, screen))}
+            page={showEnglish && englishPage != null ? englishPage : livePage(pageNumber, screen)}
             pageNumber={pageNumber}
             subpage={screen}
             subpageCount={row.screens}
             scale={1}
-            alt={`Page ${pageNumber}, screen ${screen}${draftPage != null || (showEnglish && englishPage != null) ? ', in English' : ''}`}
+            alt={`Page ${pageNumber}, screen ${screen}${showEnglish && englishPage != null ? ', in English' : ''}`}
           />
         </div>
 
@@ -431,24 +405,19 @@ export function Inspector({
               English <span className="mg-muted">screen {screen}</span>
             </h3>
             <div className="mg-en-buttons">
-              {draft == null && (
-                <button
-                  type="button"
+              {englishPage != null && (
+                <Link
                   className="mg-btn mg-btn-small mg-btn-ghost"
-                  disabled={locked || translating}
-                  title="Write or correct this screen's English by hand"
-                  onClick={() => {
-                    setOutcome(null);
-                    setEditing({ screen, draft: englishLines.map(({ en }) => en) });
-                  }}
+                  to={`/edit/${pageNumber}/${screen}?lang=en`}
+                  title="Open this screen's English in the editor"
                 >
-                  Edit
-                </button>
+                  Edit English
+                </Link>
               )}
               <button
                 type="button"
                 className={`mg-btn mg-btn-small${translation.status === 'full' ? ' mg-btn-ghost' : ''}`}
-                disabled={locked || translating || draft != null}
+                disabled={locked || translating}
                 title="Translate this screen with Claude, as it reads now. Replaces any English written by hand."
                 onClick={() => {
                   setOutcome(null);
@@ -466,29 +435,7 @@ export function Inspector({
                 ? 'Translated: the EN key shows this screen in English.'
                 : `Partly translated: ${translation.matched} of ${translation.total} lines still match what the screen says now. Translate again to catch up.`}
           </p>
-          {draft != null && (
-            <EnglishEditor
-              lines={englishLines}
-              draft={draft}
-              saving={savingEnglish}
-              onChange={(index, text) =>
-                setEditing((current) =>
-                  current == null ? current : { ...current, draft: current.draft.map((line, i) => (i === index ? text : line)) },
-                )
-              }
-              onCancel={() => setEditing(null)}
-              onSave={() => {
-                setSavingEnglish(true);
-                void onSaveEnglish(draft)
-                  .then((result) => {
-                    setOutcome({ screen, result });
-                    if (result.ok) setEditing(null);
-                  })
-                  .finally(() => setSavingEnglish(false));
-              }}
-            />
-          )}
-          {draft == null && englishPage != null && (
+          {englishPage != null && (
             <label className="mg-check">
               <input type="checkbox" checked={showEnglish} onChange={(event) => setShowEnglish(event.target.checked)} />
               <span>Show English in the preview</span>

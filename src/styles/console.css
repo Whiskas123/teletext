@@ -905,6 +905,23 @@
   min-width: 0;
 }
 
+/* The EN key, and while it is lit, what English editing leaves out. */
+.editor-console .rc-english {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 2.75rem;
+}
+
+.editor-console .rc-english-note {
+  margin: 0;
+  max-width: 20rem;
+  font-family: var(--rc-text-font);
+  font-size: 0.72rem;
+  line-height: 1.3;
+  color: var(--rc-cap-ink);
+}
+
 .editor-console .rc-subpage-row {
   display: flex;
   align-items: center;

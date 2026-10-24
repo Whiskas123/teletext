@@ -12,21 +12,15 @@
  * and running them in parallel would only trade a queue here for rate limits
  * there.
  *
- * A translation can also be written or corrected by hand (`POST ?sub=`): it is
- * stored the same way, one entry per run, and replaces what the screen had.
+ * A translation is corrected by hand in the editor (`/edit/<page>?lang=en`, see
+ * `useEnglishDraft`), which /manage links to.
  */
 
 import { useCallback, useEffect, useState } from 'react';
 
 import { isArchivePage } from '../../domain/access';
 import { pageKey } from '../../domain/subpages';
-import {
-  englishLines,
-  translatePage,
-  translationCoverage,
-  type SubtitleEntry,
-  type SubtitleRun,
-} from '../../domain/subtitles';
+import { translatePage, translationCoverage, type SubtitleEntry } from '../../domain/subtitles';
 import type { TeletextPage } from '../../types/teletext';
 
 /** One screen: `null` when there is nothing to translate on it. */
@@ -50,10 +44,6 @@ export interface Translations {
   /** Screens among these pages that have text and no translation yet. */
   missing(pages: readonly { pageNumber: number; screens: number }[]): { pageNumber: number; subpage: number }[];
   translate(targets: readonly { pageNumber: number; subpage: number }[]): Promise<TranslateOutcome>;
-  /** Every line of a screen that can be translated, with its English now (`''` for none). */
-  lines(pageNumber: number, subpage: number): { run: SubtitleRun; en: string }[];
-  /** Store English written by hand for a screen; an empty line stays Portuguese. */
-  save(pageNumber: number, subpage: number, english: readonly string[]): Promise<TranslateOutcome>;
   /** The screen being translated right now, as `"220.2"`, if any. */
   working: string | null;
   /** How far a batch has got: done of total, while one is running. */
@@ -174,53 +164,5 @@ export function useTranslations(
     [],
   );
 
-  const lines = useCallback(
-    (pageNumber: number, subpage: number) => {
-      const cells = livePage(pageNumber, subpage);
-      return cells == null ? [] : englishLines(cells, entries[String(pageKey(pageNumber, subpage))] ?? []);
-    },
-    [entries, livePage],
-  );
-
-  const save = useCallback(
-    async (pageNumber: number, subpage: number, english: readonly string[]): Promise<TranslateOutcome> => {
-      const runs = lines(pageNumber, subpage).map(({ run }, i) => ({ row: run.row, col: run.start, en: english[i] ?? '' }));
-      try {
-        const response = await fetch(`/api/snapshot?sub=${pageKey(pageNumber, subpage)}`, {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ runs }),
-        });
-        const body = (await response.json().catch(() => ({}))) as {
-          key?: string;
-          runs?: SubtitleEntry[];
-          lost?: number;
-          error?: string;
-        };
-        if (!response.ok || body.key == null || body.runs == null) {
-          return { ok: false, text: body.error ?? `Not saved (${response.status}).` };
-        }
-        const { key, runs: stored, lost = 0 } = body;
-        setEntries((previous) => {
-          const next = { ...previous };
-          if (stored.length === 0) delete next[key];
-          else next[key] = stored;
-          return next;
-        });
-        if (lost > 0) {
-          return {
-            ok: true,
-            text: `Saved — ${lost} ${lost === 1 ? 'line stays' : 'lines stay'} in Portuguese until ${lost === 1 ? 'it keeps' : 'they keep'} every number.`,
-          };
-        }
-        return { ok: true, text: 'Saved.' };
-      } catch {
-        return { ok: false, text: 'Could not reach the server.' };
-      }
-    },
-    [lines],
-  );
-
-  return { screen, page, english, missing, translate, lines, save, working, progress };
+  return { screen, page, english, missing, translate, working, progress };
 }

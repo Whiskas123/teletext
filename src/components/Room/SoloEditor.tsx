@@ -19,6 +19,14 @@
  * {@link DIAL_TIMEOUT_MS}, and a number nobody may edit reads `---`, stays
  * where it was, and says why underneath.
  *
+ * ## English
+ *
+ * On a curated screen that has a translation, an EN key beside the title turns
+ * the grid to its English, and typing changes the English words. Only those:
+ * the English is the Portuguese page with its words swapped, so colours,
+ * graphics and layout stay the Portuguese page's. See {@link useEnglishDraft}.
+ * `/manage` links here with `?lang=en` to open on it.
+ *
  * Everything else the page needs — its title, its carousel of subpages — is
  * handed to {@link Editor} as slots, and the editor decides where they sit: on
  * the strip across the top of a desk, in the page sheet on a phone.
@@ -30,7 +38,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { Link } from './LocalizedLink';
 
 import { useConnection } from '../../collab/useConnection';
@@ -56,6 +64,7 @@ import { EDITOR_NARROW_QUERY, Editor, type EditorPageSheet } from '../Editor/Edi
 import { LedWindow } from '../chrome/LedWindow';
 import { useMediaQuery } from '../../utils/useMediaQuery';
 import { useCopy } from './useCopy';
+import { useEnglishDraft } from './useEnglishDraft';
 
 /** Default Page_Number for a moderator when none is provided or invalid. */
 const DEFAULT_PAGE_NUMBER = 100;
@@ -135,7 +144,15 @@ export function SoloEditor() {
   const subpage = clampSubpage(requestedSubpage, subpageCount);
 
   // Solo editing of the global page: injected page + cell-level writes.
-  const { page, editCell, saveError } = useEditPage(pageNumber, subpage);
+  const { page: portuguese, editCell, saveError: portugueseError } = useEditPage(pageNumber, subpage);
+
+  // The EN key: asked for here, or by the link from /manage.
+  const [searchParams] = useSearchParams();
+  const [englishWanted, setEnglishWanted] = useState(() => searchParams.get('lang') === 'en');
+  const english = useEnglishDraft(pageNumber, subpage, portuguese, isModerator);
+  const inEnglish = englishWanted && english.page != null;
+  const page = inEnglish && english.page != null ? english.page : portuguese;
+  const saveError = inEnglish ? english.saveError : portugueseError;
 
   // Global TV_Guide title editing for the current page (Req 9.3).
   const { title, setTitle } = usePageTitles();
@@ -316,9 +333,10 @@ export function SoloEditor() {
   const handleEditCell = useCallback(
     (index: number, cell: Parameters<typeof editCell>[1]) => {
       placedRef.current = true;
-      editCell(index, cell);
+      if (inEnglish) english.editCell(index, cell);
+      else editCell(index, cell);
     },
-    [editCell],
+    [editCell, inEnglish, english],
   );
 
   const handleAddSubpage = useCallback(() => {
@@ -529,6 +547,21 @@ export function SoloEditor() {
           </p>
         )}
       </div>
+      {english.page != null && (
+        <div className="rc-english">
+          <button
+            type="button"
+            className={`rc-key rc-key-sub${inEnglish ? ' rc-key-lit' : ''}`}
+            aria-pressed={inEnglish}
+            title={copy.editor.englishKeyHint}
+            aria-label={copy.editor.englishKeyHint}
+            onClick={() => setEnglishWanted(!inEnglish)}
+          >
+            {copy.editor.englishKey}
+          </button>
+          {inEnglish && <p className="rc-english-note">{copy.editor.englishOn}</p>}
+        </div>
+      )}
       {subpageTabs}
     </>
   );
@@ -555,6 +588,9 @@ export function SoloEditor() {
 
   return (
     <Editor
+      // A history of its own per language: an undo must not carry a Portuguese
+      // edit into the English, or back.
+      key={inEnglish ? 'en' : 'pt'}
       pageNumber={pageNumber}
       subpage={subpage}
       subpageCount={subpageCount}

@@ -2,14 +2,13 @@
 // rows split into runs at graphics, style changes and wide gaps; numbers-only
 // runs and the header row are skipped; applying keeps every cell's style; a
 // stored translation applies only where the Portuguese still matches and
-// no number was lost; an editor gets every line with its English or nothing.
+// no number was lost.
 
 import { describe, expect, it } from 'vitest';
 
 import { COLS, ROWS, type Cell, type TeletextPage } from '../types/teletext';
 import {
   applySubtitles,
-  englishLines,
   keepsNumbers,
   subtitleRuns,
   translatePage,
@@ -109,21 +108,5 @@ describe('subtitles', () => {
     write(page, 3, 0, 'Futebol '); // edited after translation
     expect(translationCoverage(page, stored)).toEqual({ matched: 1, total: 2 });
     expect(translationCoverage(page, [])).toEqual({ matched: 0, total: 2 });
-  });
-
-  it('gives an editor every line, with its English where it still applies', () => {
-    const page = blankPage();
-    write(page, 2, 0, 'Bola de ouro');
-    write(page, 3, 0, 'Golo final');
-    write(page, 4, 0, 'Hoje');
-    const entries = [
-      { row: 2, col: 0, pt: 'Bola de ouro', en: 'Golden ball' },
-      { row: 3, col: 0, pt: 'Golo', en: 'Goal' }, // made when the line said less
-    ];
-    expect(englishLines(page, entries).map(({ run, en }) => [run.text, en])).toEqual([
-      ['Bola de ouro', 'Golden ball'],
-      ['Golo final', ''],
-      ['Hoje', ''],
-    ]);
   });
 });
