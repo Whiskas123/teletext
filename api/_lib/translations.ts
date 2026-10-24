@@ -16,6 +16,9 @@
  *   one screen of a curated page as it is in `live_pages` now, store it, and
  *   return it. Only 100–699: the playground changes too often to translate
  *   ahead of time, and its copy here is a backup that may lag.
+ * - `POST ?sub=220.2` (moderator, body `{ runs: [{ row, col, en }] }`) — store
+ *   English written or corrected by hand in /manage, replacing what the screen
+ *   had. A run left out or left empty stays Portuguese.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -55,7 +58,67 @@ export async function handleTranslations(req: VercelRequest, res: VercelResponse
     else await translate(req, res);
     return true;
   }
+  if (req.method === 'POST' && queryValue(req, 'sub') != null) {
+    if (!isAdmin(req)) fail(res, 401, 'Sign in to edit translations.');
+    else await saveByHand(req, res, queryValue(req, 'sub') ?? '');
+    return true;
+  }
   return false;
+}
+
+/**
+ * Store English edited by hand.
+ *
+ * The Portuguese each entry is matched against is read here, from the screen
+ * as it is saved now, not taken from the request: an entry only applies while
+ * the run still says what it said, so it has to be the server's copy of what
+ * that was. Each line must fit its run, the same budget the EN key draws in.
+ */
+async function saveByHand(req: VercelRequest, res: VercelResponse, key: string): Promise<void> {
+  const parsed = parsePageKey(key);
+  if (parsed == null || !isArchivePage(parsed.pageNumber)) {
+    fail(res, 400, 'Only curated pages (100–699) are translated.');
+    return;
+  }
+  const { runs: raw } = bodyObject(req);
+  const submitted: unknown[] = Array.isArray(raw) ? raw : [];
+  try {
+    const rows = await db()`
+      select cells from live_pages where page_number = ${parsed.pageNumber} and subpage = ${parsed.subpage}
+    `;
+    if (rows.length === 0) {
+      fail(res, 404, `Page ${parsed.pageNumber} screen ${parsed.subpage} is not saved yet.`);
+      return;
+    }
+    const runs = subtitleRuns(pageToArray(rows[0].cells));
+    const entries: SubtitleEntry[] = [];
+    for (const item of submitted) {
+      const { row, col, en } = (item ?? {}) as { row?: unknown; col?: unknown; en?: unknown };
+      const run = runs.find((r) => r.row === row && r.start === col);
+      const text = typeof en === 'string' ? en.trim() : '';
+      if (run == null || text === '') continue;
+      if (text.length > run.end - run.start) {
+        fail(res, 400, `Row ${run.row + 1}: "${text}" is longer than its ${run.end - run.start} cells.`);
+        return;
+      }
+      entries.push({ row: run.row, col: run.start, pt: run.text, en: text });
+    }
+
+    if (entries.length === 0) {
+      await db()`delete from page_translations where page_number = ${parsed.pageNumber} and subpage = ${parsed.subpage}`;
+    } else {
+      await db()`
+        insert into page_translations (page_number, subpage, runs, model, updated_at)
+        values (${parsed.pageNumber}, ${parsed.subpage}, ${JSON.stringify(entries)}::jsonb, 'hand', now())
+        on conflict (page_number, subpage)
+        do update set runs = excluded.runs, model = excluded.model, updated_at = now()
+      `;
+    }
+    const lost = entries.filter((entry) => !keepsNumbers(entry.pt, entry.en)).length;
+    json(res, 200, { key: String(pageKey(parsed.pageNumber, parsed.subpage)), runs: entries, lost });
+  } catch (error) {
+    serverError(res, 'snapshot/sub', error);
+  }
 }
 
 async function readOne(res: VercelResponse, key: string): Promise<void> {

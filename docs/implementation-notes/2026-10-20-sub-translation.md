@@ -176,3 +176,26 @@ the unit check had missed:
   `bunx vercel@65 logs --since 30m` returned the stack traces at once. Hobby
   keeps runtime logs only briefly, so there was no history for the older
   deploy.
+
+## 2026-10-24 — editing the English by hand
+
+- **Asked for once Translate was live:** a way to fix a translation that is
+  close but not right. /manage's English section has an **Edit** button: one
+  field per run, under the Portuguese it replaces, `maxLength` = the run's
+  cells, with a `n/width` count. The inspector's preview draws the draft as it
+  is typed. Empty fields stay Portuguese; a field that drops a number says so
+  before saving (`keepsNumbers`), since the EN key would skip it.
+- **Stored like any translation**, one entry per run, with `model = 'hand'`, via
+  `POST /api/snapshot?sub=<key>` (moderator). POST rather than PUT: `snapshot`
+  guards its methods before the translation routes run, and a PUT that missed
+  them would fall into the backup's own write path. The server reads the
+  Portuguese from `live_pages`, not the request, so an entry always matches the
+  screen as saved; a line longer than its run is a 400. All lines empty deletes
+  the row, so the screen reads "Not translated" again.
+- **Translate again replaces hand edits.** Its tooltip says so, and it is
+  disabled while the editor is open. Not guarded further — the moderator who
+  edited is the one who would press it.
+- **Test note:** the preview can't be asserted in jsdom (`PageThumb` waits for
+  an IntersectionObserver that never fires there); checked in
+  `manage-preview.html` instead. The first workspace test typed a line longer
+  than its run and got it cut — the limit working, so the test now checks it.

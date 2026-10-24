@@ -714,6 +714,8 @@ export function PagesTab({
         onTranslate={() =>
           translations.translate([{ pageNumber: active, subpage: Math.min(selection.screen, row.screens) }])
         }
+        englishLines={translations.lines(active, Math.min(selection.screen, row.screens))}
+        onSaveEnglish={(english) => translations.save(active, Math.min(selection.screen, row.screens), english)}
         titleRef={titleRef}
         checkMove={(target) => {
           if (target === active) return no(`Page ${active} is already there.`);

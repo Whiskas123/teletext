@@ -978,3 +978,12 @@
   .mg-bars-editor, .mg-front-add { border-left: 0; border-top: 1px solid var(--mg-line); }
   .mg-compare { grid-template-columns: 1fr; }
 }
+
+/* Writing a screen's English by hand: the Portuguese over each field, mono so
+   a line's length reads as the cells it will fill. */
+.mg-en-buttons { display: flex; gap: 6px; }
+.mg-en-editor { display: flex; flex-direction: column; gap: 10px; }
+.mg-en-lines { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; max-height: 420px; overflow: auto; }
+.mg-en-pt { font-family: var(--mg-mono); font-size: 11px; color: var(--mg-muted); text-transform: none; letter-spacing: 0; font-weight: 400; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+.mg-en-input { font-family: var(--mg-mono); }
+.mg-en-actions { display: flex; gap: 6px; }
