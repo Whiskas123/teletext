@@ -47,14 +47,13 @@
  * - `GET ?boot` — the pages as visitors see them while playhtml is still
  *   loading. Public, compressed, and cached at the edge for a minute, so the
  *   fallback is at most about a minute behind rather than as old as the last
- *   deploy. See `src/domain/bootData.ts`.
+ *   deploy. See `src/domain/bootData.ts`, and `_lib/bootCache.ts` for why it is
+ *   read from a stored copy rather than from `live_pages`.
  *
  * And the English for curated pages — `GET ?sub`, `GET ?subs`, `POST
  * ?translate` — which came here because of the function cap. See
  * `_lib/translations.ts`.
  */
-
-import { gzipSync } from 'node:zlib';
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
@@ -72,6 +71,7 @@ import {
 import { liveScreens, planMirror } from '../src/domain/liveMirror';
 import { SITE_URL } from '../src/domain/seo';
 import { isArchivePage } from '../src/domain/access';
+import { bootBody } from './_lib/bootCache';
 import { db, transaction } from './_lib/db';
 import { LiveDocumentError, readLiveDocument, type LiveDocumentRead } from './_lib/liveDocument';
 import { bodyObject, fail, json, methodIs, queryValue, serverError } from './_lib/http';
@@ -433,10 +433,7 @@ export default async function handler(
   // The fallback is public: it is the same pages the site shows anyone.
   if (req.method === 'GET' && queryValue(req, 'boot') != null) {
     try {
-      // Compressed here rather than left to the platform: uncompressed, a few
-      // hundred pages pass the 4.5 MB a function may return, and they shrink
-      // about sixteenfold.
-      const body = gzipSync(JSON.stringify(await bootData()));
+      const body = await bootBody(bootData);
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
       res.setHeader('Content-Encoding', 'gzip');
       res.setHeader('Vary', 'Accept-Encoding');
