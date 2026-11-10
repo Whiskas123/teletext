@@ -27,8 +27,9 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { usePlayContext } from '@playhtml/react';
 
-import { applyMenu, type CustomMenu, type MenuDraft } from '../domain/menu';
-import { pageToArray } from '../domain/pageEncoding';
+import { MENU_ROW, applyMenu, type CustomMenu, type MenuDraft } from '../domain/menu';
+import { pageToArray, pageToCellMap } from '../domain/pageEncoding';
+import { stripPageNumbers } from '../domain/stripPageNumbers';
 import { hasVisibleContent } from '../domain/pageOps';
 import { shiftPageDown } from '../domain/pageTransform';
 import { MAX_DESCRIPTION_LENGTH } from '../domain/publication';
@@ -233,6 +234,13 @@ export interface ArchiveAdminApi {
    * leave the sources empty. A move, not a copy — see `domain/absorb.ts`.
    */
   absorbPages(target: number, sources: readonly number[]): Promise<Result>;
+  /**
+   * How many three-digit numbers {@link stripPageNumbers} would blank on these
+   * pages, and on how many screens — for the confirmation, before anything goes.
+   */
+  countPageNumbers(pageNumbers: readonly number[]): { removed: number; screens: number };
+  /** Blank every three-digit number on every screen of these pages. See `domain/stripPageNumbers.ts`. */
+  stripPageNumbers(pageNumbers: readonly number[]): Promise<Result>;
   menus: CustomMenu[];
   loading: boolean;
   error: string | null;
@@ -1033,6 +1041,59 @@ export function useArchiveAdmin({
     [refuse, livePages, liveSources, liveSubpageCounts, setPages, setSources, setSubpageCounts, clearPageText],
   );
 
+  /**
+   * Each screen of these pages with its three-digit numbers blanked, keyed as
+   * the live document keys them; screens with none are left out. A screen
+   * carrying a saved bottom bar keeps that row: its numbers were set by hand.
+   */
+  const planStrip = useCallback(
+    (pageNumbers: readonly number[]) => {
+      const writes: [string, unknown][] = [];
+      let removed = 0;
+      for (const pageNumber of new Set(pageNumbers)) {
+        for (let subpage = MIN_SUBPAGE; subpage <= subpageCountOf(liveSubpageCounts, pageNumber); subpage += 1) {
+          const key = String(pageKey(pageNumber, subpage));
+          const stored = livePages?.[key as unknown as number];
+          if (stored == null) continue;
+          const keepRow = sourceAt(pageNumber, subpage)?.menuId != null ? MENU_ROW : null;
+          const stripped = stripPageNumbers(pageToArray(stored), keepRow);
+          if (stripped.removed === 0) continue;
+          removed += stripped.removed;
+          writes.push([key, pageToCellMap(stripped.page)]);
+        }
+      }
+      return { writes, removed };
+    },
+    [livePages, liveSubpageCounts, sourceAt],
+  );
+
+  const countPageNumbers = useCallback<ArchiveAdminApi['countPageNumbers']>(
+    (pageNumbers) => {
+      const { writes, removed } = planStrip(pageNumbers);
+      return { removed, screens: writes.length };
+    },
+    [planStrip],
+  );
+
+  /**
+   * Whole screens are written, not the changed cells: the same shape every
+   * other bulk write here uses. Known ceiling: a visitor drawing on one of
+   * these playground screens at that moment can lose their last stroke.
+   */
+  const stripPageNumbersOf = useCallback<ArchiveAdminApi['stripPageNumbers']>(
+    async (pageNumbers) => {
+      const refused = refuse(pageNumbers);
+      if (refused != null) return refused;
+      for (const write of orderedWrites(planStrip(pageNumbers).writes)) {
+        setPages((draft) => {
+          for (const [key, value] of write) (draft as Record<string, unknown>)[key] = value;
+        });
+      }
+      return { ok: true };
+    },
+    [refuse, planStrip, setPages],
+  );
+
   /** Remove a page entirely: every screen, where each came from, and its text. */
   const deletePage = useCallback<ArchiveAdminApi['deletePage']>(
     async (pageNumber) => {
@@ -1128,6 +1189,8 @@ export function useArchiveAdmin({
     addSubpage: subpages.addSubpage,
     removeLastSubpage,
     absorbPages,
+    countPageNumbers,
+    stripPageNumbers: stripPageNumbersOf,
     menus,
     loading,
     error,

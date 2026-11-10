@@ -386,7 +386,9 @@
 }
 .mg-row-head:hover { background: var(--mg-panel); }
 
-.mg-col-check { display: flex; justify-content: center; }
+.mg-col-check { display: flex; justify-content: center; align-self: stretch; }
+/* The whole cell checks the box: a 15px target is how a selection gets lost. */
+.mg-check-hit { display: flex; align-items: center; justify-content: center; align-self: stretch; width: 100%; cursor: pointer; }
 .mg-col-check input { width: 15px; height: 15px; margin: 0; accent-color: var(--mg-accent); cursor: pointer; }
 .mg-col-num { display: flex; align-items: center; gap: 4px; font: 700 14px var(--mg-mono); }
 .mg-grip { color: var(--mg-faint); font-size: 12px; opacity: 0; }

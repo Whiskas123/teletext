@@ -23,6 +23,7 @@ import { DEFAULT_PAGE_KIND, type PageKind } from '../../../domain/directory';
 import { applyMenu, type CustomMenu } from '../../../domain/menu';
 import { shiftPageDown } from '../../../domain/pageTransform';
 import { planArrange } from '../../../domain/reorder';
+import { stripPageNumbers } from '../../../domain/stripPageNumbers';
 import { createEmptyPage, type TeletextColor, type TeletextPage } from '../../../types/teletext';
 import type { ManageDeps } from '../ManageWorkspace';
 
@@ -441,6 +442,32 @@ export function useFakeManageDeps(
       return count - 1;
     },
     absorbPages,
+    countPageNumbers: (pages) => {
+      let removed = 0;
+      let screens = 0;
+      for (const page of pages) {
+        for (let i = 1; i <= countOf(page); i += 1) {
+          const cells = state.cells.get(key(page, i));
+          const found = cells ? stripPageNumbers(cells).removed : 0;
+          removed += found;
+          if (found > 0) screens += 1;
+        }
+      }
+      return { removed, screens };
+    },
+    stripPageNumbers: async (pages) => {
+      setState((current) => {
+        const draft = clone(current);
+        for (const page of pages) {
+          for (let i = 1; i <= (current.counts.get(page) ?? 1); i += 1) {
+            const cells = current.cells.get(key(page, i));
+            if (cells) draft.cells.set(key(page, i), stripPageNumbers(cells).page);
+          }
+        }
+        return draft;
+      });
+      return { ok: true };
+    },
     menus: state.menus,
     loading: false,
     error: null,

@@ -254,6 +254,8 @@ export function LineupTable({
     }
   };
 
+  const allSelected = order.length > 0 && order.every((page) => selected.has(page));
+  const someSelected = order.some((page) => selected.has(page));
   const hint = verdict != null && spot != null ? verdict : null;
 
   return (
@@ -287,7 +289,18 @@ export function LineupTable({
     >
       <div className="mg-row mg-row-head" role="row">
         <span role="columnheader" className="mg-col-check">
-          <span className="sr-only">Selected</span>
+          <label className="mg-check-hit" title={allSelected ? 'Clear the selection (Esc)' : 'Select every page shown (⌘A)'}>
+            <input
+              ref={(input) => {
+                if (input != null) input.indeterminate = someSelected && !allSelected;
+              }}
+              type="checkbox"
+              checked={allSelected}
+              disabled={order.length === 0}
+              aria-label={allSelected ? 'Clear the selection' : 'Select every page shown'}
+              onChange={() => (allSelected ? selection.clear() : selection.selectAll(order))}
+            />
+          </label>
         </span>
         <span role="columnheader" className="mg-col-num">No.</span>
         <span role="columnheader" className="mg-col-thumb">
@@ -415,7 +428,9 @@ export function LineupTable({
                         order,
                       )
                     }
-                    onCheck={() => selection.toggle(item.pageNumber)}
+                    onCheck={(shift) =>
+                      shift ? selection.addRange(item.pageNumber, order) : selection.toggle(item.pageNumber)
+                    }
                     onToggleExpanded={() => selection.toggleExpanded(item.pageNumber)}
                     onPickScreen={(screen) => {
                       selection.selectOnly(item.pageNumber);
@@ -471,7 +486,8 @@ interface PageRowViewProps {
   publicationAt(pageNumber: number, subpage: number): PublishedEntry | null;
   locked: boolean;
   onClick(event: React.MouseEvent): void;
-  onCheck(): void;
+  /** Shift held: add the stretch from the anchor rather than this row alone. */
+  onCheck(shift: boolean): void;
   onToggleExpanded(): void;
   onPickScreen(screen: number): void;
   onDragStart(event: DragEvent): void;
@@ -538,13 +554,21 @@ function PageRowView({
         onDrop={onDrop}
       >
         <span role="gridcell" className="mg-col-check">
-          <input
-            type="checkbox"
-            checked={selected}
-            aria-label={`Select page ${pageNumber}`}
-            onClick={(event) => event.stopPropagation()}
-            onChange={onCheck}
-          />
+          {/* The whole cell is the target, not the 15px box. */}
+          <label className="mg-check-hit" onClick={(event) => event.stopPropagation()}>
+            <input
+              type="checkbox"
+              checked={selected}
+              aria-label={`Select page ${pageNumber}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onCheck(event.shiftKey);
+              }}
+              // Handled on click, which knows about Shift; this only keeps React's
+              // controlled checkbox quiet.
+              onChange={() => undefined}
+            />
+          </label>
         </span>
         <span role="gridcell" className="mg-col-num">
           <span className="mg-grip" aria-hidden>

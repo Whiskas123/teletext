@@ -6,7 +6,13 @@
  *
  * - a plain click selects one row and makes it the anchor;
  * - Cmd/Ctrl-click (or the row's checkbox) adds or removes one row;
- * - Shift-click selects everything between the anchor and the row clicked.
+ * - Shift-click selects everything between the anchor and the row clicked
+ *   (Shift on a checkbox adds that stretch to what is already selected).
+ *
+ * One departure: once rows are being picked — a checkbox, Cmd-click, Shift or
+ * select-all — a plain click adds or removes a row instead of replacing the
+ * selection, until it is cleared (Esc, "Clear") or emptied. A stray click used
+ * to throw away a hand-picked set of thirty pages.
  *
  * Selection is by page number. A renumbering therefore has to carry it along —
  * {@link remap} follows the pages to their new numbers, so a page moved with
@@ -38,6 +44,8 @@ export interface LineupSelection {
   /** Move focus to a row; with `extend`, grow the selection to it. */
   focus(pageNumber: number, extend: boolean, order: readonly number[]): void;
   toggle(pageNumber: number): void;
+  /** Add every row between the anchor and this one to the selection. */
+  addRange(pageNumber: number, order: readonly number[]): void;
   selectOnly(pageNumber: number): void;
   selectAll(pages: readonly number[]): void;
   clear(): void;
@@ -59,6 +67,7 @@ export function useLineupSelection(): LineupSelection {
   const [anchor, setAnchor] = useState<number | null>(null);
   const [screen, setScreen] = useState(1);
   const [expanded, setExpanded] = useState<ReadonlySet<number>>(new Set());
+  const [picking, setPicking] = useState(false);
 
   const activate = useCallback(
     (pageNumber: number | null) => {
@@ -72,22 +81,26 @@ export function useLineupSelection(): LineupSelection {
 
   const click = useCallback<LineupSelection['click']>(
     (pageNumber, { shift, toggle }, order) => {
+      const keep = picking && selected.size > 0;
       if (shift && anchor != null) {
         setSelected(new Set(range(order, anchor, pageNumber)));
-      } else if (toggle) {
+        setPicking(true);
+      } else if (toggle || keep) {
         setSelected((current) => {
           const next = new Set(current);
           if (!next.delete(pageNumber)) next.add(pageNumber);
           return next;
         });
         setAnchor(pageNumber);
+        setPicking(true);
       } else {
         setSelected(new Set([pageNumber]));
         setAnchor(pageNumber);
+        setPicking(false);
       }
       activate(pageNumber);
     },
-    [anchor, activate],
+    [anchor, activate, selected, picking],
   );
 
   const focus = useCallback<LineupSelection['focus']>(
@@ -112,12 +125,23 @@ export function useLineupSelection(): LineupSelection {
       return next;
     });
     setAnchor(pageNumber);
+    setPicking(true);
   }, []);
+
+  const addRange = useCallback<LineupSelection['addRange']>(
+    (pageNumber, order) => {
+      setSelected((current) => new Set([...current, ...range(order, anchor ?? pageNumber, pageNumber)]));
+      setAnchor(pageNumber);
+      setPicking(true);
+    },
+    [anchor],
+  );
 
   const selectOnly = useCallback(
     (pageNumber: number) => {
       setSelected(new Set([pageNumber]));
       setAnchor(pageNumber);
+      setPicking(false);
       activate(pageNumber);
     },
     [activate],
@@ -125,10 +149,12 @@ export function useLineupSelection(): LineupSelection {
 
   const selectAll = useCallback((pages: readonly number[]) => {
     setSelected(new Set(pages));
+    setPicking(true);
   }, []);
 
   const clear = useCallback(() => {
     setSelected(new Set());
+    setPicking(false);
     setAnchor(null);
     setActive(null);
   }, []);
@@ -161,6 +187,7 @@ export function useLineupSelection(): LineupSelection {
     click,
     focus,
     toggle,
+    addRange,
     selectOnly,
     selectAll,
     clear,

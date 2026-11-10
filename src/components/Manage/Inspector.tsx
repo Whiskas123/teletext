@@ -58,6 +58,8 @@ export interface InspectorProps {
   onAddScreensFromArchive(): void;
   onReplaceScreen(screen: number): void;
   onToggleShowcase(screen: number, on: boolean): void;
+  /** Blank the three-digit page numbers on every screen of this page. */
+  onStripNumbers(): void;
   onDelete(): void;
   onClose(): void;
 }
@@ -90,6 +92,7 @@ export function Inspector({
   onAddScreensFromArchive,
   onReplaceScreen,
   onToggleShowcase,
+  onStripNumbers,
   onDelete,
   onClose,
 }: InspectorProps) {
@@ -521,6 +524,9 @@ export function Inspector({
       </section>
 
       <section className="mg-insp-section mg-insp-danger">
+        <button type="button" className="mg-btn" disabled={disabled} onClick={onStripNumbers}>
+          Remove page numbers…
+        </button>
         <button type="button" className="mg-btn mg-btn-danger-ghost" disabled={disabled} onClick={onDelete}>
           Delete page {pageNumber}…
         </button>

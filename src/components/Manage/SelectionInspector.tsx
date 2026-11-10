@@ -31,6 +31,8 @@ export interface SelectionInspectorProps {
   translating: { done: number; total: number } | null;
   onTranslate(): Promise<TranslateOutcome>;
   onMerge(): void;
+  /** Blank the three-digit page numbers on every screen of the selection. */
+  onStripNumbers(): void;
   onDelete(): void;
   onClear(): void;
 }
@@ -54,6 +56,7 @@ export function SelectionInspector({
   translating,
   onTranslate,
   onMerge,
+  onStripNumbers,
   onDelete,
   onClear,
 }: SelectionInspectorProps) {
@@ -211,6 +214,9 @@ export function SelectionInspector({
           </button>
           <button type="button" className="mg-btn" disabled={locked} onClick={onMerge}>
             Merge into page {pages[0]} as screens…
+          </button>
+          <button type="button" className="mg-btn" disabled={locked} onClick={onStripNumbers}>
+            Remove page numbers…
           </button>
           <button type="button" className="mg-btn mg-btn-danger-ghost" disabled={locked} onClick={onDelete}>
             Delete {rows.length} pages…

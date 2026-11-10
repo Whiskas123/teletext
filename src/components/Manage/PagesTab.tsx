@@ -489,6 +489,36 @@ export function PagesTab({
     });
   };
 
+  const askStripNumbers = (pages: readonly number[]) => {
+    const { removed, screens } = data.countPageNumbers(pages);
+    if (removed === 0) {
+      void actions.stripPageNumbers(pages);
+      return;
+    }
+    const playground = pages.some((page) => page >= PLAYGROUND_MIN_PAGE);
+    confirm({
+      title: `Remove ${removed} page ${removed === 1 ? 'number' : 'numbers'}?`,
+      danger: true,
+      confirmLabel: `Remove ${removed}`,
+      body: (
+        <>
+          <p>
+            Every number of exactly three digits on {screens} {screens === 1 ? 'screen' : 'screens'} of{' '}
+            {pages.length === 1 ? `page ${pages[0]}` : `pages ${describeRange(pages)}`} becomes blank, in its own
+            colours. Longer and shorter numbers — years, phone and SMS numbers, 1/20 — stay, and so does a saved
+            bottom bar.
+          </p>
+          <p>
+            A three-digit number that is not a page goes too. Archive screens can be put back by publishing them
+            again from the archive (changing the bar or the shift), which also undoes other hand edits.
+            {playground && ' Playground screens cannot be put back.'}
+          </p>
+        </>
+      ),
+      onConfirm: () => void actions.stripPageNumbers(pages),
+    });
+  };
+
   const askDelete = (pages: readonly number[]) => {
     const titled = pages.map((page) => ({ page, title: rowOf(page).title }));
     confirm({
@@ -690,6 +720,7 @@ export function PagesTab({
           )
         }
         onMerge={() => askMerge(selectedPages[0], selectedPages.slice(1))}
+        onStripNumbers={() => askStripNumbers(selectedPages)}
         onDelete={() => askDelete(selectedPages)}
         onClear={selection.clear}
       />
@@ -753,6 +784,7 @@ export function PagesTab({
           openArchive({ mode: 'replace', page: String(active), screen: String(screen) })
         }
         onToggleShowcase={(screen, on) => actions.toggleShowcase(active, screen, on)}
+        onStripNumbers={() => askStripNumbers([active])}
         onDelete={() => askDelete([active])}
         onClose={selection.clear}
       />
@@ -920,13 +952,21 @@ export function PagesTab({
             </button>
             <button
               type="button"
+              className="mg-btn mg-btn-small"
+              disabled={locked}
+              onClick={() => askStripNumbers(selectedPages)}
+            >
+              Remove page numbers
+            </button>
+            <button
+              type="button"
               className="mg-btn mg-btn-small mg-btn-danger-ghost"
               disabled={locked}
               onClick={() => askDelete(selectedPages)}
             >
               Delete
             </button>
-            <span className="mg-grow" />
+            <span className="mg-grow mg-muted">Click rows to add or remove · Shift for a stretch</span>
             <button type="button" className="mg-btn mg-btn-small mg-btn-ghost" onClick={selection.clear}>
               Clear <kbd>Esc</kbd>
             </button>

@@ -136,6 +136,8 @@ export interface ManageActionsApi {
   deletePages(pageNumbers: readonly number[]): Promise<boolean>;
   /** Fold each source's carousel onto the end of `target`'s, in order. */
   mergePages(target: number, sources: readonly number[]): Promise<boolean>;
+  /** Blank the three-digit page numbers on every screen of these pages. */
+  stripPageNumbers(pageNumbers: readonly number[]): Promise<boolean>;
   /** Re-publish every archive screen of these pages with new transforms. */
   applyTransforms(pageNumbers: readonly number[], patch: TransformPatch): Promise<boolean>;
   setRole(pageNumbers: readonly number[], kind: PageKind): void;
@@ -441,6 +443,24 @@ export function useManageActions({
     [runStructural, sequence, data],
   );
 
+  const stripPageNumbers = useCallback(
+    (pageNumbers: readonly number[]) => {
+      const { removed, screens } = data.countPageNumbers(pageNumbers);
+      return runStructural(
+        () => data.stripPageNumbers(pageNumbers),
+        (outcome) =>
+          outcome.ok
+            ? status(
+                removed === 0
+                  ? 'No three-digit numbers to remove there.'
+                  : `Removed ${plural(removed, 'number')} from ${plural(screens, 'screen')}.`,
+              )
+            : alert(outcome.error),
+      );
+    },
+    [runStructural, data],
+  );
+
   const mergePages = useCallback(
     (target: number, sources: readonly number[]) =>
       runStructural(
@@ -619,6 +639,7 @@ export function useManageActions({
     arrange,
     addCaptures: addCapturesAndRefresh,
     deletePages,
+    stripPageNumbers,
     mergePages,
     applyTransforms,
     setRole,
