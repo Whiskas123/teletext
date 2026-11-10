@@ -14,7 +14,9 @@ import type { DragEvent } from 'react';
 
 export type DragPayload =
   | { kind: 'pages'; pages: number[] }
-  | { kind: 'captures'; ids: number[] };
+  | { kind: 'captures'; ids: number[] }
+  /** One screen of a page, to put elsewhere in the same carousel. */
+  | { kind: 'screen'; pageNumber: number; screen: number };
 
 let current: DragPayload | null = null;
 

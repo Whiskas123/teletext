@@ -442,6 +442,23 @@ export function useFakeManageDeps(
       return count - 1;
     },
     absorbPages,
+    moveScreen: async (page, from, to) => {
+      setState((current) => {
+        const draft = clone(current);
+        const order = Array.from({ length: current.counts.get(page) ?? 1 }, (_, i) => i + 1);
+        order.splice(to - 1, 0, ...order.splice(from - 1, 1));
+        order.forEach((old, index) => {
+          const cells = current.cells.get(key(page, old));
+          if (cells) draft.cells.set(key(page, index + 1), cells);
+          else draft.cells.delete(key(page, index + 1));
+        });
+        draft.published = current.published.map((entry) =>
+          entry.page_number === page ? { ...entry, subpage: order.indexOf(entry.subpage ?? 1) + 1 } : entry,
+        );
+        return draft;
+      });
+      return { ok: true };
+    },
     countPageNumbers: (pages) => {
       let removed = 0;
       let screens = 0;

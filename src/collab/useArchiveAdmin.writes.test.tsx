@@ -115,3 +115,30 @@ it('merges several pages into one, each after the last, not all onto the same sc
   for (const key of ['702', '703', '703.2', '703.3', '704']) expect(channels.pages[key]).toEqual({});
   expect(channels.titles[700]).toBe('Index');
 });
+
+it('moves a screen within its page, with its source, and shifts the ones between', async () => {
+  channels['page-sources'] = { 703: { captureId: 1 }, '703.3': { captureId: 3 } };
+  const { result } = renderHook(() =>
+    useArchiveAdmin({ admin: true, archiveEnabled: false, filters: {} as never, offset: 0 }),
+  );
+  const first = channels.pages[703];
+
+  let outcome: unknown;
+  await act(async () => {
+    outcome = await result.current.moveScreen(703, 3, 1);
+  });
+
+  expect(outcome).toEqual({ ok: true });
+  expect(channels.pages[703]).toEqual(screen('3'));
+  expect(channels.pages['703.2']).toEqual(first);
+  expect(channels.pages['703.3']).toEqual(screen('2'));
+  expect(channels['page-sources'][703]).toEqual({ captureId: 3 });
+  expect(channels['page-sources']['703.2']).toEqual({ captureId: 1 });
+  expect(channels['page-sources']['703.3']).toEqual({});
+  expect(channels['subpage-counts'][703]).toBe(3);
+
+  await act(async () => {
+    outcome = await result.current.moveScreen(703, 1, 4);
+  });
+  expect(outcome).toEqual({ ok: false, error: 'Page 703 has screens 1–3.' });
+});

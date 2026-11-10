@@ -136,6 +136,8 @@ export interface ManageActionsApi {
   deletePages(pageNumbers: readonly number[]): Promise<boolean>;
   /** Fold each source's carousel onto the end of `target`'s, in order. */
   mergePages(target: number, sources: readonly number[]): Promise<boolean>;
+  /** Move one screen of a page to position `to` in its carousel. */
+  moveScreen(pageNumber: number, from: number, to: number): Promise<boolean>;
   /** Blank the three-digit page numbers on every screen of these pages. */
   stripPageNumbers(pageNumbers: readonly number[]): Promise<boolean>;
   /** Re-publish every archive screen of these pages with new transforms. */
@@ -443,6 +445,31 @@ export function useManageActions({
     [runStructural, sequence, data],
   );
 
+  const moveScreen = useCallback(
+    (pageNumber: number, from: number, to: number) => {
+      // Front-page entries are kept by screen number, so they now open
+      // whichever screen took that place; said, rather than silently wrong.
+      const low = Math.min(from, to);
+      const high = Math.max(from, to);
+      const stale = showcase.entries.some(
+        (entry) => entry.page_number === pageNumber && entry.subpage >= low && entry.subpage <= high,
+      );
+      return runStructural(
+        () => data.moveScreen(pageNumber, from, to),
+        (outcome) =>
+          outcome.ok
+            ? stale
+              ? alert(
+                  `Screen ${from} of page ${pageNumber} is now screen ${to}. A screen of this page is on the ` +
+                    'front page by its number — check the Front page tab.',
+                )
+              : status(`Screen ${from} of page ${pageNumber} is now screen ${to}.`)
+            : alert(outcome.error),
+      );
+    },
+    [runStructural, data, showcase],
+  );
+
   const stripPageNumbers = useCallback(
     (pageNumbers: readonly number[]) => {
       const { removed, screens } = data.countPageNumbers(pageNumbers);
@@ -639,6 +666,7 @@ export function useManageActions({
     arrange,
     addCaptures: addCapturesAndRefresh,
     deletePages,
+    moveScreen,
     stripPageNumbers,
     mergePages,
     applyTransforms,

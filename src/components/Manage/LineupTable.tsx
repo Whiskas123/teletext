@@ -8,6 +8,8 @@
  *
  * - **drag** a row (or the selection) to reorder — between two rows, or onto a
  *   stretch of free numbers; drop *onto* a row to fold it in as more screens;
+ * - drag a page's screen (shown with ▸ under the page) above or below another
+ *   of its screens to reorder the carousel;
  * - **Alt+↑/↓** swaps a page with the row above or below;
  * - **↑/↓** move focus, with Shift to extend the selection, **Space** toggles,
  *   **Delete** deletes, **Enter** jumps to the title, **→/←** open and close a
@@ -67,6 +69,8 @@ export interface LineupTableProps {
   judgeDrop(spot: DropSpot): DropVerdict;
   onDrop(spot: DropSpot): void;
   onSwap(pageNumber: number, direction: -1 | 1): void;
+  /** Put screen `from` of a page at position `to` of its carousel. */
+  onMoveScreen(pageNumber: number, from: number, to: number): void;
   onDelete(pages: readonly number[]): void;
   onRename(pageNumber: number): void;
   /** Open the archive pane aimed at this stretch of free numbers. */
@@ -102,6 +106,7 @@ export function LineupTable({
   judgeDrop,
   onDrop,
   onSwap,
+  onMoveScreen,
   onDelete,
   onRename,
   onAddAt,
@@ -436,6 +441,7 @@ export function LineupTable({
                       selection.selectOnly(item.pageNumber);
                       selection.setScreen(screen);
                     }}
+                    onMoveScreen={(from, to) => onMoveScreen(item.pageNumber, from, to)}
                     onDragStart={(event) => {
                       const rows = selected.has(item.pageNumber) ? [...selected] : [item.pageNumber];
                       const pages = [...new Set(rows.flatMap(dragPagesOf))].sort((a, b) => a - b);
@@ -490,6 +496,7 @@ interface PageRowViewProps {
   onCheck(shift: boolean): void;
   onToggleExpanded(): void;
   onPickScreen(screen: number): void;
+  onMoveScreen(from: number, to: number): void;
   onDragStart(event: DragEvent): void;
   onDragEnd(): void;
   onDragOver(event: DragEvent<HTMLElement>): void;
@@ -516,6 +523,7 @@ function PageRowView({
   onCheck,
   onToggleExpanded,
   onPickScreen,
+  onMoveScreen,
   onDragStart,
   onDragEnd,
   onDragOver,
@@ -684,7 +692,9 @@ function PageRowView({
             current={activeScreen === screen}
             livePage={livePage}
             record={publicationAt(pageNumber, screen)}
+            locked={locked}
             onPick={() => onPickScreen(screen)}
+            onMove={onMoveScreen}
           />
         ))}
     </>
@@ -698,7 +708,9 @@ function ScreenRow({
   current,
   livePage,
   record,
+  locked,
   onPick,
+  onMove,
 }: {
   pageNumber: number;
   screen: number;
@@ -706,17 +718,74 @@ function ScreenRow({
   current: boolean;
   livePage(pageNumber: number, subpage?: number): TeletextPage | null;
   record: PublishedEntry | null;
+  locked: boolean;
   onPick(): void;
+  /** A screen of this page was dropped here: it goes from `from` to `to`. */
+  onMove(from: number, to: number): void;
 }) {
   const page = useMemo(() => livePage(pageNumber, screen), [livePage, pageNumber, screen]);
+  // Above or below this screen, while one of its page's screens is dragged over.
+  const [over, setOver] = useState<'before' | 'after' | null>(null);
+  const draggedScreen = () => {
+    const drag = currentDrag();
+    return drag?.kind === 'screen' && drag.pageNumber === pageNumber ? drag.screen : null;
+  };
+  /**
+   * Where the dragged screen ends up: dropped above screen 5 it takes 5's
+   * place if it came from below, and 4's if it came from above.
+   */
+  const target = (from: number, side: 'before' | 'after') =>
+    side === 'before' ? (from < screen ? screen - 1 : screen) : from < screen ? screen : screen + 1;
   return (
     <div
-      className={`mg-row mg-row-screen${current ? ' mg-row-screen-current' : ''}`}
+      className={[
+        'mg-row mg-row-screen',
+        current ? 'mg-row-screen-current' : '',
+        over != null ? `mg-drop-${over} mg-drop-ok` : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       role="row"
+      draggable={!locked && count > 1}
       onClick={onPick}
+      onDragStart={(event) => {
+        event.stopPropagation();
+        beginDrag(event, { kind: 'screen', pageNumber, screen }, `Screen ${screen} of page ${pageNumber}`);
+      }}
+      onDragEnd={() => {
+        setOver(null);
+        endDrag();
+      }}
+      onDragOver={(event) => {
+        const from = draggedScreen();
+        if (from == null) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const rect = event.currentTarget.getBoundingClientRect();
+        const side = event.clientY - rect.top < rect.height / 2 ? 'before' : 'after';
+        const moves = target(from, side) !== from;
+        event.dataTransfer.dropEffect = moves ? 'move' : 'none';
+        setOver(moves ? side : null);
+      }}
+      onDragLeave={() => setOver(null)}
+      onDrop={(event) => {
+        const from = draggedScreen();
+        const side = over;
+        setOver(null);
+        if (from == null || side == null) return;
+        event.preventDefault();
+        event.stopPropagation();
+        endDrag();
+        onMove(from, target(from, side));
+      }}
     >
       <span role="gridcell" className="mg-col-check" />
       <span role="gridcell" className="mg-col-num mg-muted">
+        {count > 1 && (
+          <span className="mg-grip" aria-hidden title="Drag above or below another screen to reorder">
+            ⠿
+          </span>
+        )}
         {screen}/{count}
       </span>
       <span role="gridcell" className="mg-col-thumb">

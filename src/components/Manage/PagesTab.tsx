@@ -353,6 +353,8 @@ export function PagesTab({
   const judgeDrop = (spot: DropSpot): DropVerdict => {
     const drag = currentDrag();
     if (drag == null) return no('Nothing is being dragged.');
+    // A screen is dropped among its page's own screens, which handle it.
+    if (drag.kind === 'screen') return no('Drop a screen between the screens of its own page.');
 
     if (drag.kind === 'pages') {
       if (spot.kind === 'into') {
@@ -429,7 +431,7 @@ export function PagesTab({
 
   const onDrop = (spot: DropSpot) => {
     const drag = currentDrag();
-    if (drag == null) return;
+    if (drag == null || drag.kind === 'screen') return;
     if (drag.kind === 'pages') {
       if (spot.kind === 'into') {
         askMerge(spot.pageNumber, drag.pages.filter((page) => page !== spot.pageNumber));
@@ -911,6 +913,11 @@ export function PagesTab({
           judgeDrop={judgeDrop}
           onDrop={onDrop}
           onSwap={swap}
+          onMoveScreen={(pageNumber, from, to) => {
+            void actions.moveScreen(pageNumber, from, to).then((done) => {
+              if (done && active === pageNumber && selection.screen === from) selection.setScreen(to);
+            });
+          }}
           onDelete={askDelete}
           onRename={(page) => {
             selection.selectOnly(page);

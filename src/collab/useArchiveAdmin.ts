@@ -235,6 +235,12 @@ export interface ArchiveAdminApi {
    */
   absorbPages(target: number, sources: readonly number[]): Promise<Result>;
   /**
+   * Move one screen of a page to another position in its carousel; the screens
+   * between shift by one. Positions count from 1, and `to` is where the screen
+   * ends up. Its archive source travels with it.
+   */
+  moveScreen(pageNumber: number, from: number, to: number): Promise<Result>;
+  /**
    * How many three-digit numbers {@link stripPageNumbers} would blank on these
    * pages, and on how many screens — for the confirmation, before anything goes.
    */
@@ -1042,6 +1048,48 @@ export function useArchiveAdmin({
   );
 
   /**
+   * The same move of data inside the live document as {@link absorbPages},
+   * within one page: each screen key is rewritten with the screen that now
+   * belongs there. Front-page entries and translations are keyed by screen
+   * number and stay where they are, as they do when a page is renumbered.
+   */
+  const moveScreen = useCallback<ArchiveAdminApi['moveScreen']>(
+    async (pageNumber, from, to) => {
+      const count = subpageCountOf(liveSubpageCounts, pageNumber);
+      const inRange = (n: number) => Number.isInteger(n) && n >= MIN_SUBPAGE && n <= count;
+      if (!inRange(from) || !inRange(to)) {
+        return { ok: false, error: `Page ${pageNumber} has screens 1–${count}.` };
+      }
+      if (from === to) return { ok: true };
+      const refused = refuse([pageNumber]);
+      if (refused != null) return refused;
+      const order = Array.from({ length: count }, (_, index) => index + MIN_SUBPAGE);
+      order.splice(to - MIN_SUBPAGE, 0, ...order.splice(from - MIN_SUBPAGE, 1));
+      const carry = (live: Readonly<Record<string, unknown>> | undefined) => {
+        const result: Record<string, unknown> = {};
+        order.forEach((old, index) => {
+          const value = live?.[String(pageKey(pageNumber, old))];
+          result[String(pageKey(pageNumber, index + MIN_SUBPAGE))] =
+            value === undefined ? {} : JSON.parse(JSON.stringify(value));
+        });
+        return orderedWrites(changedEntries(result, live));
+      };
+      for (const write of carry(livePages as Record<string, unknown>)) {
+        setPages((draft) => {
+          for (const [key, value] of write) (draft as Record<string, unknown>)[key] = value;
+        });
+      }
+      for (const write of carry(liveSources)) {
+        setSources((draft) => {
+          for (const [key, value] of write) draft[key] = value;
+        });
+      }
+      return { ok: true };
+    },
+    [refuse, livePages, liveSources, liveSubpageCounts, setPages, setSources],
+  );
+
+  /**
    * Each screen of these pages with its three-digit numbers blanked, keyed as
    * the live document keys them; screens with none are left out. A screen
    * carrying a saved bottom bar keeps that row: its numbers were set by hand.
@@ -1189,6 +1237,7 @@ export function useArchiveAdmin({
     addSubpage: subpages.addSubpage,
     removeLastSubpage,
     absorbPages,
+    moveScreen,
     countPageNumbers,
     stripPageNumbers: stripPageNumbersOf,
     menus,
