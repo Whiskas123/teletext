@@ -183,14 +183,22 @@ export function PagesTab({
    * from the archive. Asked first when any was edited by hand since, because
    * that undoes the edits.
    */
-  const changeTransforms = (pages: readonly number[], patch: TransformPatch) => {
-    const edited = pages.filter((page) => rowOf(page).edited);
+  /** With `subpage`, only that screen of the (one) page is published again. */
+  const changeTransforms = (pages: readonly number[], patch: TransformPatch, subpage?: number) => {
+    const edited = pages.filter((page) =>
+      subpage == null ? rowOf(page).edited : data.isEdited(page, subpage),
+    );
     if (edited.length === 0) {
-      void actions.applyTransforms(pages, patch);
+      void actions.applyTransforms(pages, patch, subpage);
       return;
     }
     confirm({
-      title: edited.length === 1 ? `Page ${edited[0]} was edited by hand` : `${edited.length} pages were edited by hand`,
+      title:
+        subpage != null
+          ? `Screen ${subpage} of page ${edited[0]} was edited by hand`
+          : edited.length === 1
+            ? `Page ${edited[0]} was edited by hand`
+            : `${edited.length} pages were edited by hand`,
       danger: true,
       confirmLabel: 'Publish again from the archive',
       body: (
@@ -200,7 +208,7 @@ export function PagesTab({
           lost.
         </p>
       ),
-      onConfirm: () => void actions.applyTransforms(pages, patch),
+      onConfirm: () => void actions.applyTransforms(pages, patch, subpage),
     });
   };
   const sections = useMemo<LineupSection[]>(
@@ -772,7 +780,13 @@ export function PagesTab({
         onSaveText={(title, description) => void actions.saveText(active, title, description)}
         onSetRole={(kind) => actions.setRole([active], kind)}
         onSetBar={(menuId) => changeTransforms([active], { shiftDown: null, menuId })}
-        onSetShift={(shiftDown) => changeTransforms([active], { shiftDown, menuId: 'keep' })}
+        onSetShift={(shiftDown, everyScreen) =>
+          changeTransforms(
+            [active],
+            { shiftDown, menuId: 'keep' },
+            everyScreen ? undefined : Math.min(selection.screen, row.screens),
+          )
+        }
         onAddEmptyScreen={() => {
           actions.addSubpage(active);
           selection.setScreen(row.screens + 1);

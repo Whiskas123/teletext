@@ -802,6 +802,12 @@ function ScreenRow({
       </span>
       <span role="gridcell" className="mg-col-bar">
         {record == null ? '—' : record.menu_name ?? 'Own row'}
+        {record?.shift_down === false && (
+          <span className="mg-muted" title="Not shifted down">
+            {' '}
+            · ⇧
+          </span>
+        )}
       </span>
       <span role="gridcell" className="mg-col-screens" />
       <span role="gridcell" className="mg-col-status" />

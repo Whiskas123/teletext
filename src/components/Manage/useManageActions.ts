@@ -141,7 +141,8 @@ export interface ManageActionsApi {
   /** Blank the three-digit page numbers on every screen of these pages. */
   stripPageNumbers(pageNumbers: readonly number[]): Promise<boolean>;
   /** Re-publish every archive screen of these pages with new transforms. */
-  applyTransforms(pageNumbers: readonly number[], patch: TransformPatch): Promise<boolean>;
+  /** Re-publish these pages' archive screens with new transforms; only `subpage` when given. */
+  applyTransforms(pageNumbers: readonly number[], patch: TransformPatch, subpage?: number): Promise<boolean>;
   setRole(pageNumbers: readonly number[], kind: PageKind): void;
   /** Give every untitled page among these a title read off its first screen. */
   fillTitles(pageNumbers: readonly number[]): void;
@@ -514,9 +515,11 @@ export function useManageActions({
    * edit made since publication is not reverted by a change of bar.
    */
   const applyTransforms = useCallback(
-    (pageNumbers: readonly number[], patch: TransformPatch) => {
+    (pageNumbers: readonly number[], patch: TransformPatch, subpage?: number) => {
       const chosen = new Set(pageNumbers);
-      const records = data.published.filter((entry) => chosen.has(entry.page_number));
+      const records = data.published.filter(
+        (entry) => chosen.has(entry.page_number) && (subpage == null || (entry.subpage ?? 1) === subpage),
+      );
       if (records.length === 0) return Promise.resolve(true);
 
       return runStructural(
@@ -541,7 +544,9 @@ export function useManageActions({
         (outcome) =>
           outcome.ok
             ? status(
-                `${plural(records.length, 'screen')} on ${plural(chosen.size, 'page')} re-published.`,
+                subpage == null
+                  ? `${plural(records.length, 'screen')} on ${plural(chosen.size, 'page')} re-published.`
+                  : `Screen ${subpage} of page ${pageNumbers[0]} re-published.`,
               )
             : alert(outcome.error),
       );

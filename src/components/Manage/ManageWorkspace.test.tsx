@@ -200,6 +200,24 @@ describe('the details pane', () => {
     expect(screen.getByText('2 screens on 1 page re-published.')).toBeInTheDocument();
   });
 
+  it('shifts one screen down without touching the others, then all of them', async () => {
+    const { user } = renderWorkspace();
+    await user.click(row(202));
+    const pane = screen.getByRole('complementary', { name: 'Page 202' });
+    await user.click(within(pane).getByRole('checkbox', { name: /Shift screen 1 down one row/ }));
+    await waitFor(() => expect(screen.getByText('Screen 1 of page 202 re-published.')).toBeInTheDocument());
+    expect(within(pane).getByRole('checkbox', { name: /Shift screen 1 down one row/ })).not.toBeChecked();
+    expect(within(pane).getByText('Some screens are shifted and some are not.')).toBeInTheDocument();
+
+    await user.click(within(pane).getByRole('option', { name: /^2/ }));
+    expect(within(pane).getByRole('checkbox', { name: /Shift screen 2 down one row/ })).toBeChecked();
+
+    await user.click(within(pane).getByRole('button', { name: 'Shift all 2' }));
+    await waitFor(() => expect(within(pane).getByText('All 2 archive screens are shifted.')).toBeInTheDocument());
+    await user.click(within(pane).getByRole('option', { name: /^1/ }));
+    expect(within(pane).getByRole('checkbox', { name: /Shift screen 1 down one row/ })).toBeChecked();
+  });
+
   it('has no bar to choose on a hand-made page', async () => {
     const { user } = renderWorkspace();
     await user.click(row(203));

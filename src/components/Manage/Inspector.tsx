@@ -55,7 +55,8 @@ export interface InspectorProps {
   onSaveText(title: string, description: string): void;
   onSetRole(kind: PageKind): void;
   onSetBar(menuId: number | null): void;
-  onSetShift(shift: boolean): void;
+  /** Shift the screen shown, or with `everyScreen` all the page's archive screens. */
+  onSetShift(shift: boolean, everyScreen: boolean): void;
   onAddEmptyScreen(): void;
   onRemoveLastScreen(): void;
   onAddScreensFromArchive(): void;
@@ -541,28 +542,48 @@ export function Inspector({
                 return menu == null ? null : <MenuStrip items={menu.items} label={`${menu.name} preview`} />;
               })()}
 
-            <label className="mg-check">
-              <input
-                type="checkbox"
-                checked={row.shift === true}
-                ref={(input) => {
-                  if (input != null) input.indeterminate = row.shift === 'mixed';
-                }}
-                disabled={disabled}
-                onChange={(event) => onSetShift(event.target.checked)}
-              />
-              <span>
-                Shift down one row
-                <span className="mg-muted"> — clears the header row, drops the capture’s last row</span>
-              </span>
-            </label>
+            {record == null ? (
+              <p className="mg-note">Screen {screen} is made by hand, so there is nothing to shift.</p>
+            ) : (
+              <label className="mg-check">
+                <input
+                  type="checkbox"
+                  checked={record.shift_down}
+                  disabled={disabled}
+                  onChange={(event) => onSetShift(event.target.checked, false)}
+                />
+                <span>
+                  Shift {row.screens > 1 ? `screen ${screen}` : 'it'} down one row
+                  <span className="mg-muted"> — clears the header row, drops the capture’s last row</span>
+                </span>
+              </label>
+            )}
+            {record != null && row.archiveScreens > 1 && (
+              <div className="mg-inline mg-wrap">
+                <span className="mg-note mg-grow">
+                  {row.shift === 'mixed'
+                    ? 'Some screens are shifted and some are not.'
+                    : `All ${row.archiveScreens} archive screens are ${row.shift ? '' : 'not '}shifted.`}
+                </span>
+                {row.shift !== record.shift_down && (
+                  <button
+                    type="button"
+                    className="mg-btn mg-btn-small"
+                    disabled={disabled}
+                    onClick={() => onSetShift(record.shift_down, true)}
+                  >
+                    {record.shift_down ? 'Shift' : 'Unshift'} all {row.archiveScreens}
+                  </button>
+                )}
+              </div>
+            )}
             {row.edited && (
               <p className="mg-note mg-note-warn">
                 Edited by hand since it was published. Changing the bar or the shift publishes it again from the
                 archive, which undoes those edits.
               </p>
             )}
-            {row.shift === true && row.bar.kind === 'own' && (
+            {record?.shift_down === true && row.bar.kind === 'own' && (
               <p className="mg-note mg-note-warn">
                 Shifted, the capture’s own bottom row falls off the page — so there is no bar. Pick a saved bar,
                 or untick the shift to keep the original one.
