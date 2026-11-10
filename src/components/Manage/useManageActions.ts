@@ -444,17 +444,9 @@ export function useManageActions({
   const mergePages = useCallback(
     (target: number, sources: readonly number[]) =>
       runStructural(
-        async () => {
-          // One at a time and stopping at the first failure: each absorb reads
-          // the target's carousel length, which the one before it changed.
-          setProgress({ label: 'Merging', done: 0, total: sources.length });
-          for (const [index, source] of sources.entries()) {
-            const result = await data.absorbPage(target, source);
-            if (!result.ok) return result;
-            setProgress({ label: 'Merging', done: index + 1, total: sources.length });
-          }
-          return { ok: true as const };
-        },
+        // All at once: absorbing them one call each read the target's old
+        // length every time, and each source overwrote the one before.
+        () => data.absorbPages(target, sources),
         (outcome) =>
           outcome.ok
             ? status(

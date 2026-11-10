@@ -355,22 +355,25 @@ export function useFakeManageDeps(
     [wait],
   );
 
-  const absorbPage = useCallback<ArchiveAdminApi['absorbPage']>(
-    async (target, source) => {
+  const absorbPages = useCallback<ArchiveAdminApi['absorbPages']>(
+    async (target, sources) => {
       await wait();
       setState((current) => {
         const draft = clone(current);
-        const from = current.counts.get(target) ?? 1;
-        const moving = current.counts.get(source) ?? 1;
-        for (let i = 1; i <= moving; i += 1) {
-          const cells = current.cells.get(key(source, i));
-          if (cells) draft.cells.set(key(target, from + i), cells);
-          for (const entry of current.published.filter((e) => e.page_number === source && (e.subpage ?? 1) === i)) {
-            draft.published.push({ ...entry, page_number: target, subpage: from + i });
+        let from = current.counts.get(target) ?? 1;
+        for (const source of sources) {
+          const moving = current.counts.get(source) ?? 1;
+          for (let i = 1; i <= moving; i += 1) {
+            const cells = current.cells.get(key(source, i));
+            if (cells) draft.cells.set(key(target, from + i), cells);
+            for (const entry of current.published.filter((e) => e.page_number === source && (e.subpage ?? 1) === i)) {
+              draft.published.push({ ...entry, page_number: target, subpage: from + i });
+            }
           }
+          from += moving;
+          clearPage(draft, source);
         }
-        draft.counts.set(target, from + moving);
-        clearPage(draft, source);
+        draft.counts.set(target, from);
         return draft;
       });
       return { ok: true };
@@ -437,7 +440,7 @@ export function useFakeManageDeps(
       });
       return count - 1;
     },
-    absorbPage,
+    absorbPages,
     menus: state.menus,
     loading: false,
     error: null,

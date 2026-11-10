@@ -93,3 +93,25 @@ it('closes a gap in front of 44 pages in writes that each fit, ending where one 
   expect(pageWrites.length).toBeGreaterThan(5);
   for (const { json } of pageWrites) expect(json).toBeLessThanOrEqual(MAX_WRITE_JSON + 70_000);
 });
+
+it('merges several pages into one, each after the last, not all onto the same screen', async () => {
+  // 703 has three screens; 702 and 704 one each.
+  const { result } = renderHook(() =>
+    useArchiveAdmin({ admin: true, archiveEnabled: false, filters: {} as never, offset: 0 }),
+  );
+  const [p702, p704] = [channels.pages[702], channels.pages[704]];
+
+  let outcome: unknown;
+  await act(async () => {
+    outcome = await result.current.absorbPages(700, [702, 703, 704]);
+  });
+
+  expect(outcome).toEqual({ ok: true });
+  expect(channels.pages['700.2']).toEqual(p702);
+  expect(channels.pages['700.4']).toEqual(screen('2'));
+  expect(channels.pages['700.5']).toEqual(screen('3'));
+  expect(channels.pages['700.6']).toEqual(p704);
+  expect(channels['subpage-counts'][700]).toBe(6);
+  for (const key of ['702', '703', '703.2', '703.3', '704']) expect(channels.pages[key]).toEqual({});
+  expect(channels.titles[700]).toBe('Index');
+});

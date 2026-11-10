@@ -229,10 +229,10 @@ export interface ArchiveAdminApi {
   /** Drop a page's last screen and where it came from; returns the new count, or null at 1. */
   removeLastSubpage(pageNumber: number): Promise<number | null>;
   /**
-   * Fold `source`'s whole carousel onto the end of `target`'s, and leave
-   * `source` empty. A move, not a copy — see `domain/absorb.ts`.
+   * Fold each source's whole carousel onto the end of `target`'s, in order, and
+   * leave the sources empty. A move, not a copy — see `domain/absorb.ts`.
    */
-  absorbPage(target: number, source: number): Promise<Result>;
+  absorbPages(target: number, sources: readonly number[]): Promise<Result>;
   menus: CustomMenu[];
   loading: boolean;
   error: string | null;
@@ -975,32 +975,42 @@ export function useArchiveAdmin({
   );
 
   /**
-   * Fold one page's carousel onto the end of another's: every screen and its
-   * source land after the target's last screen, and the source page is
-   * emptied — in one moment, as a move of data inside the live document,
-   * written in pieces small enough to arrive (see `domain/liveWrites.ts`).
+   * Fold pages' carousels onto the end of another's: every screen and its
+   * source land after the target's last screen, one source after the other, and
+   * the sources are emptied — in one moment, as a move of data inside the live
+   * document, written in pieces small enough to arrive (see `domain/liveWrites.ts`).
    *
-   * This used to re-publish each screen through the server one at a time, so a
-   * failure half way left a story duplicated across two pages. There is no
-   * request in the middle any more, so there is no half way.
+   * All the sources in one call, not one call each: the live values here are
+   * the render's, so a second call in the same tick would read the target's
+   * old length and land on the screens the first just wrote. Merging three
+   * pages that way kept only the last and emptied all three.
    *
    * The *target's* title and description stay: absorbing 118 into 117 must not
    * retitle 117 as 118.
    */
-  const absorbPage = useCallback<ArchiveAdminApi['absorbPage']>(
-    async (target, source) => {
-      const refused = refuse([target, source]);
+  const absorbPages = useCallback<ArchiveAdminApi['absorbPages']>(
+    async (target, sources) => {
+      const refused = refuse([target, ...sources]);
       if (refused != null) return refused;
-      const from = subpageCountOf(liveSubpageCounts, target);
-      const moving = subpageCountOf(liveSubpageCounts, source);
+      const plan: { fromKey: string; toKey: string }[] = [];
+      let length = subpageCountOf(liveSubpageCounts, target);
+      for (const source of new Set(sources)) {
+        if (source === target) continue;
+        const moving = subpageCountOf(liveSubpageCounts, source);
+        for (let index = 0; index < moving; index += 1) {
+          plan.push({
+            fromKey: String(pageKey(source, index + MIN_SUBPAGE)),
+            toKey: String(pageKey(target, length + index + MIN_SUBPAGE)),
+          });
+        }
+        length += moving;
+      }
       const carry = (live: Readonly<Record<string, unknown>> | undefined) => {
         const result: Record<string, unknown> = {};
-        for (let index = 0; index < moving; index += 1) {
-          const fromKey = String(pageKey(source, index + MIN_SUBPAGE));
+        for (const { fromKey } of plan) result[fromKey] = {};
+        for (const { fromKey, toKey } of plan) {
           const value = live?.[fromKey];
-          result[String(pageKey(target, from + index + MIN_SUBPAGE))] =
-            value === undefined ? {} : JSON.parse(JSON.stringify(value));
-          result[fromKey] = {};
+          result[toKey] = value === undefined ? {} : JSON.parse(JSON.stringify(value));
         }
         return orderedWrites(changedEntries(result, live));
       };
@@ -1015,9 +1025,9 @@ export function useArchiveAdmin({
         });
       }
       setSubpageCounts((draft) => {
-        draft[target] = from + moving;
+        draft[target] = length;
       });
-      clearPageText(source);
+      for (const source of sources) if (source !== target) clearPageText(source);
       return { ok: true };
     },
     [refuse, livePages, liveSources, liveSubpageCounts, setPages, setSources, setSubpageCounts, clearPageText],
@@ -1117,7 +1127,7 @@ export function useArchiveAdmin({
     subpageCountOfPage,
     addSubpage: subpages.addSubpage,
     removeLastSubpage,
-    absorbPage,
+    absorbPages,
     menus,
     loading,
     error,
