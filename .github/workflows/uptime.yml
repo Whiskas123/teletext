@@ -15,7 +15,10 @@ name: uptime
 
 on:
   schedule:
+    # The API check.
     - cron: '7,37 * * * *'
+    # The API check and the backup. Off the half hour so the two never collide.
+    - cron: '22 */6 * * *'
   workflow_dispatch:
 
 jobs:
@@ -34,10 +37,15 @@ jobs:
           exit $failed
 
       # The backup that used to run once a day at 04:00 (the Vercel cron, still
-      # there as a fallback), now every half hour, so a wiped or drawn-over
-      # playground costs minutes of drawings rather than a day. Drawn-over pages
+      # there as a fallback), now every six hours, so a wiped or drawn-over
+      # playground costs hours of drawings rather than a day. Drawn-over pages
       # are recoverable because live_pages keeps earlier versions (migration
       # 017; `bun run db:restore --at`).
+      #
+      # Not every half hour: each backup that changes something makes the next
+      # page load rebuild the boot cache, a ~9 MB read out of Neon, whose free
+      # plan allows 5 GB a month (see docs/implementation-notes/2026-11-01-neon-transfer.md).
+      # Runs on the six-hour schedule, and when started by hand.
       #
       # It also watches the live document's size. playhtml's server ran out of
       # memory opening the room at ~8 MB in October 2026 and nothing live worked
@@ -46,7 +54,7 @@ jobs:
       #
       # Needs the repository secret CRON_SECRET, the same value as on Vercel.
       - name: Back up the playground and check the document's size
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event.schedule != '7,37 * * * *' }}
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           MAX_BYTES: 3000000

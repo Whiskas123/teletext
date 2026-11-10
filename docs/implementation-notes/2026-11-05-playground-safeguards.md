@@ -89,3 +89,17 @@ against attacks and pages that shouldn't be there.
   `db:restore --at`. The migration is now `017_playground_history.sql`; it had
   not been applied anywhere with the old name, so renaming it is safe.
 - Taking a page off air stays what it was: deleting it in /manage.
+
+## 2026-11-10 — backup every six hours, not every half hour
+
+- **The user asked for six hours** after asking whether the half-hourly backup
+  fits the free tiers.
+- What it costs: each backup that changes `live_pages` makes the next page load
+  rebuild the boot cache, a full ~9.1 MB read out of Neon (131 screens today),
+  against a 5 GB monthly transfer allowance. The playground changed in only 3
+  half-hours in the previous 14 days, so half-hourly was affordable today; the
+  risk was a busy day, up to 48 rebuilds (~430 MB).
+- How: a second schedule (`22 */6 * * *`) in `uptime.yml`, and the backup step
+  runs unless `github.event.schedule` is the half-hourly one. The API check
+  stays every half hour. Off the half hour so the two schedules never fire in
+  the same minute.
