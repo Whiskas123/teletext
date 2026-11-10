@@ -32,3 +32,31 @@ jobs:
             [ "$status" = 200 ] || failed=1
           done
           exit $failed
+
+      # The backup that used to run once a day at 04:00 (the Vercel cron, still
+      # there as a fallback), now every half hour, so a wiped or drawn-over
+      # playground costs minutes of drawings rather than a day. Drawn-over pages
+      # are recoverable because live_pages keeps earlier versions (migration
+      # 017; `bun run db:restore --at`).
+      #
+      # It also watches the live document's size. playhtml's server ran out of
+      # memory opening the room at ~8 MB in October 2026 and nothing live worked
+      # until the room was replaced; anyone can write to the room, so a script
+      # can grow it. Failing at 3 MB leaves time to act.
+      #
+      # Needs the repository secret CRON_SECRET, the same value as on Vercel.
+      - name: Back up the playground and check the document's size
+        if: ${{ !cancelled() }}
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          MAX_BYTES: 3000000
+        run: |
+          body=$(curl -s --compressed --max-time 70 -H "Authorization: Bearer $CRON_SECRET" \
+            https://teletext.joaobernardo.me/api/snapshot)
+          echo "$body"
+          echo "$body" | jq -e '.ok == true' > /dev/null || { echo "::error::The backup failed."; exit 1; }
+          bytes=$(echo "$body" | jq '.bytes // 0')
+          if [ "$bytes" -gt "$MAX_BYTES" ]; then
+            echo "::error::The live document is $bytes bytes (alarm at $MAX_BYTES; ~8 MB crashed it before)."
+            exit 1
+          fi

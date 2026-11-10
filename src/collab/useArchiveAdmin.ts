@@ -1166,6 +1166,17 @@ export function useArchiveAdmin({
 
   const boot = useSyncExternalStore(subscribeBoot, getBoot, getBoot);
   /**
+   * Every page seen on air during this visit. The backup is read once, at load,
+   * so a page deleted since — from here or by a visitor — is still in it; one
+   * that was on air and went is a deletion, not something a room move left
+   * behind, and is never offered back.
+   *
+   * Accumulated during render (React's "state from props" pattern) rather than
+   * frozen at the sync: for one render after it the live pages are still empty.
+   */
+  const [seenOnAir, setSeenOnAir] = useState<ReadonlySet<number>>(() => new Set());
+  if (occupiedPages.some((page) => !seenOnAir.has(page))) setSeenOnAir(new Set([...seenOnAir, ...occupiedPages]));
+  /**
    * Backed-up playground entries of one channel, for pages not on air.
    *
    * Page by page rather than "only when the playground is empty": a visitor
@@ -1180,11 +1191,11 @@ export function useArchiveAdmin({
       return Object.fromEntries(
         Object.entries(entries).filter(([key]) => {
           const page = parsePageKey(key)?.pageNumber;
-          return page != null && !occupiedSet.has(page);
+          return page != null && !occupiedSet.has(page) && !seenOnAir.has(page);
         }),
       );
     },
-    [occupiedSet],
+    [occupiedSet, seenOnAir],
   );
   const backupPlayground = useMemo(() => missingPlayground(boot?.pages), [missingPlayground, boot]);
   const playgroundToRestore = liveSynced ? Object.keys(backupPlayground).length : 0;

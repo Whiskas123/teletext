@@ -3,6 +3,18 @@
  *
  *     bun run db:restore                 # summarise what the backup holds
  *     bun run db:restore --out pages.json  # write it in playhtml's own shape
+ *     bun run db:restore --at 2026-11-04T10:00Z --out pages.json
+ *                                        # the playground as it was then
+ *     bun run db:restore --at 2026-11-04T10:00Z --page 712 --out page.json
+ *
+ * ## --at: before the page was drawn over
+ *
+ * Every backup overwrites `live_pages`, so a playground page covered in junk is
+ * covered in junk there too by the next half-hourly read. The version before it
+ * is in `live_pages_history` (migration 017), which keeps each playground row
+ * with the interval it was current. `--at` reads every playground screen whose
+ * interval contains that time, from the history and the current copy together.
+ * Playground only: the archive keeps no history, and is the moderator's own.
  *
  * ## Why this does not write to playhtml directly
  *
@@ -37,28 +49,65 @@ interface LivePageRow {
   updated_at: Date;
 }
 
-function parseOptions(argv: string[]): { out: string | null } {
-  const index = argv.indexOf('--out');
-  if (index === -1) return { out: null };
-  const path = argv[index + 1];
-  if (path == null || path.startsWith('--')) {
-    throw new Error('--out needs a file path, e.g. --out restore.json');
-  }
-  return { out: path };
+interface Options {
+  out: string | null;
+  at: Date | null;
+  page: number | null;
 }
 
+function optionValue(argv: string[], name: string, example: string): string | null {
+  const index = argv.indexOf(name);
+  if (index === -1) return null;
+  const value = argv[index + 1];
+  if (value == null || value.startsWith('--')) throw new Error(`${name} needs a value, e.g. ${name} ${example}`);
+  return value;
+}
+
+function parseOptions(argv: string[]): Options {
+  const out = optionValue(argv, '--out', 'restore.json');
+  const atText = optionValue(argv, '--at', '2026-11-04T10:00Z');
+  const pageText = optionValue(argv, '--page', '712');
+  const at = atText == null ? null : new Date(atText);
+  if (at != null && Number.isNaN(at.getTime())) throw new Error(`--at ${atText} is not a time`);
+  const page = pageText == null ? null : Number(pageText);
+  if (page != null && !(Number.isInteger(page) && page >= 700 && page <= 999)) {
+    throw new Error('--page takes a playground page, 700-999');
+  }
+  if (page != null && at == null) throw new Error('--page goes with --at');
+  return { out, at, page };
+}
+
+const COLUMNS = 'page_number, subpage, subpage_count, cells, title, kind, description, updated_at';
+
+/**
+ * The playground as the backup held it at `at`: each screen's current row if
+ * it was written by then, or the history row that was current then. A screen
+ * deleted before `at`, or first backed up after it, is absent.
+ */
+const AT_QUERY =
+  `select ${COLUMNS} from (` +
+  `  select ${COLUMNS}, 'infinity'::timestamptz as until from live_pages` +
+  `  union all` +
+  `  select ${COLUMNS}, replaced_at as until from live_pages_history` +
+  `) v where page_number >= 700 and updated_at <= $1 and until > $1` +
+  ` and ($2::int is null or page_number = $2)` +
+  ` order by page_number, subpage`;
+
 async function main(): Promise<void> {
-  const { out } = parseOptions(process.argv.slice(2));
+  const { out, at, page } = parseOptions(process.argv.slice(2));
 
   await withPool(async (pool) => {
-    const { rows } = await pool.query<LivePageRow>(
-      'select page_number, subpage, subpage_count, cells, title, kind, description, updated_at' +
-        ' from live_pages order by page_number, subpage',
-    );
+    const { rows } =
+      at == null
+        ? await pool.query<LivePageRow>(`select ${COLUMNS} from live_pages order by page_number, subpage`)
+        : await pool.query<LivePageRow>(AT_QUERY, [at.toISOString(), page]);
+    if (at != null) console.log(`The playground as backed up at ${at.toISOString()}:`);
 
     if (rows.length === 0) {
       console.log(
-        'The backup is empty. Open the app as admin and use "Back up now" first.',
+        at == null
+          ? 'The backup is empty. Open the app as admin and use "Back up now" first.'
+          : 'No playground screen was in the backup at that time.',
       );
       return;
     }

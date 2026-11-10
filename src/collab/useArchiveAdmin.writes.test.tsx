@@ -41,6 +41,13 @@ vi.mock('@playhtml/react', async () => {
   };
 });
 
+/** The backup read at load, as `bootData` would hand it over. */
+let boot: Record<string, unknown> | null = null;
+vi.mock('./bootData', async (original) => ({
+  ...(await original<typeof import('./bootData')>()),
+  getBoot: () => boot,
+}));
+
 const { useArchiveAdmin } = await import('./useArchiveAdmin');
 
 const screen = (char: string) =>
@@ -92,6 +99,23 @@ it('closes a gap in front of 44 pages in writes that each fit, ending where one 
   const pageWrites = writes.filter(({ channel }) => channel === 'pages');
   expect(pageWrites.length).toBeGreaterThan(5);
   for (const { json } of pageWrites) expect(json).toBeLessThanOrEqual(MAX_WRITE_JSON + 70_000);
+});
+
+it('offers back what the backup has and the room lacks, but not a page deleted during the visit', async () => {
+  // The backup has 701 (gone with an old room) and 702 (on air, then deleted here).
+  boot = { pages: { 701: screen('A'), 702: channels.pages[702] } };
+  const { result } = renderHook(() =>
+    useArchiveAdmin({ admin: true, archiveEnabled: false, filters: {} as never, offset: 0 }),
+  );
+  expect(result.current.playgroundToRestore).toBe(1);
+
+  await act(async () => {
+    await result.current.deletePage(702);
+  });
+
+  expect(channels.pages[702]).toEqual({});
+  expect(result.current.playgroundToRestore).toBe(1);
+  boot = null;
 });
 
 it('merges several pages into one, each after the last, not all onto the same screen', async () => {
