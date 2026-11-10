@@ -52,6 +52,8 @@ export interface Translations {
 
 export function useTranslations(
   livePage: (pageNumber: number, subpage?: number) => TeletextPage | null,
+  /** Read them again when this changes: they were moved on the server. */
+  version = 0,
 ): Translations {
   const [entries, setEntries] = useState<Record<string, SubtitleEntry[]>>({});
   const [working, setWorking] = useState<string | null>(null);
@@ -68,7 +70,7 @@ export function useTranslations(
     return () => {
       current = false;
     };
-  }, []);
+  }, [version]);
 
   const screen = useCallback(
     (pageNumber: number, subpage: number): ScreenTranslation | null => {

@@ -62,6 +62,7 @@ import {
   pageKeys,
   parsePageKey,
   subpageCountOf,
+  type PageKey,
   type SubpageCounts,
 } from '../domain/subpages';
 import { DEFAULT_PAGE_KIND, type PageKinds } from '../domain/directory';
@@ -245,6 +246,11 @@ export interface ArchiveAdminApi {
    * pages, and on how many screens — for the confirmation, before anything goes.
    */
   countPageNumbers(pageNumbers: readonly number[]): { removed: number; screens: number };
+  /**
+   * Goes up each time translations were moved on the server along with their
+   * screens, so whoever holds a copy of them knows to read them again.
+   */
+  translationsVersion: number;
   /** Blank every three-digit number on every screen of these pages. See `domain/stripPageNumbers.ts`. */
   stripPageNumbers(pageNumbers: readonly number[]): Promise<Result>;
   menus: CustomMenu[];
@@ -323,6 +329,14 @@ export interface ArchiveAdminApi {
 }
 
 const PAGE_SIZE = 60;
+
+/** A move that went through, whose translations could not follow it. */
+const englishLeftBehind = (reason: string): Result => ({
+  ok: false,
+  error:
+    `Done, but the English translations did not follow (${reason}): they may now show on the wrong ` +
+    'page. Translate the pages concerned again.',
+});
 
 export function useArchiveAdmin({
   admin,
@@ -503,6 +517,39 @@ export function useArchiveAdmin({
     (pageNumber: number, subpage: number): PageSource | null =>
       readSource(liveSources?.[String(pageKey(pageNumber, subpage))]),
     [liveSources],
+  );
+
+  /**
+   * English is stored by screen number on the server, not in the live
+   * document, so a screen that moves must take it along — or the page that
+   * moves into its number inherits it. Called after the live writes, with the
+   * same moves; `null` drops a screen's English. Returns why it failed, if it did.
+   */
+  const [translationsVersion, setTranslationsVersion] = useState(0);
+  const carryTranslations = useCallback(
+    async (moves: readonly (readonly [PageKey, PageKey | null])[]): Promise<string | null> => {
+      const body = moves
+        .map(([from, to]) => ({ from: String(from), to: to == null ? null : String(to) }))
+        .filter(({ from, to }) => from !== to);
+      if (body.length === 0) return null;
+      try {
+        const response = await fetch('/api/snapshot?subs-move', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ moves: body }),
+        });
+        if (!response.ok) {
+          const { error } = (await response.json().catch(() => ({}))) as { error?: string };
+          return error ?? `the server answered ${response.status}`;
+        }
+        setTranslationsVersion((version) => version + 1);
+        return null;
+      } catch {
+        return 'the server could not be reached';
+      }
+    },
+    [],
   );
 
   /**
@@ -758,9 +805,13 @@ export function useArchiveAdmin({
       setSources((draft) => {
         draft[String(pageKey(pageNumber, count))] = {};
       });
-      return subpages.removeLastSubpage(pageNumber);
+      const remaining = subpages.removeLastSubpage(pageNumber);
+      // Its English goes too. A failure here only leaves a translation that
+      // matches nothing until a screen is added back at that number.
+      await carryTranslations([[pageKey(pageNumber, count), null]]);
+      return remaining;
     },
-    [refuse, liveSubpageCounts, setSources, subpages],
+    [refuse, liveSubpageCounts, setSources, subpages, carryTranslations],
   );
 
   const isEdited = useCallback(
@@ -954,10 +1005,17 @@ export function useArchiveAdmin({
           error: `That would put archive pages in the open playground (${PLAYGROUND_MIN_PAGE}+).`,
         };
       }
+      // Read before the replay changes the counts.
+      const screens = [...plan.moves, ...plan.drops].flatMap(({ from, to }) =>
+        pageKeys(from, subpageCountOf(liveSubpageCounts, from)).map(
+          (key, index) => [key, pageKey(to, index + MIN_SUBPAGE)] as const,
+        ),
+      );
       replayPlan(plan);
-      return { ok: true };
+      const failed = await carryTranslations(screens);
+      return failed == null ? { ok: true } : englishLeftBehind(failed);
     },
-    [refuse, occupiedPages, publishedByPage, replayPlan],
+    [refuse, occupiedPages, publishedByPage, replayPlan, liveSubpageCounts, carryTranslations],
   );
 
   const savePageText = useCallback<ArchiveAdminApi['savePageText']>(
@@ -1042,9 +1100,20 @@ export function useArchiveAdmin({
         draft[target] = length;
       });
       for (const source of sources) if (source !== target) clearPageText(source);
-      return { ok: true };
+      const failed = await carryTranslations(plan.map(({ fromKey, toKey }) => [fromKey, toKey] as const));
+      return failed == null ? { ok: true } : englishLeftBehind(failed);
     },
-    [refuse, livePages, liveSources, liveSubpageCounts, setPages, setSources, setSubpageCounts, clearPageText],
+    [
+      refuse,
+      livePages,
+      liveSources,
+      liveSubpageCounts,
+      setPages,
+      setSources,
+      setSubpageCounts,
+      clearPageText,
+      carryTranslations,
+    ],
   );
 
   /**
@@ -1084,9 +1153,12 @@ export function useArchiveAdmin({
           for (const [key, value] of write) draft[key] = value;
         });
       }
-      return { ok: true };
+      const failed = await carryTranslations(
+        order.map((old, index) => [pageKey(pageNumber, old), pageKey(pageNumber, index + MIN_SUBPAGE)] as const),
+      );
+      return failed == null ? { ok: true } : englishLeftBehind(failed);
     },
-    [refuse, livePages, liveSources, liveSubpageCounts, setPages, setSources],
+    [refuse, livePages, liveSources, liveSubpageCounts, setPages, setSources, carryTranslations],
   );
 
   /**
@@ -1155,9 +1227,10 @@ export function useArchiveAdmin({
         for (const key of keys) draft[key] = {};
       });
       clearPageText(pageNumber);
-      return { ok: true };
+      const failed = await carryTranslations(keys.map((key) => [key, null] as const));
+      return failed == null ? { ok: true } : englishLeftBehind(failed);
     },
-    [refuse, liveSubpageCounts, setPages, setSources, clearPageText],
+    [refuse, liveSubpageCounts, setPages, setSources, clearPageText, carryTranslations],
   );
 
   /* --- the old table ------------------------------------------------------- */
@@ -1249,6 +1322,7 @@ export function useArchiveAdmin({
     removeLastSubpage,
     absorbPages,
     moveScreen,
+    translationsVersion,
     countPageNumbers,
     stripPageNumbers: stripPageNumbersOf,
     menus,

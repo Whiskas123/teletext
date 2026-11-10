@@ -442,6 +442,7 @@ export function useFakeManageDeps(
       return count - 1;
     },
     absorbPages,
+    translationsVersion: 0,
     moveScreen: async (page, from, to) => {
       setState((current) => {
         const draft = clone(current);

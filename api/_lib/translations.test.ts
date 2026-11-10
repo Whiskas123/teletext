@@ -15,7 +15,18 @@ const cells: Cell[] = Array.from({ length: COLS * ROWS }, () => ({ char: ' ', fg
 [...'Golo'].forEach((char, i) => (cells[3 * COLS + i].char = char));
 
 const writes: unknown[][] = [];
+/** Each statement of a transaction: its SQL and the values bound to it. */
+const transactions: { text: string; values: unknown[] }[][] = [];
 vi.mock('./db', () => ({
+  transaction: async (build: (sql: unknown) => unknown[]) => {
+    const statements: { text: string; values: unknown[] }[] = [];
+    build((strings: TemplateStringsArray, ...values: unknown[]) => {
+      statements.push({ text: strings.join('$'), values });
+      return {};
+    });
+    transactions.push(statements);
+    return [];
+  },
   db: () => (strings: TemplateStringsArray, ...values: unknown[]) => {
     if (strings.join('').includes('select cells')) return Promise.resolve([{ cells }]);
     writes.push(values);
@@ -76,5 +87,34 @@ describe('English written by hand', () => {
     expect(res.code).toBe(200);
     expect(res.body).toEqual({ translations: {} });
     expect(res.headers['Cache-Control']).toMatch(/^public, .*s-maxage=60/);
+  });
+});
+
+describe('translations following their screens', () => {
+  const move = (moves: unknown) => send({ method: 'POST', query: { 'subs-move': '' }, body: { moves } });
+
+  it('moves, drops and leaves alone in one transaction', async () => {
+    transactions.length = 0;
+    const res = await move([
+      { from: '135', to: '140' },
+      { from: '202.3', to: '202' },
+      { from: '300', to: null },
+      { from: '150', to: '150' },
+    ]);
+    expect(res.code).toBe(200);
+    expect(res.body).toEqual({ moved: 3 });
+    expect(transactions).toHaveLength(1);
+    const [copy, remove, insert] = transactions[0];
+    // Every statement sees the same four columns: from page, from screen, to page, to screen.
+    expect(copy.values).toEqual([[135, 202, 300], [1, 3, 1], [140, 202, null], [1, 1, null]]);
+    expect(remove.values).toEqual(copy.values);
+    expect(insert.text).toContain('from moving');
+  });
+
+  it('refuses a move to a screen that cannot exist, and writes nothing', async () => {
+    transactions.length = 0;
+    const res = await move([{ from: '135', to: '135.99' }]);
+    expect(res.code).toBe(400);
+    expect(transactions).toHaveLength(0);
   });
 });

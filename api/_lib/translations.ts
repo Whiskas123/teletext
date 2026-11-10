@@ -22,6 +22,10 @@
  * - `POST ?sub=220.2` (moderator, body `{ runs: [{ row, col, en }] }`) — store
  *   English written or corrected by hand in /manage, replacing what the screen
  *   had. A run left out or left empty stays Portuguese.
+ * - `POST ?subs-move` (moderator, body `{ moves: [{ from: "220.2", to: "221" }] }`)
+ *   — carry translations along when /manage renumbers, merges, reorders or
+ *   deletes screens; `to: null` drops one. Keyed by position, a translation
+ *   left behind was claimed by whichever page moved into its number.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -38,7 +42,7 @@ import {
   type SubtitleEntry,
 } from '../../src/domain/subtitles';
 import { isAdmin } from './auth';
-import { db } from './db';
+import { db, transaction } from './db';
 import { bodyObject, fail, json, queryValue, serverError } from './http';
 import { isTranslationConfigured, TRANSLATION_MODEL, translateRuns } from './translate';
 
@@ -60,6 +64,11 @@ export async function handleTranslations(req: VercelRequest, res: VercelResponse
   if (req.method === 'POST' && queryValue(req, 'translate') != null) {
     if (!isAdmin(req)) fail(res, 401, 'Sign in to translate pages.');
     else await translate(req, res);
+    return true;
+  }
+  if (req.method === 'POST' && queryValue(req, 'subs-move') != null) {
+    if (!isAdmin(req)) fail(res, 401, 'Sign in to move translations.');
+    else await moveAll(req, res);
     return true;
   }
   if (req.method === 'POST' && queryValue(req, 'sub') != null) {
@@ -122,6 +131,77 @@ async function saveByHand(req: VercelRequest, res: VercelResponse, key: string):
     json(res, 200, { key: String(pageKey(parsed.pageNumber, parsed.subpage)), runs: entries, lost });
   } catch (error) {
     serverError(res, 'snapshot/sub', error);
+  }
+}
+
+/** More than every screen of every curated page: a request past it is not /manage's. */
+const MAX_MOVES = 600 * MAX_SUBPAGE;
+
+/** A screen key as /manage sends it ("220", "220.2"), or null. */
+function screenOf(raw: unknown): { pageNumber: number; subpage: number } | null {
+  if (typeof raw !== 'string' && typeof raw !== 'number') return null;
+  return parsePageKey(raw);
+}
+
+/**
+ * Move translations from screen to screen, all in one transaction.
+ *
+ * Whatever is at a destination is dropped first: it belonged to the screen
+ * that used to stand there, which has either moved too (and is carried in the
+ * same request) or is gone. Done through a temporary copy, because the rows
+ * being written are the ones being deleted.
+ */
+async function moveAll(req: VercelRequest, res: VercelResponse): Promise<void> {
+  const { moves: raw } = bodyObject(req);
+  if (!Array.isArray(raw) || raw.length > MAX_MOVES) {
+    fail(res, 400, 'Send the moves as a list.');
+    return;
+  }
+  const fromPages: number[] = [];
+  const fromSubs: number[] = [];
+  const toPages: (number | null)[] = [];
+  const toSubs: (number | null)[] = [];
+  for (const item of raw) {
+    const { from, to } = (item ?? {}) as { from?: unknown; to?: unknown };
+    const source = screenOf(from);
+    const target = to == null ? null : screenOf(to);
+    if (source == null || (to != null && target == null)) {
+      fail(res, 400, 'A move names a screen that does not exist.');
+      return;
+    }
+    if (target != null && target.pageNumber === source.pageNumber && target.subpage === source.subpage) continue;
+    fromPages.push(source.pageNumber);
+    fromSubs.push(source.subpage);
+    toPages.push(target?.pageNumber ?? null);
+    toSubs.push(target?.subpage ?? null);
+  }
+  if (fromPages.length === 0) {
+    json(res, 200, { moved: 0 });
+    return;
+  }
+
+  try {
+    await transaction((sql) => [
+      sql`
+        create temp table moving on commit drop as
+        select p.tp as page_number, p.ts as subpage, t.runs, t.model, t.updated_at
+        from unnest(${fromPages}::int[], ${fromSubs}::int[], ${toPages}::int[], ${toSubs}::int[]) as p(fp, fs, tp, ts)
+        join page_translations t on t.page_number = p.fp and t.subpage = p.fs
+        where p.tp is not null
+      `,
+      sql`
+        delete from page_translations t
+        using unnest(${fromPages}::int[], ${fromSubs}::int[], ${toPages}::int[], ${toSubs}::int[]) as p(fp, fs, tp, ts)
+        where (t.page_number = p.fp and t.subpage = p.fs) or (t.page_number = p.tp and t.subpage = p.ts)
+      `,
+      sql`
+        insert into page_translations (page_number, subpage, runs, model, updated_at)
+        select page_number, subpage, runs, model, updated_at from moving
+      `,
+    ]);
+    json(res, 200, { moved: fromPages.length });
+  } catch (error) {
+    serverError(res, 'snapshot/subs-move', error);
   }
 }
 

@@ -92,7 +92,7 @@ export function PagesTab({
   confirm,
 }: PagesTabProps) {
   const selection = useLineupSelection();
-  const translations = useTranslations(data.livePage);
+  const translations = useTranslations(data.livePage, data.translationsVersion);
   const [filter, setFilter] = useState<LineupFilter>(EMPTY_FILTER);
   const [picked, setPicked] = useState<CaptureSummary[]>([]);
   const [destination, setDestination] = useState<AddDestination>({ mode: 'pages', at: '' });

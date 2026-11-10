@@ -166,3 +166,46 @@ it('moves a screen within its page, with its source, and shifts the ones between
   });
   expect(outcome).toEqual({ ok: false, error: 'Page 703 has screens 1–3.' });
 });
+
+/** What was sent to move translations, as `from→to` keys (`-` for dropped). */
+function translationMoves(): string[] {
+  const calls = (fetch as unknown as { mock: { calls: [string, RequestInit?][] } }).mock.calls;
+  return calls
+    .filter(([url]) => url.includes('subs-move'))
+    .flatMap(([, init]) =>
+      (JSON.parse(String(init?.body)) as { moves: { from: string; to: string | null }[] }).moves.map(
+        ({ from, to }) => `${from}→${to ?? '-'}`,
+      ),
+    );
+}
+
+it('takes the English along when pages are renumbered, merged, reordered or deleted', async () => {
+  const { result } = renderHook(() =>
+    useArchiveAdmin({ admin: true, archiveEnabled: false, filters: {} as never, offset: 0 }),
+  );
+
+  await act(async () => {
+    await result.current.arrange([{ from: 703, to: 701 }]);
+  });
+  // The whole carousel, screen by screen.
+  expect(translationMoves()).toEqual(['703→701', '703.2→701.2', '703.3→701.3']);
+
+  vi.mocked(fetch).mockClear();
+  await act(async () => {
+    await result.current.moveScreen(701, 3, 1);
+  });
+  expect(translationMoves()).toEqual(['701.3→701', '701→701.2', '701.2→701.3']);
+
+  vi.mocked(fetch).mockClear();
+  await act(async () => {
+    await result.current.absorbPages(700, [702]);
+  });
+  expect(translationMoves()).toEqual(['702→700.2']);
+
+  vi.mocked(fetch).mockClear();
+  await act(async () => {
+    await result.current.deletePage(704);
+  });
+  expect(translationMoves()).toEqual(['704→-']);
+  expect(result.current.translationsVersion).toBe(4);
+});
