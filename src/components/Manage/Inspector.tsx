@@ -22,6 +22,7 @@ import type { TeletextPage } from '../../types/teletext';
 import type { DropVerdict } from './LineupTable';
 import { KIND_NAMES, type PageRow } from './lineupModel';
 import { MenuStrip } from './MenuStrip';
+import { beginDrag, currentDrag, endDrag, screenTarget } from './dnd';
 import { PageThumb } from './PageThumb';
 import type { ScreenTranslation, TranslateOutcome } from './useTranslations';
 
@@ -30,6 +31,8 @@ export interface InspectorProps {
   row: PageRow;
   screen: number;
   setScreen(screen: number): void;
+  /** Put screen `from` at position `to` of the carousel. */
+  onMoveScreen(from: number, to: number): void;
   records: readonly PublishedEntry[];
   livePage(pageNumber: number, subpage?: number): TeletextPage | null;
   menus: readonly CustomMenu[];
@@ -68,6 +71,7 @@ export function Inspector({
   row,
   screen: requestedScreen,
   setScreen,
+  onMoveScreen,
   records,
   livePage,
   menus,
@@ -110,6 +114,8 @@ export function Inspector({
   const [description, setDescription] = useState<string | null>(null);
   const [number, setNumber] = useState('');
   const [fold, setFold] = useState('');
+  // Which side of which screen a dragged screen would land on.
+  const [dropAt, setDropAt] = useState<{ screen: number; side: 'before' | 'after' } | null>(null);
   const [showEnglish, setShowEnglish] = useState(false);
   // Kept with the screen it was for, so moving to another screen drops it.
   const [outcome, setOutcome] = useState<{ screen: number; result: TranslateOutcome } | null>(null);
@@ -298,20 +304,63 @@ export function Inspector({
 
         <div className="mg-screens" role="listbox" aria-label={`Screens of page ${pageNumber}`}>
           {Array.from({ length: row.screens }, (_, index) => index + 1).map((n) => (
-            <button
+            // A focusable div rather than a button: a button is not reliably
+            // draggable in every browser.
+            <div
               key={n}
-              type="button"
               role="option"
+              tabIndex={0}
               aria-selected={n === screen}
-              className={`mg-screen${n === screen ? ' mg-screen-current' : ''}`}
+              title={row.screens > 1 ? 'Drag left or right of another screen to reorder' : undefined}
+              className={[
+                'mg-screen',
+                n === screen ? 'mg-screen-current' : '',
+                dropAt?.screen === n ? `mg-screen-drop-${dropAt.side}` : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              draggable={!disabled && row.screens > 1}
               onClick={() => setScreen(n)}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                setScreen(n);
+              }}
+              onDragStart={(event) => {
+                event.stopPropagation();
+                beginDrag(event, { kind: 'screen', pageNumber, screen: n }, `Screen ${n} of page ${pageNumber}`);
+              }}
+              onDragEnd={() => {
+                setDropAt(null);
+                endDrag();
+              }}
+              onDragOver={(event) => {
+                const drag = currentDrag();
+                if (drag?.kind !== 'screen' || drag.pageNumber !== pageNumber) return;
+                event.preventDefault();
+                const rect = event.currentTarget.getBoundingClientRect();
+                const side = event.clientX - rect.left < rect.width / 2 ? 'before' : 'after';
+                const moves = screenTarget(drag.screen, n, side) !== drag.screen;
+                event.dataTransfer.dropEffect = moves ? 'move' : 'none';
+                setDropAt(moves ? { screen: n, side } : null);
+              }}
+              onDragLeave={() => setDropAt(null)}
+              onDrop={(event) => {
+                const drag = currentDrag();
+                const side = dropAt?.screen === n ? dropAt.side : null;
+                setDropAt(null);
+                if (drag?.kind !== 'screen' || drag.pageNumber !== pageNumber || side == null) return;
+                event.preventDefault();
+                endDrag();
+                onMoveScreen(drag.screen, screenTarget(drag.screen, n, side));
+              }}
             >
               <PageThumb page={livePage(pageNumber, n)} pageNumber={pageNumber} subpage={n} subpageCount={row.screens} scale={0.2} />
               <span className="mg-screen-label">
                 {n}
                 {isShowcased(pageNumber, n) && <span className="mg-star"> ★</span>}
               </span>
-            </button>
+            </div>
           ))}
         </div>
 

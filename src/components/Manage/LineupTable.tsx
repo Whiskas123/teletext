@@ -27,7 +27,7 @@ import type { LineupGroup, LineupItem } from '../../domain/lineup';
 import type { PageActionName } from '../../domain/inFlight';
 import type { Notice } from '../../domain/manageMessages';
 import type { TeletextPage } from '../../types/teletext';
-import { beginDrag, currentDrag, endDrag } from './dnd';
+import { beginDrag, currentDrag, endDrag, screenTarget } from './dnd';
 import { describeBar, type PageRow } from './lineupModel';
 import { PageThumb } from './PageThumb';
 import type { LineupSelection } from './useLineupSelection';
@@ -730,12 +730,6 @@ function ScreenRow({
     const drag = currentDrag();
     return drag?.kind === 'screen' && drag.pageNumber === pageNumber ? drag.screen : null;
   };
-  /**
-   * Where the dragged screen ends up: dropped above screen 5 it takes 5's
-   * place if it came from below, and 4's if it came from above.
-   */
-  const target = (from: number, side: 'before' | 'after') =>
-    side === 'before' ? (from < screen ? screen - 1 : screen) : from < screen ? screen : screen + 1;
   return (
     <div
       className={[
@@ -746,6 +740,10 @@ function ScreenRow({
         .filter(Boolean)
         .join(' ')}
       role="row"
+      // Focusable, so a mouse-down lands focus here and not on the list itself:
+      // the list's own focus handler jumps to the active page row, which
+      // scrolled this row from under the pointer and cancelled every drag.
+      tabIndex={-1}
       draggable={!locked && count > 1}
       onClick={onPick}
       onDragStart={(event) => {
@@ -763,7 +761,7 @@ function ScreenRow({
         event.stopPropagation();
         const rect = event.currentTarget.getBoundingClientRect();
         const side = event.clientY - rect.top < rect.height / 2 ? 'before' : 'after';
-        const moves = target(from, side) !== from;
+        const moves = screenTarget(from, screen, side) !== from;
         event.dataTransfer.dropEffect = moves ? 'move' : 'none';
         setOver(moves ? side : null);
       }}
@@ -776,7 +774,7 @@ function ScreenRow({
         event.preventDefault();
         event.stopPropagation();
         endDrag();
-        onMove(from, target(from, side));
+        onMove(from, screenTarget(from, screen, side));
       }}
     >
       <span role="gridcell" className="mg-col-check" />

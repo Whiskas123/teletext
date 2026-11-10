@@ -491,6 +491,13 @@ export function PagesTab({
     });
   };
 
+  /** Move a screen, and keep the inspector on it if it was the one shown. */
+  const moveScreen = (pageNumber: number, from: number, to: number) => {
+    void actions.moveScreen(pageNumber, from, to).then((done) => {
+      if (done && active === pageNumber && selection.screen === from) selection.setScreen(to);
+    });
+  };
+
   const askStripNumbers = (pages: readonly number[]) => {
     const { removed, screens } = data.countPageNumbers(pages);
     if (removed === 0) {
@@ -735,6 +742,7 @@ export function PagesTab({
         row={row}
         screen={selection.screen}
         setScreen={selection.setScreen}
+        onMoveScreen={(from, to) => moveScreen(active, from, to)}
         records={records.get(active) ?? []}
         livePage={data.livePage}
         menus={data.menus}
@@ -913,11 +921,7 @@ export function PagesTab({
           judgeDrop={judgeDrop}
           onDrop={onDrop}
           onSwap={swap}
-          onMoveScreen={(pageNumber, from, to) => {
-            void actions.moveScreen(pageNumber, from, to).then((done) => {
-              if (done && active === pageNumber && selection.screen === from) selection.setScreen(to);
-            });
-          }}
+          onMoveScreen={moveScreen}
           onDelete={askDelete}
           onRename={(page) => {
             selection.selectOnly(page);

@@ -20,6 +20,17 @@ export type DragPayload =
 
 let current: DragPayload | null = null;
 
+/**
+ * Where a dragged screen ends up when dropped on one side of screen `onto`.
+ * Dropped before screen 5 it takes 5's place if it came from after it, and
+ * 4's if it came from before: the screens between close up behind it.
+ */
+export function screenTarget(from: number, onto: number, side: 'before' | 'after'): number {
+  if (from === onto) return from;
+  if (side === 'before') return from < onto ? onto - 1 : onto;
+  return from < onto ? onto : onto + 1;
+}
+
 export function beginDrag(event: DragEvent, payload: DragPayload, label: string): void {
   current = payload;
   event.dataTransfer.effectAllowed = 'copyMove';

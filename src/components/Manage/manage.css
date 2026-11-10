@@ -663,6 +663,10 @@
 .mg-screen:hover { border-color: var(--mg-line-strong); background: transparent; }
 .mg-screen-current { border-color: var(--mg-accent); color: var(--mg-text); }
 .mg-screen-label { text-align: center; }
+.mg-screen[draggable='true'] { cursor: grab; }
+/* Where a dragged screen would land: a bar on that side of the thumbnail. */
+.mg-screen-drop-before { box-shadow: -4px 0 0 var(--mg-accent); }
+.mg-screen-drop-after { box-shadow: 4px 0 0 var(--mg-accent); }
 
 .mg-preview { border: 1px solid var(--mg-line); border-radius: 6px; overflow: hidden; }
 .mg-preview .mg-thumb { border-radius: 0; }
