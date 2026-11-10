@@ -195,7 +195,7 @@ describe('the details pane', () => {
     const { user } = renderWorkspace();
     await user.click(row(202));
     const pane = screen.getByRole('complementary', { name: 'Page 202' });
-    await user.selectOptions(within(pane).getByRole('combobox', { name: /Last row of all 2 archive screens/ }), 'Main navigation');
+    await user.selectOptions(within(pane).getByRole('combobox', { name: /Bar on all 2 archive screens/ }), 'Main navigation');
     await waitFor(() => expect(row(202).querySelector('.mg-col-bar')).toHaveTextContent('Main navigation'));
     expect(screen.getByText('2 screens on 1 page re-published.')).toBeInTheDocument();
   });
@@ -208,6 +208,9 @@ describe('the details pane', () => {
     await waitFor(() => expect(screen.getByText('Screen 1 of page 202 re-published.')).toBeInTheDocument());
     expect(within(pane).getByRole('checkbox', { name: /Shift screen 1 down one row/ })).not.toBeChecked();
     expect(within(pane).getByText('Some screens are shifted and some are not.')).toBeInTheDocument();
+    // The thumbnail of the unshifted screen says so.
+    expect(within(pane).getByRole('option', { name: /^1/ })).toHaveTextContent('⇧');
+    expect(within(pane).getByRole('option', { name: /^2/ })).not.toHaveTextContent('⇧');
 
     await user.click(within(pane).getByRole('option', { name: /^2/ }));
     expect(within(pane).getByRole('checkbox', { name: /Shift screen 2 down one row/ })).toBeChecked();
@@ -472,13 +475,13 @@ describe('pages edited by hand since publishing', () => {
 
     await user.click(row(201));
     const pane = screen.getByRole('complementary', { name: 'Page 201' });
-    await user.selectOptions(within(pane).getByRole('combobox', { name: /Last row/ }), 'Main navigation');
+    await user.selectOptions(within(pane).getByRole('combobox', { name: /^Bar/ }), 'Main navigation');
     const dialog = screen.getByRole('dialog', { name: 'Page 201 was edited by hand' });
 
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     expect(row(201).querySelector('.mg-col-bar')).not.toHaveTextContent('Main navigation');
 
-    await user.selectOptions(within(pane).getByRole('combobox', { name: /Last row/ }), 'Main navigation');
+    await user.selectOptions(within(pane).getByRole('combobox', { name: /^Bar/ }), 'Main navigation');
     await user.click(screen.getByRole('button', { name: 'Publish again from the archive' }));
     await waitFor(() => expect(row(201).querySelector('.mg-col-bar')).toHaveTextContent('Main navigation'));
     expect(within(row(201)).queryByText(/edited/)).toBeNull();
@@ -561,7 +564,7 @@ describe('the tabs', () => {
     const { user } = renderWorkspace();
     await user.click(row(202));
     await user.selectOptions(
-      within(screen.getByRole('complementary', { name: 'Page 202' })).getByRole('combobox', { name: /Last row/ }),
+      within(screen.getByRole('complementary', { name: 'Page 202' })).getByRole('combobox', { name: /^Bar/ }),
       'Main navigation',
     );
     await waitFor(() => expect(row(202).querySelector('.mg-col-bar')).toHaveTextContent('Main navigation'));

@@ -360,6 +360,12 @@ export function Inspector({
               <span className="mg-screen-label">
                 {n}
                 {isShowcased(pageNumber, n) && <span className="mg-star"> ★</span>}
+                {records.find((entry) => (entry.subpage ?? 1) === n)?.shift_down === false && (
+                  <span className="mg-muted" title="Not shifted down">
+                    {' '}
+                    ⇧
+                  </span>
+                )}
               </span>
             </div>
           ))}
@@ -512,7 +518,7 @@ export function Inspector({
           <>
             <label className="mg-field">
               <span className="mg-label">
-                Last row of {row.archiveScreens === 1 ? 'the archive screen' : `all ${row.archiveScreens} archive screens`}
+                {row.archiveScreens === 1 ? 'Bar' : `Bar on all ${row.archiveScreens} archive screens`}
               </span>
               <select
                 className="mg-input"
@@ -542,22 +548,38 @@ export function Inspector({
                 return menu == null ? null : <MenuStrip items={menu.items} label={`${menu.name} preview`} />;
               })()}
 
-            {record == null ? (
-              <p className="mg-note">Screen {screen} is made by hand, so there is nothing to shift.</p>
-            ) : (
-              <label className="mg-check">
-                <input
-                  type="checkbox"
-                  checked={record.shift_down}
-                  disabled={disabled}
-                  onChange={(event) => onSetShift(event.target.checked, false)}
-                />
-                <span>
-                  Shift {row.screens > 1 ? `screen ${screen}` : 'it'} down one row
-                  <span className="mg-muted"> — clears the header row, drops the capture’s last row</span>
-                </span>
-              </label>
-            )}
+            {/*
+              * The shift is per screen; the bar above is per page. Its own block
+              * and heading, so it cannot read as one more setting of "all".
+              */}
+            <div className="mg-screen-block">
+              {row.screens > 1 && (
+                <h4 className="mg-label">
+                  Screen {screen} of {row.screens} only
+                </h4>
+              )}
+              {record == null ? (
+                <p className="mg-note">Screen {screen} is made by hand, so there is nothing to shift.</p>
+              ) : (
+                <label className="mg-check">
+                  <input
+                    type="checkbox"
+                    checked={record.shift_down}
+                    disabled={disabled}
+                    onChange={(event) => onSetShift(event.target.checked, false)}
+                  />
+                  <span>
+                    Shift {row.screens > 1 ? `screen ${screen}` : 'it'} down one row
+                    <span className="mg-muted"> — clears the header row, drops the capture’s last row</span>
+                  </span>
+                </label>
+              )}
+              {row.screens > 1 && (
+                <p className="mg-note mg-muted">
+                  Pick another screen above to shift it. ⇧ on a screen means it is not shifted.
+                </p>
+              )}
+            </div>
             {record != null && row.archiveScreens > 1 && (
               <div className="mg-inline mg-wrap">
                 <span className="mg-note mg-grow">
