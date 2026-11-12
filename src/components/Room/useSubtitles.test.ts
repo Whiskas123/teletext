@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { COLS, ROWS, type Cell, type TeletextPage } from '../../types/teletext';
 import { LanguageContext } from './languageContext';
-import { EN_FAULT_MS, useSubtitles } from './useSubtitles';
+import { EN_FAULT_MS, useEnglishTitles, useSubtitles } from './useSubtitles';
 
 vi.mock('../../features', () => ({ SUB_ENABLED: true }));
 
@@ -28,7 +28,9 @@ vi.stubGlobal(
   vi.fn((url: string) =>
     Promise.resolve(
       url === '/api/snapshot?sub=all'
-        ? new Response(JSON.stringify({ translations: { 901: runs } }))
+        ? new Response(
+            JSON.stringify({ translations: { 901: runs }, titles: { 901: { pt: 'TEMPO', en: 'WEATHER' } } }),
+          )
         : new Response('{"error":"Not found."}', { status: 404 }),
     ),
   ),
@@ -80,5 +82,19 @@ describe('useSubtitles', () => {
     rerender({ n: 901 });
     await waitFor(() => expect(result.current.lamp).toBe('live'));
     expect(firstRow(result.current.page)).toBe('Clima');
+  });
+});
+
+describe('useEnglishTitles', () => {
+  it('gives a title its English only while the page is still called that', async () => {
+    const { result } = renderHook(() => useEnglishTitles(true));
+    await waitFor(() => expect(result.current(901, 'TEMPO')).toBe('WEATHER'));
+    expect(result.current(901, 'TEMPO HOJE')).toBe('TEMPO HOJE'); // renamed since
+    expect(result.current(902, 'DESPORTO')).toBe('DESPORTO'); // never translated
+  });
+
+  it('leaves every title as it is in Portuguese', () => {
+    const { result } = renderHook(() => useEnglishTitles(false));
+    expect(result.current(901, 'TEMPO')).toBe('TEMPO');
   });
 });

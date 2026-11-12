@@ -171,7 +171,13 @@ export function descendantCounts(blocks: readonly Block[]): Map<number, number> 
  * The shape is read off page order and each page's kind, so it needs no
  * structure of its own — see `domain/directory.ts`.
  */
-export function useDirectory() {
+/** A title as it is: the default, kept stable so the tree is not rebuilt per render. */
+const asIs = (_pageNumber: number, title: string) => title;
+
+export function useDirectory(
+  /** The title to list a page under: its English, in the Yellow Pages in English. */
+  localize: (pageNumber: number, title: string) => string = asIs,
+) {
   const { entries } = useGuide();
   const { kinds } = usePageKinds();
 
@@ -180,11 +186,11 @@ export function useDirectory() {
       buildDirectory(
         entries.map((entry) => ({
           pageNumber: entry.pageNumber,
-          title: entry.title,
+          title: localize(entry.pageNumber, entry.title),
           kind: kinds[entry.pageNumber],
         })),
       ),
-    [entries, kinds],
+    [entries, kinds, localize],
   );
 
   const blocks = useMemo(() => directoryBlocks(tree), [tree]);

@@ -2580,6 +2580,25 @@ button.yellow-pages-number:hover {
   color: #ffcf1f;
 }
 
+/*
+ * PT/EN, the front page's switch at leaflet size: both always in the same
+ * place, the language being read in ink and the other faded, so pressing it
+ * swaps which is dark rather than moving anything.
+ */
+.yp-drawer-lang {
+  width: auto;
+  padding: 0 0.35rem;
+  gap: 0.15em;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: rgb(20 16 7 / 45%);
+}
+
+.yp-drawer-lang-on {
+  color: #141007;
+}
+
 /* The brand at book size does not fit a panel one column wide. */
 .yp-drawer-leaflet .yellow-pages-brand {
   font-size: 1.45rem;

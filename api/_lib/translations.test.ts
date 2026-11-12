@@ -85,7 +85,7 @@ describe('English written by hand', () => {
   it('lists every translation for the EN key, publicly, cached at the edge', async () => {
     const res = await send({ method: 'GET', query: { sub: 'all' }, headers: {} });
     expect(res.code).toBe(200);
-    expect(res.body).toEqual({ translations: {} });
+    expect(res.body).toEqual({ translations: {}, titles: {} });
     expect(res.headers['Cache-Control']).toMatch(/^public, .*s-maxage=60/);
   });
 });

@@ -9,15 +9,16 @@
  * (`vercel.json`) that a call to Claude needs.
  *
  * - `GET ?sub=all` (public) — every translation, `{ translations: { "220.2":
- *   runs } }`, for the EN key: loaded once when a visitor first wants English,
+ *   runs }, titles: { "220": { pt, en } } }`, for the EN key and the Yellow
+ *   Pages in English: loaded once when a visitor first wants English,
  *   so each page change finds its English already there. Only curated pages
  *   are translated, so it stays small. Cached at the edge for a minute, like
  *   the boot pages.
  * - `GET ?subs` (moderator) — every translation, for /manage to show which
  *   pages have one and whether it still covers what the page says now.
  * - `POST ?translate` (moderator, body `{ pageNumber, subpage }`) — translate
- *   one screen of a curated page as it is in `live_pages` now, store it, and
- *   return it. Only 100–699: the playground changes too often to translate
+ *   one screen of a curated page as it is in `live_pages` now, and the page's
+ *   title with it, store them, and return them. Only 100–699: the playground changes too often to translate
  *   ahead of time, and its copy here is a backup that may lag.
  * - `POST ?sub=220.2` (moderator, body `{ runs: [{ row, col, en }] }`) — store
  *   English written or corrected by hand in /manage, replacing what the screen
@@ -184,7 +185,7 @@ async function moveAll(req: VercelRequest, res: VercelResponse): Promise<void> {
     await transaction((sql) => [
       sql`
         create temp table moving on commit drop as
-        select p.tp as page_number, p.ts as subpage, t.runs, t.model, t.updated_at
+        select p.tp as page_number, p.ts as subpage, t.runs, t.model, t.updated_at, t.title_pt, t.title_en
         from unnest(${fromPages}::int[], ${fromSubs}::int[], ${toPages}::int[], ${toSubs}::int[]) as p(fp, fs, tp, ts)
         join page_translations t on t.page_number = p.fp and t.subpage = p.fs
         where p.tp is not null
@@ -195,8 +196,8 @@ async function moveAll(req: VercelRequest, res: VercelResponse): Promise<void> {
         where (t.page_number = p.fp and t.subpage = p.fs) or (t.page_number = p.tp and t.subpage = p.ts)
       `,
       sql`
-        insert into page_translations (page_number, subpage, runs, model, updated_at)
-        select page_number, subpage, runs, model, updated_at from moving
+        insert into page_translations (page_number, subpage, runs, model, updated_at, title_pt, title_en)
+        select page_number, subpage, runs, model, updated_at, title_pt, title_en from moving
       `,
     ]);
     json(res, 200, { moved: fromPages.length });
@@ -207,11 +208,21 @@ async function moveAll(req: VercelRequest, res: VercelResponse): Promise<void> {
 
 async function readAll(res: VercelResponse, cacheControl: string): Promise<void> {
   try {
-    const rows = await db()`select page_number, subpage, runs from page_translations`;
+    // Highest screen first, so a page's first screen has the last word on its title.
+    const rows = await db()`
+      select page_number, subpage, runs, title_pt, title_en from page_translations
+      order by page_number, subpage desc
+    `;
     const translations: Record<string, SubtitleEntry[]> = {};
-    for (const row of rows) translations[String(pageKey(row.page_number, row.subpage))] = row.runs;
+    const titles: Record<string, { pt: string; en: string }> = {};
+    for (const row of rows) {
+      translations[String(pageKey(row.page_number, row.subpage))] = row.runs;
+      if (row.title_pt != null && row.title_en != null) {
+        titles[row.page_number] = { pt: row.title_pt, en: row.title_en };
+      }
+    }
     res.setHeader('Cache-Control', cacheControl);
-    json(res, 200, { translations });
+    json(res, 200, { translations, titles });
   } catch (error) {
     serverError(res, 'snapshot/subs', error);
   }
@@ -232,13 +243,14 @@ async function translate(req: VercelRequest, res: VercelResponse): Promise<void>
 
   try {
     const rows = await db()`
-      select cells from live_pages where page_number = ${pageNumber} and subpage = ${subpage}
+      select cells, title from live_pages where page_number = ${pageNumber} and subpage = ${subpage}
     `;
     if (rows.length === 0) {
       fail(res, 404, `Page ${pageNumber} screen ${subpage} is not saved yet.`);
       return;
     }
     const page = pageToArray(rows[0].cells);
+    const title: string = typeof rows[0].title === 'string' ? rows[0].title.trim() : '';
     const runs = subtitleRuns(page);
     if (runs.length === 0) {
       fail(res, 422, 'There is no text on this screen to translate.');
@@ -246,8 +258,11 @@ async function translate(req: VercelRequest, res: VercelResponse): Promise<void>
     }
 
     let english: string[];
+    let titleEn: string | null;
     try {
-      english = (await translateRuns(runs, { timeoutMs: TRANSLATE_TIMEOUT_MS })).english;
+      const translation = await translateRuns(runs, { timeoutMs: TRANSLATE_TIMEOUT_MS, title });
+      english = translation.english;
+      titleEn = translation.title || null;
     } catch (error) {
       // Claude's answer, not the database's: safe to pass on, and the one thing
       // the moderator can act on (try again, or later).
@@ -258,14 +273,24 @@ async function translate(req: VercelRequest, res: VercelResponse): Promise<void>
 
     const entries = toEntries(runs, english);
     await db()`
-      insert into page_translations (page_number, subpage, runs, model, updated_at)
-      values (${pageNumber}, ${subpage}, ${JSON.stringify(entries)}::jsonb, ${TRANSLATION_MODEL}, now())
+      insert into page_translations (page_number, subpage, runs, model, updated_at, title_pt, title_en)
+      values (
+        ${pageNumber}, ${subpage}, ${JSON.stringify(entries)}::jsonb, ${TRANSLATION_MODEL}, now(),
+        ${titleEn == null ? null : title}, ${titleEn}
+      )
       on conflict (page_number, subpage)
-      do update set runs = excluded.runs, model = excluded.model, updated_at = now()
+      do update set runs = excluded.runs, model = excluded.model, updated_at = now(),
+        title_pt = excluded.title_pt, title_en = excluded.title_en
     `;
     const clipped = applySubtitles(page, runs, english).clipped.length;
     const lost = runs.filter((run, i) => !keepsNumbers(run.text, english[i])).length;
-    json(res, 200, { key: String(pageKey(pageNumber, subpage)), runs: entries, clipped, lost });
+    json(res, 200, {
+      key: String(pageKey(pageNumber, subpage)),
+      runs: entries,
+      title: titleEn,
+      clipped,
+      lost,
+    });
   } catch (error) {
     serverError(res, 'snapshot/translate', error);
   }

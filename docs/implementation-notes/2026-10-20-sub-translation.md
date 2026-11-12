@@ -245,3 +245,23 @@ the unit check had missed:
   sign-in, so the key never appears there. `SoloEditor.test.tsx` covers the
   wiring with the shared-document hooks stubbed; `useEnglishDraft.test.ts`
   covers what is accepted and saved.
+
+## 2026-11-11 — titles, and PT/EN on the Yellow Pages
+
+- **The title rides in the same Claude request** as one more segment
+  (`id: "title"`, no grid budget, 40 as a soft cap). A second call per page
+  would double the wait for one short string.
+- **Stored on the screen's translation row** (`title_pt`, `title_en`,
+  migration 018), not in a table of its own: `?subs-move` already carries the
+  row when /manage renumbers, so the title moves with it for free. Same
+  staleness rule as runs: the English applies only while the page is still
+  called `title_pt`. `?sub=all` serves `titles` per page, the first screen
+  winning.
+- **Not editable by hand.** The editor's EN key edits the grid; the title is
+  set by Translate / Translate again. Clearing every hand line of a screen
+  deletes its row, title included.
+- **The drawer's switch is its own**, not the TV's EN key: it opens in the
+  site's language (`/en` → EN) and wraps the leaflet in `LanguageProvider`, so
+  its wording follows with no new copy. Behind `VITE_SUB` like the key.
+- **Checked in a browser** for the switch and the wording only: local dev has
+  no API and no pages, so English titles are covered by `useSubtitles.test.ts`.

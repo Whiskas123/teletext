@@ -20,16 +20,31 @@
  * Those are gone, along with the photographs: the leaflet is the only directory
  * now, on both watching screens, and the search field at the top of it is the
  * only search.
+ *
+ * ## PT/EN
+ *
+ * On a build with the EN key, the masthead carries the front page's `PT/EN`
+ * switch in its top right corner. It opens in the language the visitor chose
+ * on the front page (an `/en` address opens it in English) and switches the
+ * leaflet alone: its words, and every listing whose title was translated with
+ * its page in /manage. An untranslated title stays Portuguese. The set beside
+ * it keeps its own EN key — reading the index in English is not asking for
+ * every page in English.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { LANDING_COPY, otherLanguage, type Language } from '../../domain/landing';
 import { MIN_QUERY_LENGTH } from '../../domain/pageSearch';
+import { SUB_ENABLED } from '../../features';
 import DirectoryList from './DirectoryList';
 import { useDirectory, useOpenSections } from './directoryRows';
+import { LanguageProvider } from './LanguageProvider';
+import { useCurrentLanguage } from './languageContext';
 import { SearchResults } from './searchResults';
 import { usePageSearchHits } from './usePageSearchHits';
 import { useCopy } from './useCopy';
+import { useEnglishTitles } from './useSubtitles';
 
 /** The panel's id, so the tab can say what it opens. */
 const PANEL_ID = 'yellow-pages-drawer-panel';
@@ -49,18 +64,37 @@ export interface YellowPagesDrawerProps {
   onSelect: (pageNumber: number, subpage?: number) => void;
 }
 
-export function YellowPagesDrawer({
+export function YellowPagesDrawer(props: YellowPagesDrawerProps) {
+  // Read once: the site's language changes by navigation, which remounts this.
+  const [language, setLanguage] = useState<Language>(useCurrentLanguage());
+  const switchLanguage = useCallback(() => setLanguage(otherLanguage), []);
+
+  return (
+    <LanguageProvider language={language}>
+      <Leaflet {...props} onSwitchLanguage={SUB_ENABLED ? switchLanguage : undefined} />
+    </LanguageProvider>
+  );
+}
+
+function Leaflet({
   open,
   onToggle,
   onClose,
   onSelect,
-}: YellowPagesDrawerProps) {
+  onSwitchLanguage,
+}: YellowPagesDrawerProps & { onSwitchLanguage?: () => void }) {
   const copy = useCopy();
-  const { entries, blocks, counts } = useDirectory();
+  const language = useCurrentLanguage();
+  const localize = useEnglishTitles(SUB_ENABLED && language === 'en');
+  const { entries, blocks, counts } = useDirectory(localize);
   const { openSections, toggleSection } = useOpenSections();
 
   const [query, setQuery] = useState('');
-  const hits = usePageSearchHits(query);
+  const found = usePageSearchHits(query);
+  const hits = useMemo(
+    () => found.map((hit) => ({ ...hit, title: localize(hit.pageNumber, hit.title) })),
+    [found, localize],
+  );
 
   const trimmed = query.trim();
   const searching = trimmed.length > 0;
@@ -121,6 +155,18 @@ export function YellowPagesDrawer({
         <div className="yellow-pages-masthead yp-drawer-masthead">
           <span className="yellow-pages-brand">{copy.directory.title}</span>
           <div className="yp-drawer-tools">
+            {onSwitchLanguage != null && (
+              <button
+                type="button"
+                className="yp-drawer-tool yp-drawer-lang"
+                onClick={onSwitchLanguage}
+                aria-label={`${LANDING_COPY[language].languageSwitch}: ${language.toUpperCase()} — ${otherLanguage(language).toUpperCase()}`}
+              >
+                <span className={language === 'pt' ? 'yp-drawer-lang-on' : undefined}>PT</span>
+                <span aria-hidden="true">/</span>
+                <span className={language === 'en' ? 'yp-drawer-lang-on' : undefined}>EN</span>
+              </button>
+            )}
             <button
               type="button"
               className="yp-drawer-tool"

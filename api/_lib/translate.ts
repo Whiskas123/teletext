@@ -36,14 +36,21 @@ most characters it may hold. Return one English translation per segment id.
   Keep every number, price, time and score exactly, in the same place.
   Dotted leaders (......) are layout: keep them, so prices stay lined up.
 - Match the source's case: an all-caps heading stays all caps.
-- A segment that is already English, or only a name, comes back unchanged.`;
+- A segment that is already English, or only a name, comes back unchanged.
+- The segment with id "title" is not on the grid: it is the page's name as the
+  directory lists it. Translate it as a short listing name, same case.`;
 
 export function isTranslationConfigured(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY);
 }
 
+/** Room for a title in the directory; it is not on the grid, so this is a courtesy. */
+const TITLE_MAX = 40;
+
 export interface Translation {
   english: string[];
+  /** The page's title in English, when one was given. */
+  title?: string;
   inputTokens: number;
   outputTokens: number;
 }
@@ -57,7 +64,7 @@ export interface Translation {
  */
 export async function translateRuns(
   runs: readonly SubtitleRun[],
-  { timeoutMs }: { timeoutMs?: number } = {},
+  { timeoutMs, title }: { timeoutMs?: number; title?: string } = {},
 ): Promise<Translation> {
   const client = new Anthropic(timeoutMs == null ? {} : { timeout: timeoutMs, maxRetries: 0 });
   const segments = runs.map((run, i) => ({
@@ -67,10 +74,16 @@ export async function translateRuns(
     max: run.end - run.start,
     text: run.text,
   }));
+  // The title rides along in the same request: it names what the runs say, and
+  // a second call per page would double the wait for one short string.
+  const named = title != null && title.trim() !== '';
+  const titled = named
+    ? [...segments, { id: 'title', max: Math.max(TITLE_MAX, title.length), text: title }]
+    : segments;
   const schema = {
     type: 'object',
-    properties: Object.fromEntries(segments.map((s) => [s.id, { type: 'string' }])),
-    required: segments.map((s) => s.id),
+    properties: Object.fromEntries(titled.map((s) => [s.id, { type: 'string' }])),
+    required: titled.map((s) => s.id),
     additionalProperties: false,
   };
 
@@ -81,7 +94,7 @@ export async function translateRuns(
     fallbacks: 'default',
     output_config: { effort: 'medium', format: { type: 'json_schema', schema } },
     system: SYSTEM,
-    messages: [{ role: 'user', content: JSON.stringify(segments) }],
+    messages: [{ role: 'user', content: JSON.stringify(titled) }],
   });
 
   if (response.stop_reason === 'refusal') {
@@ -94,6 +107,7 @@ export async function translateRuns(
   const parsed = JSON.parse(text.text) as Record<string, string>;
   return {
     english: segments.map((s) => parsed[s.id]),
+    ...(named ? { title: parsed.title.trim() } : {}),
     inputTokens: response.usage.input_tokens,
     outputTokens: response.usage.output_tokens,
   };

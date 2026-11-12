@@ -46,25 +46,68 @@ import { useCurrentLanguage } from './languageContext';
 export const EN_FAULT_MS = 600;
 
 type Translations = Record<string, SubtitleEntry[]>;
+/** A page's title in English, with the Portuguese it was made from. */
+type Titles = Record<string, { pt: string; en: string }>;
+interface Loaded {
+  translations: Translations;
+  titles: Titles;
+}
 
-/** Every translation, once loaded: shared by every set on the screen, for the visit. */
-let loaded: Translations | null = null;
-let request: Promise<Translations> | null = null;
+const NOTHING: Loaded = { translations: {}, titles: {} };
+
+/**
+ * Every translation, once loaded: shared by every set on the screen and by the
+ * Yellow Pages, for the visit.
+ */
+let loaded: Loaded | null = null;
+let request: Promise<Loaded> | null = null;
 
 /**
  * Ask once. A failure (no network, or `vite dev`, which answers with the app's
  * HTML) reads as "no translations" for that attempt and is not kept, so the
  * next press asks again.
  */
-function loadTranslations(): Promise<Translations> {
+function loadTranslations(): Promise<Loaded> {
   request ??= fetch('/api/snapshot?sub=all')
     .then((response) => (response.ok ? response.json() : Promise.reject(new Error(String(response.status)))))
-    .then((data: { translations?: Translations }) => (loaded = data.translations ?? {}))
+    .then(
+      (data: { translations?: Translations; titles?: Titles }) =>
+        (loaded = { translations: data.translations ?? {}, titles: data.titles ?? {} }),
+    )
     .catch(() => {
       request = null;
-      return {};
+      return NOTHING;
     });
   return request;
+}
+
+/**
+ * A page's title in English, for the Yellow Pages: `localize(pageNumber,
+ * title)` gives the English while the page is still called what it was when
+ * it was translated, and the title as it is otherwise. Loads the translations
+ * only once English is wanted.
+ */
+export function useEnglishTitles(wanted: boolean): (pageNumber: number, title: string) => string {
+  const [titles, setTitles] = useState<Titles | null>(() => loaded?.titles ?? null);
+
+  useEffect(() => {
+    if (!wanted || titles != null) return;
+    let current = true;
+    void loadTranslations().then((all) => {
+      if (current) setTitles(all.titles);
+    });
+    return () => {
+      current = false;
+    };
+  }, [wanted, titles]);
+
+  return useCallback(
+    (pageNumber: number, title: string) => {
+      const english = wanted ? titles?.[pageNumber] : undefined;
+      return english != null && english.pt === title.trim() ? english.en : title;
+    },
+    [wanted, titles],
+  );
 }
 
 export interface Subtitles {
@@ -86,13 +129,13 @@ export function useSubtitles(pageNumber: number, subpage: number, page: Teletext
   const [pressedOn, setPressedOn] = useState<string | null>(null);
   // Seeded from what another set already loaded, so a page that mounts with the
   // mode on is English on its first render too.
-  const [translations, setTranslations] = useState<Translations | null>(() => loaded);
+  const [translations, setTranslations] = useState<Translations | null>(() => loaded?.translations ?? null);
 
   useEffect(() => {
     if (!wanted || translations != null) return;
     let current = true;
     void loadTranslations().then((all) => {
-      if (current) setTranslations(all);
+      if (current) setTranslations(all.translations);
     });
     return () => {
       current = false;
