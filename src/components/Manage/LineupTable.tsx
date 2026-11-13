@@ -9,7 +9,8 @@
  * - **drag** a row (or the selection) to reorder — between two rows, or onto a
  *   stretch of free numbers; drop *onto* a row to fold it in as more screens;
  * - drag a page's screen (shown with ▸ under the page) above or below another
- *   of its screens to reorder the carousel;
+ *   of its screens to reorder the carousel, or between two pages to make it a
+ *   page of its own there;
  * - **Alt+↑/↓** swaps a page with the row above or below;
  * - **↑/↓** move focus, with Shift to extend the selection, **Space** toggles,
  *   **Delete** deletes, **Enter** jumps to the title, **→/←** open and close a
@@ -780,7 +781,7 @@ function ScreenRow({
       <span role="gridcell" className="mg-col-check" />
       <span role="gridcell" className="mg-col-num mg-muted">
         {count > 1 && (
-          <span className="mg-grip" aria-hidden title="Drag above or below another screen to reorder">
+          <span className="mg-grip" aria-hidden title="Drag above or below another screen to reorder, or between pages to make it a page">
             ⠿
           </span>
         )}

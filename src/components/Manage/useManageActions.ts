@@ -138,6 +138,8 @@ export interface ManageActionsApi {
   mergePages(target: number, sources: readonly number[]): Promise<boolean>;
   /** Move one screen of a page to position `to` in its carousel. */
   moveScreen(pageNumber: number, from: number, to: number): Promise<boolean>;
+  /** Make one screen a page of its own at `at`, renumbering by `moves` first. */
+  splitScreen(pageNumber: number, screen: number, moves: readonly PageMove[], at: number): Promise<boolean>;
   /** Blank the three-digit page numbers on every screen of these pages. */
   stripPageNumbers(pageNumbers: readonly number[]): Promise<boolean>;
   /** Re-publish every archive screen of these pages with new transforms. */
@@ -471,6 +473,27 @@ export function useManageActions({
     [runStructural, data, showcase],
   );
 
+  const splitScreen = useCallback(
+    (pageNumber: number, screen: number, moves: readonly PageMove[], at: number) => {
+      // Front-page entries are kept by screen number, as on a reorder: the
+      // ones from this screen on now open a different screen.
+      const stale = showcase.entries.some((entry) => entry.page_number === pageNumber && entry.subpage >= screen);
+      return runStructural(
+        () => data.splitScreen(pageNumber, screen, moves, at),
+        (outcome) =>
+          outcome.ok
+            ? stale
+              ? alert(
+                  `Screen ${screen} of page ${pageNumber} is now page ${at}. A screen of page ${pageNumber} is ` +
+                    'on the front page by its number — check the Front page tab.',
+                )
+              : status(`Screen ${screen} of page ${pageNumber} is now page ${at}.`)
+            : alert(outcome.error),
+      );
+    },
+    [runStructural, data, showcase],
+  );
+
   const stripPageNumbers = useCallback(
     (pageNumbers: readonly number[]) => {
       const { removed, screens } = data.countPageNumbers(pageNumbers);
@@ -672,6 +695,7 @@ export function useManageActions({
     addCaptures: addCapturesAndRefresh,
     deletePages,
     moveScreen,
+    splitScreen,
     stripPageNumbers,
     mergePages,
     applyTransforms,

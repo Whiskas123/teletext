@@ -207,6 +207,18 @@ export interface ArchiveAdminInput {
 
 type Result = { ok: true } | { ok: false; error: string };
 
+/** One screen leaving its page for a page of its own, as `replayPlan` applies it. */
+interface ScreenSplit {
+  /** The page's number before the renumbering, and after it. */
+  prior: number;
+  page: number;
+  screen: number;
+  /** How many screens the page had, this one included. */
+  count: number;
+  /** The number the screen becomes a page at, after the renumbering. */
+  at: number;
+}
+
 /** A capture as `PUT /api/published` renders it. */
 export interface PublishedRender {
   cells: Record<string, unknown>;
@@ -241,6 +253,14 @@ export interface ArchiveAdminApi {
    * ends up. Its archive source travels with it.
    */
   moveScreen(pageNumber: number, from: number, to: number): Promise<Result>;
+  /**
+   * Take one screen out of a page and make it a page of its own at `at`, after
+   * renumbering by `moves` to make room there; the screens after it close up.
+   * One write with the renumbering, not two: the live values here are the
+   * render's, so a split read after a separate renumbering would read the old
+   * numbers (see {@link absorbPages}).
+   */
+  splitScreen(pageNumber: number, screen: number, moves: readonly PageMove[], at: number): Promise<Result>;
   /**
    * How many three-digit numbers {@link stripPageNumbers} would blank on these
    * pages, and on how many screens — for the confirmation, before anything goes.
@@ -878,9 +898,13 @@ export function useArchiveAdmin({
    * moving dozens of them is too big for playhtml's server to accept (see
    * `domain/liveWrites.ts`). Content lands before the screens it left are
    * emptied, so in between a page can show twice but never go missing.
+   *
+   * With `split`, one screen also leaves its page for a page of its own, in
+   * the same pass: the split is applied to the replayed copy, so it reads the
+   * numbers the renumbering produced, and each channel is still written once.
    */
   const replayPlan = useCallback(
-    (plan: ReorderPlan) => {
+    (plan: ReorderPlan, split?: ScreenSplit) => {
       /**
        * Take a value out of the draft as plain data. Reading `draft[page]`
        * gives a reference *into* the document; holding one across the write
@@ -938,10 +962,23 @@ export function useArchiveAdmin({
       /** The replay on a copy of the screens it reads; the writes that make it so. */
       const screenWrites = (live: Readonly<Record<string, unknown>> | undefined) => {
         const copy: Record<string, unknown> = {};
-        for (const page of [...plan.lifts, ...plan.moves.map(({ from }) => from)]) {
-          for (const key of keysOf(page)) copy[key] = detach(live?.[key]) ?? {};
+        const read = (key: string) => {
+          copy[key] = detach(live?.[key]) ?? {};
+        };
+        for (const page of [...plan.lifts, ...plan.moves.map(({ from }) => from)]) keysOf(page).forEach(read);
+        if (split != null) {
+          keysOf(split.prior).forEach(read);
+          read(String(pageKey(split.at, MIN_SUBPAGE)));
         }
         replayScreens(copy);
+        if (split != null) {
+          const key = (screen: number) => String(pageKey(split.page, screen));
+          copy[String(pageKey(split.at, MIN_SUBPAGE))] = copy[key(split.screen)] ?? {};
+          for (let screen = split.screen; screen < split.count; screen += 1) {
+            copy[key(screen)] = copy[key(screen + 1)] ?? {};
+          }
+          copy[key(split.count)] = {};
+        }
         return orderedWrites(changedEntries(copy, live));
       };
 
@@ -959,7 +996,12 @@ export function useArchiveAdmin({
       setDescriptions((draft) => replayInto(draft, ''));
       // A heading that moves stays a heading; its empty value is the default kind.
       setKinds((draft) => replayInto(draft, DEFAULT_PAGE_KIND));
-      setSubpageCounts((draft) => replayInto(draft, MIN_SUBPAGE));
+      setSubpageCounts((draft) => {
+        replayInto(draft, MIN_SUBPAGE);
+        if (split == null) return;
+        draft[split.page] = split.count - 1;
+        draft[split.at] = MIN_SUBPAGE;
+      });
     },
     [
       setPages,
@@ -979,8 +1021,14 @@ export function useArchiveAdmin({
    * to the one rule the planner does not know: an archive page never lands in
    * the open playground, where any visitor could edit it.
    */
-  const arrange = useCallback<ArchiveAdminApi['arrange']>(
-    async (moves) => {
+  /**
+   * A renumbering checked against what the live document claims, and kept to
+   * the one rule the planner does not know: an archive page never lands in the
+   * open playground, where any visitor could edit it. No moves is an empty plan.
+   */
+  const checkArrange = useCallback(
+    (moves: readonly PageMove[]): ({ ok: true } & ReorderPlan) | { ok: false; error: string } => {
+      if (moves.length === 0) return { ok: true, lifts: [], moves: [], drops: [] };
       const plan = planArrange(occupiedPages, moves);
       if (!plan.ok) {
         return {
@@ -991,11 +1039,11 @@ export function useArchiveAdmin({
               : 'That renumbering is not possible.',
         };
       }
-      const refused = refuse([
-        ...plan.lifts,
-        ...[...plan.moves, ...plan.drops].flatMap(({ from, to }) => [from, to]),
-      ]);
-      if (refused != null) return refused;
+      const refused = refusalFor(
+        [...plan.lifts, ...[...plan.moves, ...plan.drops].flatMap(({ from, to }) => [from, to])],
+        liveSynced,
+      );
+      if (refused != null) return { ok: false, error: refused };
       const strays = plan.drops.filter(
         ({ from, to }) => publishedByPage.has(from) && to >= PLAYGROUND_MIN_PAGE,
       );
@@ -1005,17 +1053,72 @@ export function useArchiveAdmin({
           error: `That would put archive pages in the open playground (${PLAYGROUND_MIN_PAGE}+).`,
         };
       }
-      // Read before the replay changes the counts.
-      const screens = [...plan.moves, ...plan.drops].flatMap(({ from, to }) =>
+      return plan;
+    },
+    [occupiedPages, liveSynced, publishedByPage],
+  );
+
+  /** Every screen a plan moves, as `[old key, new key]`, read before the replay changes the counts. */
+  const plannedScreenMoves = useCallback(
+    (plan: ReorderPlan) =>
+      [...plan.moves, ...plan.drops].flatMap(({ from, to }) =>
         pageKeys(from, subpageCountOf(liveSubpageCounts, from)).map(
           (key, index) => [key, pageKey(to, index + MIN_SUBPAGE)] as const,
         ),
-      );
+      ),
+    [liveSubpageCounts],
+  );
+
+  /** Renumber pages. See {@link checkArrange}. */
+  const arrange = useCallback<ArchiveAdminApi['arrange']>(
+    async (moves) => {
+      const plan = checkArrange(moves);
+      if (!plan.ok) return plan;
+      const screens = plannedScreenMoves(plan);
       replayPlan(plan);
       const failed = await carryTranslations(screens);
       return failed == null ? { ok: true } : englishLeftBehind(failed);
     },
-    [refuse, occupiedPages, publishedByPage, replayPlan, liveSubpageCounts, carryTranslations],
+    [checkArrange, plannedScreenMoves, replayPlan, carryTranslations],
+  );
+
+  const splitScreen = useCallback<ArchiveAdminApi['splitScreen']>(
+    async (pageNumber, screen, moves, at) => {
+      const count = subpageCountOf(liveSubpageCounts, pageNumber);
+      if (count < 2 || !Number.isInteger(screen) || screen < MIN_SUBPAGE || screen > count) {
+        return { ok: false, error: `Page ${pageNumber} has no screen ${screen} to make a page of.` };
+      }
+      const plan = checkArrange(moves);
+      if (!plan.ok) return plan;
+      const moved = [...plan.moves, ...plan.drops];
+      const page = moved.find(({ from }) => from === pageNumber)?.to ?? pageNumber;
+      const taken = new Set(occupiedPages.filter((p) => !moved.some(({ from }) => from === p)));
+      for (const { to } of moved) taken.add(to);
+      if (taken.has(at)) return { ok: false, error: `Page ${at} is taken.` };
+      if (sourceAt(pageNumber, screen) != null && at >= PLAYGROUND_MIN_PAGE) {
+        return { ok: false, error: `Archive captures only go on pages 100–${PLAYGROUND_MIN_PAGE - 1}.` };
+      }
+      const refused = refuse([pageNumber, at]);
+      if (refused != null) return refused;
+
+      // The page's own screens go where the split puts them; every other page
+      // where the renumbering does.
+      const own = new Set(pageKeys(pageNumber, count).map(String));
+      const translations = [
+        ...plannedScreenMoves(plan).filter(([from]) => !own.has(String(from))),
+        ...Array.from({ length: count }, (_, index) => {
+          const old = index + MIN_SUBPAGE;
+          const to =
+            old < screen ? pageKey(page, old) : old === screen ? pageKey(at, MIN_SUBPAGE) : pageKey(page, old - 1);
+          return [pageKey(pageNumber, old), to] as const;
+        }),
+      ].filter(([from, to]) => String(from) !== String(to));
+
+      replayPlan(plan, { prior: pageNumber, page, screen, count, at });
+      const failed = await carryTranslations(translations);
+      return failed == null ? { ok: true } : englishLeftBehind(failed);
+    },
+    [liveSubpageCounts, checkArrange, occupiedPages, sourceAt, refuse, plannedScreenMoves, replayPlan, carryTranslations],
   );
 
   const savePageText = useCallback<ArchiveAdminApi['savePageText']>(
@@ -1322,6 +1425,7 @@ export function useArchiveAdmin({
     removeLastSubpage,
     absorbPages,
     moveScreen,
+    splitScreen,
     translationsVersion,
     countPageNumbers,
     stripPageNumbers: stripPageNumbersOf,

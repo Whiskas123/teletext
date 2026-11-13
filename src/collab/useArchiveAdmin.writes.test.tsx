@@ -209,3 +209,64 @@ it('takes the English along when pages are renumbered, merged, reordered or dele
   expect(translationMoves()).toEqual(['704→-']);
   expect(result.current.translationsVersion).toBe(4);
 });
+
+it('makes a screen a page of its own, with its source and English, and closes up the rest', async () => {
+  channels['page-sources'] = { 703: { captureId: 1 }, '703.2': { captureId: 2 }, '703.3': { captureId: 3 } };
+  const { result } = renderHook(() =>
+    useArchiveAdmin({ admin: true, archiveEnabled: false, filters: {} as never, offset: 0 }),
+  );
+
+  let outcome: unknown;
+  await act(async () => {
+    outcome = await result.current.splitScreen(703, 2, [], 701);
+  });
+
+  expect(outcome).toEqual({ ok: true });
+  expect(channels.pages[701]).toEqual(screen('2'));
+  expect(channels.pages['703.2']).toEqual(screen('3'));
+  expect(channels.pages['703.3']).toEqual({});
+  expect(channels['page-sources'][701]).toEqual({ captureId: 2 });
+  expect(channels['page-sources']['703.2']).toEqual({ captureId: 3 });
+  expect(channels['page-sources']['703.3']).toEqual({});
+  expect(channels['subpage-counts'][703]).toBe(2);
+  expect(channels['subpage-counts'][701]).toBe(1);
+  expect(translationMoves()).toEqual(['703.2→701', '703.3→703.2']);
+
+  await act(async () => {
+    outcome = await result.current.splitScreen(702, 1, [], 701);
+  });
+  expect(outcome).toEqual({ ok: false, error: 'Page 702 has no screen 1 to make a page of.' });
+});
+
+it('makes room for the split-off page by renumbering, in the same write, even when its own page moves', async () => {
+  const { result } = renderHook(() =>
+    useArchiveAdmin({ admin: true, archiveEnabled: false, filters: {} as never, offset: 0 }),
+  );
+  const [first, p702] = [channels.pages[703], channels.pages[702]];
+
+  // Screen 1 of 703 goes in at 702; 702 and everything after it move up one.
+  let outcome: unknown;
+  await act(async () => {
+    outcome = await result.current.splitScreen(
+      703,
+      1,
+      Array.from({ length: 44 }, (_, index) => ({ from: 702 + index, to: 703 + index })),
+      702,
+    );
+  });
+
+  expect(outcome).toEqual({ ok: true });
+  expect(channels.pages[702]).toEqual(first);
+  expect(channels.pages[703]).toEqual(p702);
+  expect(channels.pages[704]).toEqual(screen('2'));
+  expect(channels.pages['704.2']).toEqual(screen('3'));
+  // Never held anything, so nothing is written to empty it.
+  expect(channels.pages['704.3'] ?? {}).toEqual({});
+  expect(channels.titles[702]).toBe('');
+  expect(channels.titles[703]).toBe('Page 702');
+  expect(channels.titles[704]).toBe('Page 703');
+  expect(channels['subpage-counts'][702]).toBe(1);
+  expect(channels['subpage-counts'][704]).toBe(2);
+  expect(translationMoves()).toEqual(expect.arrayContaining(['702→703', '703→702', '703.2→704', '703.3→704.2']));
+  expect(translationMoves()).not.toContain('703→704');
+});

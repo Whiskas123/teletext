@@ -361,8 +361,15 @@ export function PagesTab({
   const judgeDrop = (spot: DropSpot): DropVerdict => {
     const drag = currentDrag();
     if (drag == null) return no('Nothing is being dragged.');
-    // A screen is dropped among its page's own screens, which handle it.
-    if (drag.kind === 'screen') return no('Drop a screen between the screens of its own page.');
+    // Between pages, a screen becomes a page of its own; among its page's own
+    // screens, the screen rows handle it.
+    if (drag.kind === 'screen') {
+      if (spot.kind === 'into') return no('Drop it between pages to make it a page of its own.');
+      const plan = arrangePlan([], targetOf(spot), 1);
+      if (!plan.ok) return no(plan.reason);
+      const pushed = describeArrangement(plan, [], 1).replace(/^Adds a page at \d+\.\s*/, '');
+      return ok(`Screen ${drag.screen} of page ${drag.pageNumber} becomes page ${plan.placed[0]}. ${pushed}`.trim());
+    }
 
     if (drag.kind === 'pages') {
       if (spot.kind === 'into') {
@@ -439,7 +446,11 @@ export function PagesTab({
 
   const onDrop = (spot: DropSpot) => {
     const drag = currentDrag();
-    if (drag == null || drag.kind === 'screen') return;
+    if (drag == null) return;
+    if (drag.kind === 'screen') {
+      if (spot.kind !== 'into') void splitScreen(drag.pageNumber, drag.screen, targetOf(spot));
+      return;
+    }
     if (drag.kind === 'pages') {
       if (spot.kind === 'into') {
         askMerge(spot.pageNumber, drag.pages.filter((page) => page !== spot.pageNumber));
@@ -497,6 +508,18 @@ export function PagesTab({
       ),
       onConfirm: () => void runArrange(plan, `Gap closed. ${summary}`),
     });
+  };
+
+  /** Make a screen a page of its own where it was dropped, and select that page. */
+  const splitScreen = async (pageNumber: number, screen: number, target: LineupTarget) => {
+    const plan = arrangePlan([], target, 1);
+    if (!plan.ok) return;
+    const at = plan.placed[0];
+    if (await actions.splitScreen(pageNumber, screen, plan.moves, at)) {
+      selection.remap(plan.moves);
+      if (collapsed.size > 0) setCollapsed(new Set(remapPages(collapsed, plan.moves)));
+      selection.selectOnly(at);
+    }
   };
 
   /** Move a screen, and keep the inspector on it if it was the one shown. */

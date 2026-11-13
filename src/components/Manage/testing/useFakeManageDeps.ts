@@ -460,6 +460,35 @@ export function useFakeManageDeps(
       });
       return { ok: true };
     },
+    splitScreen: async (page, screen, moves, at) => {
+      const plan = moves.length === 0 ? null : planArrange(occupiedPages, moves);
+      if (plan != null && !plan.ok) return { ok: false, error: `Refused: ${plan.reason}` };
+      if (plan != null) await arrange(moves);
+      const landed = plan == null ? page : ([...plan.moves, ...plan.drops].find((m) => m.from === page)?.to ?? page);
+      setState((current) => {
+        const draft = clone(current);
+        const count = current.counts.get(landed) ?? 1;
+        const cells = (s: number) => current.cells.get(key(landed, s));
+        const moved = cells(screen);
+        if (moved) draft.cells.set(key(at, 1), moved);
+        for (let s = screen; s < count; s += 1) {
+          const next = cells(s + 1);
+          if (next) draft.cells.set(key(landed, s), next);
+          else draft.cells.delete(key(landed, s));
+        }
+        draft.cells.delete(key(landed, count));
+        draft.counts.set(landed, count - 1);
+        draft.counts.set(at, 1);
+        draft.published = current.published.map((entry) => {
+          if (entry.page_number !== landed) return entry;
+          const sub = entry.subpage ?? 1;
+          if (sub === screen) return { ...entry, page_number: at, subpage: 1 };
+          return sub > screen ? { ...entry, subpage: sub - 1 } : entry;
+        });
+        return draft;
+      });
+      return { ok: true };
+    },
     countPageNumbers: (pages) => {
       let removed = 0;
       let screens = 0;
