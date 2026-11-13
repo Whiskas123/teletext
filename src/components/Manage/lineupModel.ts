@@ -56,6 +56,34 @@ export interface RowSources {
   isEdited?(pageNumber: number): boolean;
 }
 
+/** A screen as the list names it: `183` for a page's first screen, `183/9` for the rest. */
+export function placeName(pageNumber: number, subpage: number): string {
+  return subpage === 1 ? String(pageNumber) : `${pageNumber}/${subpage}`;
+}
+
+/**
+ * Screens whose archive capture is on air somewhere else too, keyed by
+ * {@link placeName}, each with the other places it is on, in list order.
+ * Hand-made screens have no capture and are never duplicates by this measure.
+ */
+export function duplicatePlaces(published: readonly PublishedEntry[]): Map<string, string[]> {
+  const byCapture = new Map<number, string[]>();
+  const sorted = [...published].sort(
+    (a, b) => a.page_number - b.page_number || (a.subpage ?? 1) - (b.subpage ?? 1),
+  );
+  for (const entry of sorted) {
+    const places = byCapture.get(entry.capture_id) ?? [];
+    places.push(placeName(entry.page_number, entry.subpage ?? 1));
+    byCapture.set(entry.capture_id, places);
+  }
+  const result = new Map<string, string[]>();
+  for (const places of byCapture.values()) {
+    if (places.length < 2) continue;
+    for (const place of places) result.set(place, places.filter((other) => other !== place));
+  }
+  return result;
+}
+
 /** Records grouped by page, each group in screen order. */
 export function recordsByPage(
   published: readonly PublishedEntry[],

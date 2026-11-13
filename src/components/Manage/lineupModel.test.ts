@@ -7,6 +7,7 @@ import type { PublishedEntry } from '../../collab/useArchiveAdmin';
 import {
   barOf,
   buildRow,
+  duplicatePlaces,
   headingSpans,
   matchesFilter,
   recordsByPage,
@@ -102,5 +103,19 @@ describe('what a heading owns', () => {
   it('never reaches into the playground, and leaves out empty headings', () => {
     const spans = headingSpans(pages, kindOf);
     expect(spans.has(699)).toBe(false);
+  });
+});
+
+describe('duplicatePlaces', () => {
+  const at = (page: number, subpage: number, capture: number) => ({ ...record(page, subpage, null), capture_id: capture });
+
+  it('names every other place a capture is on air, and nothing for one that is on once', () => {
+    const places = duplicatePlaces([at(183, 9, 503), at(183, 1, 499), at(182, 2, 499), at(183, 2, 503), at(184, 1, 523)]);
+    expect(places.get('182/2')).toEqual(['183']);
+    expect(places.get('183')).toEqual(['182/2']);
+    expect(places.get('183/2')).toEqual(['183/9']);
+    expect(places.get('183/9')).toEqual(['183/2']);
+    expect(places.has('184')).toBe(false);
+    expect(places.size).toBe(4);
   });
 });

@@ -45,6 +45,7 @@ import {
   DEFAULT_ADD_SETTINGS,
   EMPTY_FILTER,
   buildRow,
+  duplicatePlaces,
   headingSpans,
   isFiltering,
   matchesFilter,
@@ -702,6 +703,8 @@ export function PagesTab({
    * seconds; the live sources say it at once, so a capture just added leaves
    * the list the moment it lands rather than after the next backup.
    */
+  const duplicates = useMemo(() => duplicatePlaces(data.published), [data.published]);
+
   const onAirCaptures = useMemo(
     () => new Set(data.published.map((entry) => entry.capture_id)),
     [data.published],
@@ -952,6 +955,7 @@ export function PagesTab({
           livePage={data.livePage}
           translationOf={translations.page}
           publicationAt={data.publicationAt}
+          duplicates={duplicates}
           pageBusy={actions.inFlight.pageBusy}
           outcomes={actions.outcomes}
           locked={locked}

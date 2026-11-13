@@ -459,6 +459,7 @@
   vertical-align: 1px;
 }
 .mg-en-partial { border-style: dashed; color: var(--mg-muted); }
+.mg-dup { margin-left: 6px; color: var(--mg-warn); font-size: 12px; cursor: help; }
 
 .mg-screens-toggle {
   min-height: 24px;

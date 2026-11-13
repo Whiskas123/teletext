@@ -29,7 +29,7 @@ import type { PageActionName } from '../../domain/inFlight';
 import type { Notice } from '../../domain/manageMessages';
 import type { TeletextPage } from '../../types/teletext';
 import { beginDrag, currentDrag, endDrag, screenTarget } from './dnd';
-import { describeBar, type PageRow } from './lineupModel';
+import { describeBar, placeName, type PageRow } from './lineupModel';
 import { PageThumb } from './PageThumb';
 import type { LineupSelection } from './useLineupSelection';
 import type { PageTranslation } from './useTranslations';
@@ -62,6 +62,8 @@ export interface LineupTableProps {
   /** Whether the page's screens have English; `null` with nothing to translate. */
   translationOf(pageNumber: number, screens: number): PageTranslation | null;
   publicationAt(pageNumber: number, subpage: number): PublishedEntry | null;
+  /** Screens whose capture is on air elsewhere too, by `placeName`, with the other places. */
+  duplicates: ReadonlyMap<string, readonly string[]>;
   pageBusy(pageNumber: number): PageActionName | null;
   outcomes: ReadonlyMap<number, Notice>;
   /** A structural action is running: nothing can be dragged or dropped. */
@@ -101,6 +103,7 @@ export function LineupTable({
   livePage,
   translationOf,
   publicationAt,
+  duplicates,
   pageBusy,
   outcomes,
   locked,
@@ -426,6 +429,7 @@ export function LineupTable({
                     livePage={livePage}
                     translation={translationOf(item.pageNumber, rowOf(item.pageNumber).screens)}
                     publicationAt={publicationAt}
+                    duplicates={duplicates}
                     locked={locked}
                     onClick={(event) =>
                       selection.click(
@@ -491,6 +495,7 @@ interface PageRowViewProps {
   livePage(pageNumber: number, subpage?: number): TeletextPage | null;
   translation: PageTranslation | null;
   publicationAt(pageNumber: number, subpage: number): PublishedEntry | null;
+  duplicates: ReadonlyMap<string, readonly string[]>;
   locked: boolean;
   onClick(event: React.MouseEvent): void;
   /** Shift held: add the stretch from the anchor rather than this row alone. */
@@ -519,6 +524,7 @@ function PageRowView({
   livePage,
   translation,
   publicationAt,
+  duplicates,
   locked,
   onClick,
   onCheck,
@@ -534,6 +540,10 @@ function PageRowView({
   // Read once per change of the live document, not once per render: a new
   // array every time would redraw every visible thumbnail on every click.
   const page = useMemo(() => livePage(pageNumber, 1), [livePage, pageNumber]);
+  const duplicated = Array.from({ length: row.screens }, (_, index) => index + 1).flatMap((screen) => {
+    const others = duplicates.get(placeName(pageNumber, screen));
+    return others == null ? [] : [row.screens === 1 ? `Also on ${others.join(', ')}` : `Screen ${screen} is also on ${others.join(', ')}`];
+  });
 
   const classes = [
     'mg-row',
@@ -618,6 +628,7 @@ function PageRowView({
                 EN
               </span>
             )}
+            {duplicated.length > 0 && <DuplicateMark text={duplicated.join('\n')} />}
             {collapse?.collapsed && (
               <span className="mg-collapsed-count">
                 {collapse.owned} {collapse.owned === 1 ? 'page' : 'pages'}
@@ -693,6 +704,7 @@ function PageRowView({
             current={activeScreen === screen}
             livePage={livePage}
             record={publicationAt(pageNumber, screen)}
+            duplicateOf={duplicates.get(placeName(pageNumber, screen)) ?? null}
             locked={locked}
             onPick={() => onPickScreen(screen)}
             onMove={onMoveScreen}
@@ -709,6 +721,7 @@ function ScreenRow({
   current,
   livePage,
   record,
+  duplicateOf,
   locked,
   onPick,
   onMove,
@@ -719,6 +732,8 @@ function ScreenRow({
   current: boolean;
   livePage(pageNumber: number, subpage?: number): TeletextPage | null;
   record: PublishedEntry | null;
+  /** The other places this screen's capture is on air, or null. */
+  duplicateOf: readonly string[] | null;
   locked: boolean;
   onPick(): void;
   /** A screen of this page was dropped here: it goes from `from` to `to`. */
@@ -792,6 +807,7 @@ function ScreenRow({
       </span>
       <span role="gridcell" className="mg-col-title mg-muted">
         Screen {screen}
+        {duplicateOf != null && <DuplicateMark text={`Also on ${duplicateOf.join(', ')}`} />}
       </span>
       <span role="gridcell" className="mg-col-role" />
       <span role="gridcell" className="mg-col-source">
@@ -813,5 +829,14 @@ function ScreenRow({
       <span role="gridcell" className="mg-col-screens" />
       <span role="gridcell" className="mg-col-status" />
     </div>
+  );
+}
+
+/** The same archive capture is on air somewhere else too. */
+function DuplicateMark({ text }: { text: string }) {
+  return (
+    <span className="mg-dup" role="img" aria-label={`Duplicate. ${text}`} title={`Same capture as elsewhere.\n${text}`}>
+      ⧉
+    </span>
   );
 }
