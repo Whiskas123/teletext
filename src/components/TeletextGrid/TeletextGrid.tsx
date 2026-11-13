@@ -76,7 +76,7 @@ function formatPageNumber(n: number): string {
  * Column 4, one blank cell after the three-digit page number and well clear of
  * the date and time at column 20 — a broadcast header put the subpage counter
  * in exactly that gap, because it is the one part of the header that belongs to
- * the page number rather than to the clock. At its widest (`26/26`) it reaches
+ * the page number rather than to the clock. At its widest (`99/99`) it reaches
  * column 8.
  */
 const SUBPAGE_COL = 4;

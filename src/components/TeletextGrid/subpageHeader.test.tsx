@@ -60,13 +60,13 @@ describe('the header subpage counter', () => {
       <TeletextGrid
         page={createEmptyPage()}
         pageNumber={999}
-        subpage={26}
-        subpageCount={26}
+        subpage={99}
+        subpageCount={99}
         readOnly
       />,
     );
     const header = headerText(container);
-    expect(header.slice(0, 20)).toBe('999 26/26           ');
+    expect(header.slice(0, 20)).toBe('999 99/99           ');
   });
 
   it('never claims a screen the page does not have', () => {

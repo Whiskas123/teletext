@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 import { COLS, ROWS, type Cell } from '../../src/types/teletext';
+import { MAX_SUBPAGE } from '../../src/domain/subpages';
 
 const cells: Cell[] = Array.from({ length: COLS * ROWS }, () => ({ char: ' ', fg: 'white', bg: 'black' }));
 [...'Bola de ouro'].forEach((char, i) => (cells[2 * COLS + i].char = char));
@@ -113,7 +114,7 @@ describe('translations following their screens', () => {
 
   it('refuses a move to a screen that cannot exist, and writes nothing', async () => {
     transactions.length = 0;
-    const res = await move([{ from: '135', to: '135.99' }]);
+    const res = await move([{ from: '135', to: `135.${MAX_SUBPAGE + 1}` }]);
     expect(res.code).toBe(400);
     expect(transactions).toHaveLength(0);
   });

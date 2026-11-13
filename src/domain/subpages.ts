@@ -49,12 +49,15 @@ export const MIN_SUBPAGE = 1;
 /**
  * Highest subpage a page may hold.
  *
- * Broadcast teletext allowed far more, but a carousel is read by pressing an
- * arrow, and 26 screens is already well past what anyone will page through.
- * The bound matters because the count is written by a client: without it, one
- * bad value would ask every reader to walk an arbitrary number of keys.
+ * 99 is what the two-digit `X/Y` counter in the header can show. It was 26
+ * until November 2026, which turned out to be too few for some pages. The
+ * bound matters because the count is written by a client: without it, one bad
+ * value would ask every reader to walk an arbitrary number of keys.
+ *
+ * The database bounds the same columns (`db/migrations/019_subpages_99.sql`);
+ * raising this again needs a migration too.
  */
-export const MAX_SUBPAGE = 26;
+export const MAX_SUBPAGE = 99;
 
 /** Separator between page number and subpage in a composite key. */
 const SEPARATOR = '.';
