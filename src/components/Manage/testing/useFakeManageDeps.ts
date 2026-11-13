@@ -429,18 +429,6 @@ export function useFakeManageDeps(
       });
       return next;
     },
-    removeLastSubpage: async (page) => {
-      const count = countOf(page);
-      if (count <= 1) return null;
-      setState((current) => {
-        const draft = clone(current);
-        draft.cells.delete(key(page, count));
-        draft.counts.set(page, count - 1);
-        draft.published = draft.published.filter((e) => !(e.page_number === page && (e.subpage ?? 1) === count));
-        return draft;
-      });
-      return count - 1;
-    },
     absorbPages,
     translationsVersion: 0,
     moveScreen: async (page, from, to) => {
@@ -485,6 +473,31 @@ export function useFakeManageDeps(
           if (sub === screen) return { ...entry, page_number: at, subpage: 1 };
           return sub > screen ? { ...entry, subpage: sub - 1 } : entry;
         });
+        return draft;
+      });
+      return { ok: true };
+    },
+    removeScreens: async (screens) => {
+      setState((current) => {
+        const draft = clone(current);
+        for (const page of new Set(screens.map((s) => s.pageNumber))) {
+          const removed = new Set(screens.filter((s) => s.pageNumber === page).map((s) => s.screen));
+          const count = current.counts.get(page) ?? 1;
+          const kept = Array.from({ length: count }, (_, i) => i + 1).filter((s) => !removed.has(s));
+          if (kept.length === 0) {
+            clearPage(draft, page);
+            continue;
+          }
+          for (let s = 1; s <= count; s += 1) draft.cells.delete(key(page, s));
+          kept.forEach((old, i) => {
+            const cells = current.cells.get(key(page, old));
+            if (cells) draft.cells.set(key(page, i + 1), cells);
+          });
+          draft.counts.set(page, kept.length);
+          draft.published = draft.published
+            .filter((e) => e.page_number !== page || !removed.has(e.subpage ?? 1))
+            .map((e) => (e.page_number === page ? { ...e, subpage: kept.indexOf(e.subpage ?? 1) + 1 } : e));
+        }
         return draft;
       });
       return { ok: true };

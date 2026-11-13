@@ -240,8 +240,6 @@ export interface ArchiveAdminApi {
   subpageCountOfPage(pageNumber: number): number;
   /** Append an empty screen to a page; returns its number, or null at the cap. */
   addSubpage(pageNumber: number): number | null;
-  /** Drop a page's last screen and where it came from; returns the new count, or null at 1. */
-  removeLastSubpage(pageNumber: number): Promise<number | null>;
   /**
    * Fold each source's whole carousel onto the end of `target`'s, in order, and
    * leave the sources empty. A move, not a copy — see `domain/absorb.ts`.
@@ -261,6 +259,11 @@ export interface ArchiveAdminApi {
    * numbers (see {@link absorbPages}).
    */
   splitScreen(pageNumber: number, screen: number, moves: readonly PageMove[], at: number): Promise<Result>;
+  /**
+   * Take these screens off air, in one pass: each page's other screens close
+   * up in order, and a page left with none is deleted.
+   */
+  removeScreens(screens: readonly { pageNumber: number; screen: number }[]): Promise<Result>;
   /**
    * How many three-digit numbers {@link stripPageNumbers} would blank on these
    * pages, and on how many screens — for the confirmation, before anything goes.
@@ -817,23 +820,6 @@ export function useArchiveAdmin({
     [refuse, writeScreen, liveSubpageCounts, setSubpageCounts, setTitle, setDescriptions],
   );
 
-  /** Take a page's last screen off air, with where it came from. */
-  const removeLastSubpage = useCallback<ArchiveAdminApi['removeLastSubpage']>(
-    async (pageNumber) => {
-      const count = subpageCountOf(liveSubpageCounts, pageNumber);
-      if (count <= MIN_SUBPAGE || refuse([pageNumber]) != null) return null;
-      setSources((draft) => {
-        draft[String(pageKey(pageNumber, count))] = {};
-      });
-      const remaining = subpages.removeLastSubpage(pageNumber);
-      // Its English goes too. A failure here only leaves a translation that
-      // matches nothing until a screen is added back at that number.
-      await carryTranslations([[pageKey(pageNumber, count), null]]);
-      return remaining;
-    },
-    [refuse, liveSubpageCounts, setSources, subpages, carryTranslations],
-  );
-
   const isEdited = useCallback(
     (pageNumber: number, subpage: number): boolean => {
       const source = sourceAt(pageNumber, subpage);
@@ -962,22 +948,17 @@ export function useArchiveAdmin({
       /** The replay on a copy of the screens it reads; the writes that make it so. */
       const screenWrites = (live: Readonly<Record<string, unknown>> | undefined) => {
         const copy: Record<string, unknown> = {};
-        const read = (key: string) => {
-          copy[key] = detach(live?.[key]) ?? {};
-        };
-        for (const page of [...plan.lifts, ...plan.moves.map(({ from }) => from)]) keysOf(page).forEach(read);
-        if (split != null) {
-          keysOf(split.prior).forEach(read);
-          read(String(pageKey(split.at, MIN_SUBPAGE)));
-        }
+        const keys = [...plan.lifts, ...plan.moves.map(({ from }) => from)].flatMap(keysOf);
+        if (split != null) keys.push(...keysOf(split.prior), String(pageKey(split.at, MIN_SUBPAGE)));
+        for (const key of keys) copy[key] = detach(live?.[key]) ?? {};
         replayScreens(copy);
         if (split != null) {
-          const key = (screen: number) => String(pageKey(split.page, screen));
-          copy[String(pageKey(split.at, MIN_SUBPAGE))] = copy[key(split.screen)] ?? {};
+          const at = (screen: number) => String(pageKey(split.page, screen));
+          copy[String(pageKey(split.at, MIN_SUBPAGE))] = copy[at(split.screen)] ?? {};
           for (let screen = split.screen; screen < split.count; screen += 1) {
-            copy[key(screen)] = copy[key(screen + 1)] ?? {};
+            copy[at(screen)] = copy[at(screen + 1)] ?? {};
           }
-          copy[key(split.count)] = {};
+          copy[at(split.count)] = {};
         }
         return orderedWrites(changedEntries(copy, live));
       };
@@ -1264,6 +1245,87 @@ export function useArchiveAdmin({
     [refuse, livePages, liveSources, liveSubpageCounts, setPages, setSources, carryTranslations],
   );
 
+  const removeScreens = useCallback<ArchiveAdminApi['removeScreens']>(
+    async (screens) => {
+      const byPage = new Map<number, Set<number>>();
+      for (const { pageNumber, screen } of screens) {
+        byPage.set(pageNumber, (byPage.get(pageNumber) ?? new Set()).add(screen));
+      }
+      const refused = refuse([...byPage.keys()]);
+      if (refused != null) return refused;
+
+      // What each screen key holds afterwards, and where each one's English goes.
+      const plan: { key: string; from: string | null }[] = [];
+      const translations: (readonly [PageKey, PageKey | null])[] = [];
+      const counts = new Map<number, number>();
+      const emptied: number[] = [];
+      for (const [pageNumber, removed] of byPage) {
+        const count = subpageCountOf(liveSubpageCounts, pageNumber);
+        const kept = Array.from({ length: count }, (_, index) => index + MIN_SUBPAGE).filter((s) => !removed.has(s));
+        for (let screen = MIN_SUBPAGE; screen <= count; screen += 1) {
+          const old = kept[screen - MIN_SUBPAGE];
+          plan.push({ key: String(pageKey(pageNumber, screen)), from: old == null ? null : String(pageKey(pageNumber, old)) });
+          if (removed.has(screen)) translations.push([pageKey(pageNumber, screen), null]);
+        }
+        kept.forEach((old, index) => {
+          if (old !== index + MIN_SUBPAGE) {
+            translations.push([pageKey(pageNumber, old), pageKey(pageNumber, index + MIN_SUBPAGE)]);
+          }
+        });
+        if (kept.length === 0) emptied.push(pageNumber);
+        else counts.set(pageNumber, kept.length);
+      }
+      const carry = (live: Readonly<Record<string, unknown>> | undefined) => {
+        const result: Record<string, unknown> = {};
+        for (const { key, from } of plan) {
+          const value = from == null ? undefined : live?.[from];
+          result[key] = value === undefined ? {} : JSON.parse(JSON.stringify(value));
+        }
+        return orderedWrites(changedEntries(result, live));
+      };
+      for (const write of carry(livePages as Record<string, unknown>)) {
+        setPages((draft) => {
+          for (const [key, value] of write) (draft as Record<string, unknown>)[key] = value;
+        });
+      }
+      for (const write of carry(liveSources)) {
+        setSources((draft) => {
+          for (const [key, value] of write) draft[key] = value;
+        });
+      }
+      setSubpageCounts((draft) => {
+        for (const [pageNumber, count] of counts) draft[pageNumber] = count;
+        for (const pageNumber of emptied) draft[pageNumber] = MIN_SUBPAGE;
+      });
+      if (emptied.length > 0) {
+        setTitles((draft) => {
+          for (const pageNumber of emptied) draft[pageNumber] = '';
+        });
+        setDescriptions((draft) => {
+          for (const pageNumber of emptied) draft[pageNumber] = '';
+        });
+        setKinds((draft) => {
+          for (const pageNumber of emptied) draft[pageNumber] = DEFAULT_PAGE_KIND;
+        });
+      }
+      const failed = await carryTranslations(translations);
+      return failed == null ? { ok: true } : englishLeftBehind(failed);
+    },
+    [
+      refuse,
+      liveSubpageCounts,
+      livePages,
+      liveSources,
+      setPages,
+      setSources,
+      setSubpageCounts,
+      setTitles,
+      setDescriptions,
+      setKinds,
+      carryTranslations,
+    ],
+  );
+
   /**
    * Each screen of these pages with its three-digit numbers blanked, keyed as
    * the live document keys them; screens with none are left out. A screen
@@ -1422,10 +1484,10 @@ export function useArchiveAdmin({
     isEdited,
     subpageCountOfPage,
     addSubpage: subpages.addSubpage,
-    removeLastSubpage,
     absorbPages,
     moveScreen,
     splitScreen,
+    removeScreens,
     translationsVersion,
     countPageNumbers,
     stripPageNumbers: stripPageNumbersOf,

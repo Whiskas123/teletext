@@ -53,7 +53,7 @@ export function actionLabel(action: PageActionName): string {
     case 'add-subpage':
       return 'Add a subpage';
     case 'remove-subpage':
-      return 'Remove the last subpage';
+      return 'Remove a screen';
     case 'absorb-page':
       return 'Fold a page in as a subpage';
     case 'showcase':
@@ -79,7 +79,7 @@ export function actionDone(action: PageActionName): string {
     case 'add-subpage':
       return 'given another subpage';
     case 'remove-subpage':
-      return 'one subpage shorter';
+      return 'one screen shorter';
     case 'absorb-page':
       return 'given the page as a subpage';
     case 'showcase':

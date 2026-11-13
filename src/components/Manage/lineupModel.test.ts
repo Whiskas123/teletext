@@ -8,6 +8,7 @@ import {
   barOf,
   buildRow,
   duplicatePlaces,
+  duplicatesToRemove,
   headingSpans,
   matchesFilter,
   recordsByPage,
@@ -117,5 +118,19 @@ describe('duplicatePlaces', () => {
     expect(places.get('183/9')).toEqual(['183/2']);
     expect(places.has('184')).toBe(false);
     expect(places.size).toBe(4);
+  });
+});
+
+describe('duplicatesToRemove', () => {
+  const at = (page: number, subpage: number, capture: number) => ({ ...record(page, subpage, null), capture_id: capture });
+
+  it('keeps the first place in list order and removes the rest', () => {
+    expect(
+      duplicatesToRemove([at(183, 9, 503), at(183, 1, 499), at(182, 2, 499), at(183, 2, 503), at(184, 1, 523), at(190, 1, 503)]),
+    ).toEqual([
+      { pageNumber: 183, screen: 1, keep: '182/2' },
+      { pageNumber: 183, screen: 9, keep: '183/2' },
+      { pageNumber: 190, screen: 1, keep: '183/2' },
+    ]);
   });
 });

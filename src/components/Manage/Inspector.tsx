@@ -58,7 +58,8 @@ export interface InspectorProps {
   /** Shift the screen shown, or with `everyScreen` all the page's archive screens. */
   onSetShift(shift: boolean, everyScreen: boolean): void;
   onAddEmptyScreen(): void;
-  onRemoveLastScreen(): void;
+  /** Take the screen shown off the page; the ones after it close up. */
+  onRemoveScreen(screen: number): void;
   onAddScreensFromArchive(): void;
   onReplaceScreen(screen: number): void;
   onToggleShowcase(screen: number, on: boolean): void;
@@ -93,7 +94,7 @@ export function Inspector({
   onSetBar,
   onSetShift,
   onAddEmptyScreen,
-  onRemoveLastScreen,
+  onRemoveScreen,
   onAddScreensFromArchive,
   onReplaceScreen,
   onToggleShowcase,
@@ -415,10 +416,10 @@ export function Inspector({
             type="button"
             className="mg-btn mg-btn-small mg-btn-ghost"
             disabled={disabled || row.screens < 2}
-            title={row.screens < 2 ? 'Screen 1 is the page itself' : `Delete screen ${row.screens}`}
-            onClick={onRemoveLastScreen}
+            title={row.screens < 2 ? 'A page of one screen is deleted as a page' : `Delete screen ${screen}`}
+            onClick={() => onRemoveScreen(screen)}
           >
-            − Remove screen {row.screens}
+            − Remove screen {screen}
           </button>
         </div>
 

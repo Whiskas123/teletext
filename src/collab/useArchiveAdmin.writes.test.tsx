@@ -270,3 +270,31 @@ it('makes room for the split-off page by renumbering, in the same write, even wh
   expect(translationMoves()).toEqual(expect.arrayContaining(['702→703', '703→702', '703.2→704', '703.3→704.2']));
   expect(translationMoves()).not.toContain('703→704');
 });
+
+it('removes screens in one pass, closing up the rest and deleting a page left with none', async () => {
+  channels['page-sources'] = { 703: { captureId: 1 }, '703.2': { captureId: 2 }, '703.3': { captureId: 3 } };
+  const { result } = renderHook(() =>
+    useArchiveAdmin({ admin: true, archiveEnabled: false, filters: {} as never, offset: 0 }),
+  );
+  const first = channels.pages[703];
+
+  let outcome: unknown;
+  await act(async () => {
+    outcome = await result.current.removeScreens([
+      { pageNumber: 703, screen: 2 },
+      { pageNumber: 704, screen: 1 },
+    ]);
+  });
+
+  expect(outcome).toEqual({ ok: true });
+  expect(channels.pages[703]).toEqual(first);
+  expect(channels.pages['703.2']).toEqual(screen('3'));
+  expect(channels.pages['703.3']).toEqual({});
+  expect(channels['page-sources']['703.2']).toEqual({ captureId: 3 });
+  expect(channels['page-sources']['703.3']).toEqual({});
+  expect(channels['subpage-counts'][703]).toBe(2);
+  expect(channels.pages[704]).toEqual({});
+  expect(channels.titles[704]).toBe('');
+  expect(channels.titles[703]).toBe('Page 703');
+  expect(translationMoves()).toEqual(['703.2→-', '703.3→703.2', '704→-']);
+});

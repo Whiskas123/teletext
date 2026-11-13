@@ -84,6 +84,27 @@ export function duplicatePlaces(published: readonly PublishedEntry[]): Map<strin
   return result;
 }
 
+/**
+ * The screens to take off air so each archive capture is on once: every place
+ * after the first, in list order, with the place that stays.
+ */
+export function duplicatesToRemove(
+  published: readonly PublishedEntry[],
+): { pageNumber: number; screen: number; keep: string }[] {
+  const first = new Map<number, string>();
+  const remove: { pageNumber: number; screen: number; keep: string }[] = [];
+  const sorted = [...published].sort(
+    (a, b) => a.page_number - b.page_number || (a.subpage ?? 1) - (b.subpage ?? 1),
+  );
+  for (const entry of sorted) {
+    const screen = entry.subpage ?? 1;
+    const keep = first.get(entry.capture_id);
+    if (keep == null) first.set(entry.capture_id, placeName(entry.page_number, screen));
+    else remove.push({ pageNumber: entry.page_number, screen, keep });
+  }
+  return remove;
+}
+
 /** Records grouped by page, each group in screen order. */
 export function recordsByPage(
   published: readonly PublishedEntry[],

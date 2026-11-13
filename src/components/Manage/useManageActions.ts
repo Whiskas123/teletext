@@ -140,6 +140,8 @@ export interface ManageActionsApi {
   moveScreen(pageNumber: number, from: number, to: number): Promise<boolean>;
   /** Make one screen a page of its own at `at`, renumbering by `moves` first. */
   splitScreen(pageNumber: number, screen: number, moves: readonly PageMove[], at: number): Promise<boolean>;
+  /** Take these screens off air in one pass; a page left with none is deleted. */
+  removeScreens(screens: readonly { pageNumber: number; screen: number }[]): Promise<boolean>;
   /** Blank the three-digit page numbers on every screen of these pages. */
   stripPageNumbers(pageNumbers: readonly number[]): Promise<boolean>;
   /** Re-publish every archive screen of these pages with new transforms. */
@@ -151,7 +153,8 @@ export interface ManageActionsApi {
 
   saveText(pageNumber: number, title: string, description: string): Promise<boolean>;
   addSubpage(pageNumber: number): void;
-  removeLastSubpage(pageNumber: number): void;
+  /** Take one screen off a page; the screens after it close up. */
+  removeScreen(pageNumber: number, screen: number): void;
   toggleShowcase(pageNumber: number, subpage: number, on: boolean): void;
 }
 
@@ -494,6 +497,18 @@ export function useManageActions({
     [runStructural, data, showcase],
   );
 
+  const removeScreens = useCallback(
+    (screens: readonly { pageNumber: number; screen: number }[]) =>
+      runStructural(
+        () => data.removeScreens(screens),
+        (outcome) =>
+          outcome.ok
+            ? status(`Removed ${plural(screens.length, 'duplicate screen')}.`)
+            : alert(outcome.error),
+      ),
+    [runStructural, data],
+  );
+
   const stripPageNumbers = useCallback(
     (pageNumbers: readonly number[]) => {
       const { removed, screens } = data.countPageNumbers(pageNumbers);
@@ -645,15 +660,12 @@ export function useManageActions({
     [runPageAction, data],
   );
 
-  const removeLastSubpage = useCallback(
-    (pageNumber: number) => {
+  const removeScreen = useCallback(
+    (pageNumber: number, screen: number) => {
       void runPageAction(pageNumber, 'remove-subpage', async () =>
-        (await data.removeLastSubpage(pageNumber)) == null
-          ? {
-              ok: false as const,
-              error: `Page ${pageNumber} has one screen, which is the page itself.`,
-            }
-          : { ok: true as const },
+        data.subpageCountOfPage(pageNumber) < 2
+          ? { ok: false as const, error: `Page ${pageNumber} has one screen, which is the page itself.` }
+          : data.removeScreens([{ pageNumber, screen }]),
       );
     },
     [runPageAction, data],
@@ -696,6 +708,7 @@ export function useManageActions({
     deletePages,
     moveScreen,
     splitScreen,
+    removeScreens,
     stripPageNumbers,
     mergePages,
     applyTransforms,
@@ -703,7 +716,7 @@ export function useManageActions({
     fillTitles,
     saveText,
     addSubpage,
-    removeLastSubpage,
+    removeScreen,
     toggleShowcase,
   };
 }

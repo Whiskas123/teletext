@@ -46,9 +46,11 @@ import {
   EMPTY_FILTER,
   buildRow,
   duplicatePlaces,
+  duplicatesToRemove,
   headingSpans,
   isFiltering,
   matchesFilter,
+  placeName,
   recordsByPage,
   type AddDestination,
   type AddSettings,
@@ -704,6 +706,39 @@ export function PagesTab({
    * the list the moment it lands rather than after the next backup.
    */
   const duplicates = useMemo(() => duplicatePlaces(data.published), [data.published]);
+  const extraCopies = useMemo(() => duplicatesToRemove(data.published), [data.published]);
+
+  const askRemoveDuplicates = () => {
+    const doomed = extraCopies;
+    // Pages every one of whose screens goes, so the dialog can say they go too.
+    const gone = [...new Set(doomed.map((d) => d.pageNumber))].filter(
+      (page) => doomed.filter((d) => d.pageNumber === page).length === data.subpageCountOfPage(page),
+    );
+    confirm({
+      title: `Remove ${doomed.length === 1 ? 'a duplicate screen' : `${doomed.length} duplicate screens`}?`,
+      danger: true,
+      confirmLabel: 'Remove',
+      body: (
+        <>
+          <p>
+            Each capture stays where it is on first, in list order; these copies are taken off air and the screens
+            after them close up.
+            {gone.length > 0 && ` ${gone.length === 1 ? `Page ${gone[0]} has` : `Pages ${describeRange(gone)} have`} nothing else, so ${gone.length === 1 ? 'it is' : 'they are'} deleted.`}
+          </p>
+          <ul className="mg-dup-list">
+            {doomed.map((d) => (
+              <li key={`${d.pageNumber}.${d.screen}`}>
+                {placeName(d.pageNumber, d.screen)} <span className="mg-muted">— same as {d.keep}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ),
+      onConfirm: async () => {
+        await actions.removeScreens(doomed.map(({ pageNumber, screen }) => ({ pageNumber, screen })));
+      },
+    });
+  };
 
   const onAirCaptures = useMemo(
     () => new Set(data.published.map((entry) => entry.capture_id)),
@@ -817,15 +852,21 @@ export function PagesTab({
           actions.addSubpage(active);
           selection.setScreen(row.screens + 1);
         }}
-        onRemoveLastScreen={() =>
+        onRemoveScreen={(screen) =>
           confirm({
-            title: `Remove screen ${row.screens} of page ${active}?`,
+            title: `Remove screen ${screen} of page ${active}?`,
             danger: true,
             confirmLabel: 'Remove screen',
-            body: <p>Its content goes, and its archive record if it has one. Screens are numbered by position, so only the last can be removed.</p>,
+            body: (
+              <p>
+                Its content goes, and its archive record if it has one.
+                {screen + 1 === row.screens && ` Screen ${row.screens} moves up one.`}
+                {screen + 1 < row.screens && ` Screens ${screen + 1}–${row.screens} move up one.`}
+              </p>
+            ),
             onConfirm: () => {
-              actions.removeLastSubpage(active);
-              selection.setScreen(Math.max(1, row.screens - 1));
+              actions.removeScreen(active, screen);
+              selection.setScreen(Math.min(screen, row.screens - 1));
             },
           })
         }
@@ -898,6 +939,17 @@ export function PagesTab({
               onClick={() => setFilter({ ...filter, edited: !filter.edited })}
             >
               Edited · {editedCount}
+            </button>
+          )}
+          {extraCopies.length > 0 && (
+            <button
+              type="button"
+              className="mg-btn mg-btn-small mg-btn-ghost"
+              title="Screens whose archive capture is already on air earlier in the list"
+              disabled={actions.structuralBusy}
+              onClick={askRemoveDuplicates}
+            >
+              Remove duplicates · {extraCopies.length}
             </button>
           )}
           {(untitledCount > 0 || filter.untitled) && (
