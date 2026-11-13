@@ -27,6 +27,9 @@
  *   — carry translations along when /manage renumbers, merges, reorders or
  *   deletes screens; `to: null` drops one. Keyed by position, a translation
  *   left behind was claimed by whichever page moved into its number.
+ *   Front-page entries (`showcase_pages`) are keyed the same way and had the
+ *   same fault — the star and the front-page link stayed on the number and
+ *   passed to whatever page took it — so they move in the same transaction.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -198,6 +201,22 @@ async function moveAll(req: VercelRequest, res: VercelResponse): Promise<void> {
       sql`
         insert into page_translations (page_number, subpage, runs, model, updated_at, title_pt, title_en)
         select page_number, subpage, runs, model, updated_at, title_pt, title_en from moving
+      `,
+      sql`
+        create temp table moving_showcase on commit drop as
+        select p.tp as page_number, p.ts as subpage, s.position, s.image, s.image_type, s.title, s.updated_at
+        from unnest(${fromPages}::int[], ${fromSubs}::int[], ${toPages}::int[], ${toSubs}::int[]) as p(fp, fs, tp, ts)
+        join showcase_pages s on s.page_number = p.fp and s.subpage = p.fs
+        where p.tp is not null
+      `,
+      sql`
+        delete from showcase_pages s
+        using unnest(${fromPages}::int[], ${fromSubs}::int[], ${toPages}::int[], ${toSubs}::int[]) as p(fp, fs, tp, ts)
+        where (s.page_number = p.fp and s.subpage = p.fs) or (s.page_number = p.tp and s.subpage = p.ts)
+      `,
+      sql`
+        insert into showcase_pages (page_number, subpage, position, image, image_type, title, updated_at)
+        select page_number, subpage, position, image, image_type, title, updated_at from moving_showcase
       `,
     ]);
     json(res, 200, { moved: fromPages.length });

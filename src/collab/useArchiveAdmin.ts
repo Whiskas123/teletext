@@ -543,10 +543,10 @@ export function useArchiveAdmin({
   );
 
   /**
-   * English is stored by screen number on the server, not in the live
-   * document, so a screen that moves must take it along — or the page that
-   * moves into its number inherits it. Called after the live writes, with the
-   * same moves; `null` drops a screen's English. Returns why it failed, if it did.
+   * English and front-page entries are stored by screen number on the server,
+   * not in the live document, so a screen that moves must take them along — or
+   * the page that moves into its number inherits them. Called after the live
+   * writes, with the same moves; `null` drops them. Returns why it failed, if it did.
    */
   const [translationsVersion, setTranslationsVersion] = useState(0);
   const carryTranslations = useCallback(

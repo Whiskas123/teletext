@@ -105,11 +105,17 @@ describe('translations following their screens', () => {
     expect(res.code).toBe(200);
     expect(res.body).toEqual({ moved: 3 });
     expect(transactions).toHaveLength(1);
-    const [copy, remove, insert] = transactions[0];
+    const [copy, remove, insert, copyShowcase, removeShowcase, insertShowcase] = transactions[0];
     // Every statement sees the same four columns: from page, from screen, to page, to screen.
     expect(copy.values).toEqual([[135, 202, 300], [1, 3, 1], [140, 202, null], [1, 1, null]]);
     expect(remove.values).toEqual(copy.values);
     expect(insert.text).toContain('from moving');
+    // Front-page entries follow their screen the same way, or the star stays on the number.
+    expect(copyShowcase.text).toContain('join showcase_pages');
+    expect(copyShowcase.values).toEqual(copy.values);
+    expect(removeShowcase.text).toContain('delete from showcase_pages');
+    expect(removeShowcase.values).toEqual(copy.values);
+    expect(insertShowcase.text).toContain('from moving_showcase');
   });
 
   it('refuses a move to a screen that cannot exist, and writes nothing', async () => {

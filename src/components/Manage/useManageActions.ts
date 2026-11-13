@@ -116,7 +116,7 @@ export interface Progress {
 
 export interface ManageActionsInput {
   data: ArchiveAdminApi;
-  showcase: Pick<ShowcaseApi, 'add' | 'remove' | 'entries'>;
+  showcase: Pick<ShowcaseApi, 'add' | 'remove' | 'entries' | 'reload'>;
   setKind(pageNumber: number, kind: PageKind): void;
 }
 
@@ -169,6 +169,7 @@ export function useManageActions({
   showcase,
   setKind,
 }: ManageActionsInput): ManageActionsApi {
+  const reloadShowcase = showcase.reload;
   const [notice, setNotice] = useState<Notice | null>(null);
   const [registry, setRegistry] = useState<InFlightRegistry>(EMPTY_REGISTRY);
   const [outcomes, setOutcomes] = useState<ReadonlyMap<number, Notice>>(new Map());
@@ -209,6 +210,9 @@ export function useManageActions({
           error: error instanceof Error ? error.message : 'Something went wrong.',
         };
       }
+      // Moving or dropping screens moves their front-page entries on the
+      // server too (`subs-move`), so the strip is read again after any action.
+      reloadShowcase();
 
       // A late answer to an action that is no longer registered is dropped
       // rather than reported over whatever has happened since.
@@ -223,7 +227,7 @@ export function useManageActions({
       }
       return outcome.ok;
     },
-    [commitRegistry],
+    [commitRegistry, reloadShowcase],
   );
 
   /** The structural lock. `publish` is its historical name in the registry. */
@@ -452,49 +456,23 @@ export function useManageActions({
   );
 
   const moveScreen = useCallback(
-    (pageNumber: number, from: number, to: number) => {
-      // Front-page entries are kept by screen number, so they now open
-      // whichever screen took that place; said, rather than silently wrong.
-      const low = Math.min(from, to);
-      const high = Math.max(from, to);
-      const stale = showcase.entries.some(
-        (entry) => entry.page_number === pageNumber && entry.subpage >= low && entry.subpage <= high,
-      );
-      return runStructural(
+    (pageNumber: number, from: number, to: number) =>
+      runStructural(
         () => data.moveScreen(pageNumber, from, to),
         (outcome) =>
-          outcome.ok
-            ? stale
-              ? alert(
-                  `Screen ${from} of page ${pageNumber} is now screen ${to}. A screen of this page is on the ` +
-                    'front page by its number — check the Front page tab.',
-                )
-              : status(`Screen ${from} of page ${pageNumber} is now screen ${to}.`)
-            : alert(outcome.error),
-      );
-    },
-    [runStructural, data, showcase],
+          outcome.ok ? status(`Screen ${from} of page ${pageNumber} is now screen ${to}.`) : alert(outcome.error),
+      ),
+    [runStructural, data],
   );
 
   const splitScreen = useCallback(
-    (pageNumber: number, screen: number, moves: readonly PageMove[], at: number) => {
-      // Front-page entries are kept by screen number, as on a reorder: the
-      // ones from this screen on now open a different screen.
-      const stale = showcase.entries.some((entry) => entry.page_number === pageNumber && entry.subpage >= screen);
-      return runStructural(
+    (pageNumber: number, screen: number, moves: readonly PageMove[], at: number) =>
+      runStructural(
         () => data.splitScreen(pageNumber, screen, moves, at),
         (outcome) =>
-          outcome.ok
-            ? stale
-              ? alert(
-                  `Screen ${screen} of page ${pageNumber} is now page ${at}. A screen of page ${pageNumber} is ` +
-                    'on the front page by its number — check the Front page tab.',
-                )
-              : status(`Screen ${screen} of page ${pageNumber} is now page ${at}.`)
-            : alert(outcome.error),
-      );
-    },
-    [runStructural, data, showcase],
+          outcome.ok ? status(`Screen ${screen} of page ${pageNumber} is now page ${at}.`) : alert(outcome.error),
+      ),
+    [runStructural, data],
   );
 
   const removeScreens = useCallback(
