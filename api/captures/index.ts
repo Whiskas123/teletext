@@ -142,7 +142,11 @@ export default async function handler(
         where (not ${latest}::boolean or g.rank = 1)
       )
       select
-        s.id, s.source, s.original_page, s.sub, s.sub_index, s.topic, s.topic_group,
+        -- id is a bigserial, which the driver hands back as a string ("523").
+        -- The browser compares it with the numeric captureId of what is on air
+        -- to hide a capture the moment it is published, and "523" !== 523, so
+        -- it is sent as the number CaptureSummary says it is.
+        s.id::int as id, s.source, s.original_page, s.sub, s.sub_index, s.topic, s.topic_group,
         s.topic_source, s.scheme, s.first_seen, s.last_seen, s.capture_count,
         s.tier, s.bucket, s.manifest_title, s.decode_status, s.profile,
         s.width, s.height, s.snapped_pixels, s.unknown_glyphs, s.corpus_file,
@@ -194,7 +198,7 @@ async function storyOf(id: number) {
     with target as (select * from archive_captures where id = ${id})
     select * from (
       select distinct on (c.sub_index)
-        c.id, c.source, c.original_page, c.sub, c.sub_index, c.topic, c.topic_group,
+        c.id::int as id, c.source, c.original_page, c.sub, c.sub_index, c.topic, c.topic_group,
         c.topic_source, c.scheme, c.first_seen, c.last_seen, c.capture_count,
         c.tier, c.bucket, c.manifest_title, c.decode_status, c.profile,
         c.width, c.height, c.snapped_pixels, c.unknown_glyphs, c.corpus_file,
