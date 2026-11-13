@@ -385,9 +385,12 @@ function alternates(path: string): Record<Language, string> {
  * that does not render keeps it. Putting the text somewhere React does not own
  * would leave it on screen underneath the television.
  *
- * Styled black on black-background monospace rather than left unstyled, because
- * that moment is visible: the site is black, and a flash of serif text on white
- * reads as a broken page where a teletext-ish block reads as one still loading.
+ * Styled white on black monospace rather than left unstyled, for the reader who
+ * does see it (no JavaScript, or a bundle that failed to load). Everyone else
+ * never does: {@link HIDE_FALLBACK_IF_JS} hides it as soon as the browser shows
+ * it runs scripts, because even styled it flashed by as a broken-looking page
+ * on every full load — longer on the lazy routes, where it stays up until the
+ * route's chunk arrives too.
  */
 function fallbackBody(target: Target, language: Language): string {
   const meta = target.meta[language];
@@ -400,7 +403,7 @@ function fallbackBody(target: Target, language: Language): string {
     : '';
 
   return (
-    `<div style="min-height:100vh;background:#000;color:#fff;` +
+    `<div class="prerender-fallback" style="min-height:100vh;background:#000;color:#fff;` +
     `font-family:monospace;padding:2rem">` +
     `<h1 style="font-size:1.1rem;font-weight:normal">${escapeText(meta.title)}</h1>` +
     `<p style="color:#c8c8c8">${escapeText(meta.description)}</p>` +
@@ -408,6 +411,17 @@ function fallbackBody(target: Target, language: Language): string {
     `</div>`
   );
 }
+
+/**
+ * Goes in `<head>`, so it runs before `#root` is parsed: a browser that runs it
+ * is about to draw the real page and gets the plain black background meanwhile.
+ * Added here rather than in `index.html` because Vite hashes inline scripts
+ * there, and keeping it beside {@link fallbackBody} keeps the class name in one
+ * file.
+ */
+const HIDE_FALLBACK_IF_JS =
+  `\n    <script>document.documentElement.classList.add('js')</script>` +
+  `\n    <style>.js .prerender-fallback{visibility:hidden}</style>`;
 
 function escapeText(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -476,7 +490,8 @@ async function main(): Promise<void> {
         // and the list to draw them from. See {@link showcaseHead}.
         .replace(
           '</head>',
-          `${target.path === '/' ? showcaseHead(showcase) : ''}` +
+          HIDE_FALLBACK_IF_JS +
+            `${target.path === '/' ? showcaseHead(showcase) : ''}` +
             `${pages.length > 0 && isWatchPath(target.path) ? bootDataHead() : ''}\n  </head>`,
         )
         // The note at the top of `index.html` explains the file to whoever
