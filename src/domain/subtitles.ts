@@ -22,10 +22,11 @@
  * - **The header row is chrome** (page number, channel, clock), not content.
  * - **A run with no letters** — a score, a time, a page number — is left as is.
  *
- * Known ceiling: the budget is the run's own width, even when the blanks to its
- * right could take a longer English phrase. Portuguese is usually the longer of
- * the two, so this rarely bites; widening into trailing blanks of the same
- * background is the upgrade.
+ * The budget is the run's own width plus the blanks to its right on the same
+ * background ({@link SubtitleRun.room}): English that is longer than the
+ * Portuguese runs on into empty cells rather than being cut. It never runs
+ * into the next piece of text — one blank is always left before it — and
+ * never leftwards, so a line still starts where the Portuguese did.
  */
 
 import { COLS, ROWS, type Cell, type TeletextPage } from '../types/teletext';
@@ -35,8 +36,14 @@ export interface SubtitleRun {
   row: number;
   /** First column, inclusive. */
   start: number;
-  /** Last column, exclusive. `end - start` is the most characters it can hold. */
+  /** Last column of the Portuguese, exclusive. */
   end: number;
+  /**
+   * Last column the English may reach, exclusive: `end` widened over the blank
+   * cells after it that share its background. `room - start` is the most
+   * characters a translation can hold.
+   */
+  room: number;
   text: string;
 }
 
@@ -54,6 +61,26 @@ function sameStyle(a: Cell, b: Cell): boolean {
   return a.fg === b.fg && a.bg === b.bg && Boolean(a.doubleHeight) === Boolean(b.doubleHeight);
 }
 
+/**
+ * How far English starting at `start` may run: past `end` over blank cells on
+ * the run's own background, stopping one short of whatever ends them so the
+ * English never touches the next piece of text. Known ceiling: that one blank
+ * is kept even when what ends them is only a change of background, which
+ * already separates the two.
+ */
+function roomAfter(page: TeletextPage, row: number, start: number, end: number): number {
+  const first = page[row * COLS + start];
+  let col = end;
+  while (col < COLS) {
+    const cell = page[row * COLS + col];
+    const covered = row > 1 && page[(row - 1) * COLS + col]?.doubleHeight === true;
+    const blank = !covered && cell.graphics == null && (cell.char === ' ' || cell.char === '');
+    if (!blank || cell.bg !== first.bg || Boolean(cell.doubleHeight) !== Boolean(first.doubleHeight)) break;
+    col += 1;
+  }
+  return col < COLS ? Math.max(end, col - 1) : COLS;
+}
+
 /** Every run on a page worth translating, top to bottom, left to right. */
 export function subtitleRuns(page: TeletextPage): SubtitleRun[] {
   const runs: SubtitleRun[] = [];
@@ -68,7 +95,7 @@ export function subtitleRuns(page: TeletextPage): SubtitleRun[] {
         .slice(row * COLS + start, row * COLS + end)
         .map(charOf)
         .join('');
-      if (LETTER.test(text)) runs.push({ row, start, end, text });
+      if (LETTER.test(text)) runs.push({ row, start, end, room: roomAfter(page, row, start, end), text });
       start = -1;
     };
 
@@ -97,7 +124,7 @@ export function subtitleRuns(page: TeletextPage): SubtitleRun[] {
 /**
  * The page with each run's text replaced, cell for cell.
  *
- * Text shorter than its run is padded with blanks; longer text is cut, and the
+ * Text shorter than its run's room is padded with blanks; longer text is cut, and the
  * runs that were cut are returned so a caller can say so rather than show a
  * clipped word as if it were right.
  *
@@ -115,7 +142,7 @@ export function applySubtitles(
   const clipped: SubtitleRun[] = [];
 
   runs.forEach((run, i) => {
-    const width = run.end - run.start;
+    const width = run.room - run.start;
     const text = (english[i] ?? run.text).trim();
     if (text.length > width) clipped.push(run);
     const fitted = text.slice(0, width).padEnd(width, ' ');

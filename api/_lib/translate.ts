@@ -71,7 +71,7 @@ export async function translateRuns(
     id: `s${i}`,
     row: run.row,
     col: run.start,
-    max: run.end - run.start,
+    max: run.room - run.start,
     text: run.text,
   }));
   // The title rides along in the same request: it names what the runs say, and

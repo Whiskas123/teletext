@@ -82,7 +82,7 @@ export function useEnglishDraft(
   const save = useCallback(async ({ key: target, page: cells, portuguese: source, stored: before }: Pending) => {
     const lines = subtitleRuns(source).flatMap((run) => {
       const en = cells
-        .slice(run.row * COLS + run.start, run.row * COLS + run.end)
+        .slice(run.row * COLS + run.start, run.row * COLS + run.room)
         .map((cell) => cell.char)
         .join('')
         .trim();
@@ -125,7 +125,7 @@ export function useEnglishDraft(
     (index: number, cell: Cell): boolean => {
       const row = Math.floor(index / COLS);
       const col = index % COLS;
-      const inLine = runs.some((run) => run.row === row && col >= run.start && col < run.end);
+      const inLine = runs.some((run) => run.row === row && col >= run.start && col < run.room);
       if (page == null || stored == null || !inLine) return false;
       const next = page.slice();
       next[index] = { ...page[index], char: cell.char };

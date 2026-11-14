@@ -87,7 +87,7 @@ async function main(): Promise<void> {
     }
     for (const run of clipped) {
       const full = result.english[runs.indexOf(run)];
-      console.log(`    row ${run.row} col ${run.start} (max ${run.end - run.start}): "${run.text}" → "${full}"`);
+      console.log(`    row ${run.row} col ${run.start} (max ${run.room - run.start}): "${run.text}" → "${full}"`);
     }
   }
 

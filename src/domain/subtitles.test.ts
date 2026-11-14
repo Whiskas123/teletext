@@ -61,6 +61,28 @@ describe('subtitles', () => {
     expect(page[5 * COLS + 2].char).toBe('T'); // the original is untouched
   });
 
+  it('lets English run on into blanks of the same background, short of the next text', () => {
+    const page = blankPage();
+    write(page, 2, 0, 'Sol', { bg: 'blue' });
+    write(page, 2, 3, '      ', { bg: 'blue' }); // blue blanks to col 9
+    write(page, 3, 0, 'Lua');
+    write(page, 3, 10, 'Mar'); // next text: one blank kept before it
+    write(page, 4, 30, 'Vento'); // nothing after: up to the edge
+    const runs = subtitleRuns(page);
+
+    expect(runs.map((r) => [r.row, r.start, r.end, r.room])).toEqual([
+      [2, 0, 3, 8],
+      [3, 0, 3, 9],
+      [3, 10, 13, 40],
+      [4, 30, 35, 40],
+    ]);
+    const { page: out, clipped } = applySubtitles(page, runs, ['Sunshine', 'Moonlight', 'Sea', 'Wind']);
+    const row = (r: number) => out.slice(r * COLS, (r + 1) * COLS).map((c) => c.char).join('');
+    expect(row(2).slice(0, 9)).toBe('Sunshine ');
+    expect(row(3).slice(0, 13)).toBe('Moonlight Sea');
+    expect(clipped).toEqual([]);
+  });
+
   it("draws a letter that lands on a blank in the run's colour", () => {
     const page = blankPage();
     write(page, 4, 0, 'A Estação', { fg: 'blue', bg: 'white' });
@@ -80,7 +102,7 @@ describe('subtitles', () => {
       { row: 2, col: 0, pt: 'Tempo', en: 'Weather' },
       { row: 3, col: 0, pt: 'Futebol', en: 'Football' }, // made before an edit
     ]);
-    expect(en && [text(en, 2), text(en, 3)]).toEqual(['Weath   ', 'Desporto']);
+    expect(en && [text(en, 2), text(en, 3)]).toEqual(['Weather ', 'Desporto']);
     expect(translatePage(page, [{ row: 9, col: 0, pt: 'Tempo', en: 'Weather' }])).toBeNull();
   });
 

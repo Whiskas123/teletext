@@ -114,8 +114,8 @@ async function saveByHand(req: VercelRequest, res: VercelResponse, key: string):
       const run = runs.find((r) => r.row === row && r.start === col);
       const text = typeof en === 'string' ? en.trim() : '';
       if (run == null || text === '') continue;
-      if (text.length > run.end - run.start) {
-        fail(res, 400, `Row ${run.row + 1}: "${text}" is longer than its ${run.end - run.start} cells.`);
+      if (text.length > run.room - run.start) {
+        fail(res, 400, `Row ${run.row + 1}: "${text}" is longer than its ${run.room - run.start} cells.`);
         return;
       }
       entries.push({ row: run.row, col: run.start, pt: run.text, en: text });

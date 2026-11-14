@@ -76,9 +76,9 @@ describe('English written by hand', () => {
     expect(writes).toHaveLength(1);
   });
 
-  it('refuses a line longer than its cells', async () => {
+  it('refuses a line longer than the row has room for', async () => {
     writes.length = 0;
-    const res = await post([{ row: 3, col: 0, en: 'Goal!!' }]);
+    const res = await post([{ row: 3, col: 0, en: 'Goal! '.repeat(8) }]);
     expect(res.code).toBe(400);
     expect(writes).toHaveLength(0);
   });
