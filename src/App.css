@@ -2202,7 +2202,6 @@ button.frontpage-watch-kind:focus-visible {
   font-size: 2rem;
   line-height: 1;
   letter-spacing: -0.02em;
-  text-transform: uppercase;
 }
 
 /*
@@ -2701,7 +2700,6 @@ button.yellow-pages-number:hover {
 .yp-drawer-knob-label {
   writing-mode: vertical-rl;
   text-orientation: mixed;
-  text-transform: uppercase;
   font-weight: 800;
   font-size: 0.78rem;
   letter-spacing: 0.16em;
@@ -3016,15 +3014,12 @@ button.yellow-pages-number:hover {
  * <ul> would be a single grid item that could not break across them.
  */
 /*
- * Headings shout, listings do not.
- *
- * Everything was set in caps, which flattened the hierarchy the kinds exist to
- * express — a section name and one of its pages looked identical. Caps now mean
- * "this is a heading".
+ * Headings by weight, not capitals: the Yellow Pages set nothing in caps.
+ * Each level down is lighter, and the third smaller and italic, so the
+ * hierarchy holds without re-casing anyone's titles.
  */
 .yellow-pages-entry-category .yellow-pages-name {
   font-weight: 800;
-  text-transform: uppercase;
   letter-spacing: 0.02em;
 }
 
@@ -3034,20 +3029,17 @@ button.yellow-pages-number:hover {
 
 .yellow-pages-entry-subcategory .yellow-pages-name {
   font-weight: 700;
-  text-transform: uppercase;
 }
 
 /*
- * The third level. Still a heading, so still capitals — but lighter and smaller
- * than the subcategory above it, since the indentation alone stops carrying the
- * hierarchy once there are three levels of it.
+ * The third level: lighter and smaller than the subcategory above it, since the
+ * indentation alone stops carrying the hierarchy once there are three levels.
  */
 .yellow-pages-entry-subsubcategory .yellow-pages-name {
   font-weight: 600;
   font-size: 0.95rem;
   font-style: italic;
   letter-spacing: 0.03em;
-  text-transform: uppercase;
 }
 
 /*
