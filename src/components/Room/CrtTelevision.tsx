@@ -1053,7 +1053,7 @@ function RemoteHandset({
                   className="lg"
                   fill="#dcdcda"
                   x={REMOTE_MIX.x + REMOTE_MIX.width / 2}
-                  y={REMOTE_MIX.y + 30}
+                  y={REMOTE_MIX.y + 31}
                 >
                   MIX
                 </text>
@@ -1075,7 +1075,7 @@ function RemoteHandset({
                   className="lg"
                   fill="#dcdcda"
                   x={REMOTE_EN.x + REMOTE_EN.width / 2}
-                  y={REMOTE_EN.y + 30}
+                  y={REMOTE_EN.y + 31}
                 >
                   EN
                 </text>

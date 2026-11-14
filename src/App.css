@@ -1811,6 +1811,13 @@ button.frontpage-watch-kind:focus-visible {
   font-size: 34px;
 }
 
+/* MIX and EN sit on caps 44 tall, not the digits' 62: at 34px their capitals
+   reached the top highlight. 24px keeps the digits' proportion (cap height
+   about two fifths of the key), centred by the `y + 31` baseline. */
+.crt-remote #remote-mix .lg {
+  font-size: 24px;
+}
+
 .crt-remote .cap {
   font-size: 13px;
   letter-spacing: 1.6px;
