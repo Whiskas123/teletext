@@ -147,7 +147,18 @@ describe('the front page', () => {
     expect(navigateMock).toHaveBeenCalledWith('/edit');
   });
 
-  it('ver reveals watching alone and the six rooms', async () => {
+  it('ver goes straight to watching alone, for now', async () => {
+    const user = userEvent.setup();
+    renderLanding();
+
+    await openWatch(user);
+    expect(navigateMock).toHaveBeenCalledWith('/watch');
+    expect(screen.queryByText('Living Room')).not.toBeInTheDocument();
+  });
+
+  // Skipped while "ver" goes straight to /watch; the choice is kept, commented
+  // out in `Landing.tsx`, and these come back with it.
+  it.skip('ver reveals watching alone and the six rooms', async () => {
     const user = userEvent.setup();
     renderLanding();
 
@@ -171,7 +182,7 @@ describe('the front page', () => {
     ).toHaveLength(6);
   });
 
-  it('sets the two kinds of watching apart, and puts the rooms under theirs', async () => {
+  it.skip('sets the two kinds of watching apart, and puts the rooms under theirs', async () => {
     const user = userEvent.setup();
     renderLanding();
 
@@ -195,7 +206,7 @@ describe('the front page', () => {
     expect(rooms).not.toContainElement(screen.getByRole('button', { name: 'sozinho' }));
   });
 
-  it('ver leads to watching alone, and to a room', async () => {
+  it.skip('ver leads to watching alone, and to a room', async () => {
     const user = userEvent.setup();
     renderLanding();
 

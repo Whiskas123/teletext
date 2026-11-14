@@ -91,9 +91,12 @@ export const MENU: readonly MenuEntry[] = [
     action: 'watch',
     color: 'red',
     label: { pt: 'ver', en: 'watch' },
+    // While "ver" goes straight to watching alone (see `Landing.tsx`). With
+    // the choice back: 'Ver teletexto, sozinho ou numa sala' /
+    // 'Watch teletext, alone or in a room'.
     hint: {
-      pt: 'Ver teletexto, sozinho ou numa sala',
-      en: 'Watch teletext, alone or in a room',
+      pt: 'Ver teletexto',
+      en: 'Watch teletext',
     },
   },
   {

@@ -25,7 +25,9 @@ import { useLanguage } from './useLanguage';
  * coloured words on black is the thing itself.
  *
  * The ways in:
- *  - **ver** — reveals the choice of watching alone (`/watch`) or in one of the
+ *  - **ver** — for now goes straight to watching alone (`/watch`). The choice
+ *    below is kept, commented out in `handleChoose`, to bring back later:
+ *    reveals the choice of watching alone (`/watch`) or in one of the
  *    six fixed rooms (`/room/:roomId`). Both are watching, so both live under
  *    one word rather than competing for the front page — but they are two kinds
  *    of watching, so each kind is named and the rooms hang off their name. Laid
@@ -50,7 +52,8 @@ export function Landing() {
   const copy = LANDING_COPY[language];
 
   // Which entry has its detail open. Only "ver" has one — the watch choices.
-  const [openEntry, setOpenEntry] = useState<MenuEntry['id'] | null>(null);
+  // Nothing opens it while "ver" goes straight to /watch (see `handleChoose`).
+  const [openEntry /* , setOpenEntry */] = useState<MenuEntry['id'] | null>(null);
 
   const occupancy = useRoomOccupancy(ROOMS.map((r) => r.id));
   const occupiedPages = useOccupiedPages();
@@ -75,7 +78,11 @@ export function Landing() {
   function handleChoose(entry: MenuEntry) {
     switch (entry.action) {
       case 'watch':
-        setOpenEntry((open) => (open === entry.id ? null : entry.id));
+        // For now "ver" is watching alone, as if "sozinho" had been chosen. To
+        // bring back the choice of alone or a room, restore this line and the
+        // two `aria-*` lines on the button below, and the `setOpenEntry` above:
+        // setOpenEntry((open) => (open === entry.id ? null : entry.id));
+        navigate('/watch');
         return;
       case 'create':
         handleCreatePage();
@@ -178,8 +185,9 @@ export function Landing() {
                       : entry.hint[language]
                   }
                   aria-disabled={pending || undefined}
-                  aria-expanded={entry.action === 'watch' ? open : undefined}
-                  aria-controls={entry.action === 'watch' ? 'frontpage-watch' : undefined}
+                  // Off while "ver" opens nothing (see `handleChoose`):
+                  // aria-expanded={entry.action === 'watch' ? open : undefined}
+                  // aria-controls={entry.action === 'watch' ? 'frontpage-watch' : undefined}
                 >
                   {entry.label[language]}
                   {/* A pending entry keeps its full colour, so the index reads
