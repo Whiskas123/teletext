@@ -11,7 +11,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 
 import { ManageWorkspace, type ManageDeps } from './ManageWorkspace';
-import { fakeCapture, useFakeManageDeps, type FakeSeed } from './testing/useFakeManageDeps';
+import { drawnPictures, fakeCapture, useFakeManageDeps, type FakeSeed } from './testing/useFakeManageDeps';
 import { useArchiveQuery } from './useArchiveQuery';
 import { useManageTab } from './useManageTab';
 
@@ -219,6 +219,23 @@ describe('the details pane', () => {
     await waitFor(() => expect(within(pane).getByText('All 2 archive screens are shifted.')).toBeInTheDocument());
     await user.click(within(pane).getByRole('option', { name: /^1/ }));
     expect(within(pane).getByRole('checkbox', { name: /Shift screen 1 down one row/ })).toBeChecked();
+  });
+
+  it('redraws a front-page picture when its screen is re-published shifted', async () => {
+    const { user } = renderWorkspace();
+    await user.click(row(202));
+    const pane = screen.getByRole('complementary', { name: 'Page 202' });
+    await user.click(within(pane).getByRole('button', { name: /Add to front page/ }));
+    await waitFor(() => expect(within(pane).getByRole('button', { name: /On the front page/ })).toBeInTheDocument());
+    const before = drawnPictures.get('202');
+
+    await user.click(within(pane).getByRole('checkbox', { name: /Shift screen 1 down one row/ }));
+    await waitFor(() => expect(drawnPictures.get('202')).not.toBe(before));
+    // Drawn from the shifted cells, not the ones the action started from: the
+    // first row is now the blank one the shift adds.
+    const drawn = drawnPictures.get('202')!;
+    expect(drawn.slice(0, 40).every((cell) => cell.char === ' ' && cell.graphics == null)).toBe(true);
+    expect(drawn.slice(40, 80)).toEqual(before!.slice(0, 40));
   });
 
   it('has no bar to choose on a hand-made page', async () => {

@@ -186,8 +186,9 @@ export function useShowcase({ fresh = false }: ShowcaseOptions = {}): ShowcaseAp
     // A parameter the endpoint ignores, which is enough to read past the edge:
     // it is a different cache key, so the edge fetches rather than answering
     // from what it has. Used for `fresh` callers, and for every `reload()` —
-    // which is only ever called after this browser added or removed a page, and
-    // has to see its own change.
+    // which /manage calls after it adds or removes a page, and after every
+    // action that moves screens (their entries move with them), and has to see
+    // its own change.
     const url =
       fresh || attempt > 0 ? `/api/showcase?fresh=${Date.now()}` : '/api/showcase';
 

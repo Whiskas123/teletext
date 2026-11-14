@@ -108,6 +108,9 @@ interface State {
   showcase: ShowcaseEntry[];
 }
 
+/** What each front-page picture was last drawn from, by `page` / `page.screen` key. */
+export const drawnPictures = new Map<string, TeletextPage | null>();
+
 const key = (page: number, screen = 1) => (screen === 1 ? String(page) : `${page}.${screen}`);
 
 function initialState(seed: FakeSeed): State {
@@ -590,6 +593,9 @@ export function useFakeManageDeps(
     reload: () => undefined,
     has: (page, screen) => state.showcase.some((e) => e.page_number === page && e.subpage === screen),
     add: async (page, screen = 1, position = state.showcase.length) => {
+      // Drawn from the cells this render has, as the real hook draws from its
+      // own render's: an add made from a stale closure draws stale cells.
+      drawnPictures.set(key(page, screen), state.cells.get(key(page, screen)) ?? null);
       await wait();
       setState((current) => {
         const draft = clone(current);

@@ -18,7 +18,7 @@
  * show it after the notice has moved on.
  */
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type {
   ArchiveAdminApi,
@@ -187,6 +187,38 @@ export function useManageActions({
 
   const inFlight = useMemo(() => inFlightView(registry), [registry]);
 
+  /**
+   * Front-page pictures to redraw: screens an action rewrote (`subpage` null
+   * means every screen of the page).
+   *
+   * A front-page entry is a picture drawn once, so a screen re-published with
+   * a shift or a new bar went on showing its old drawing on the front page
+   * until someone pressed Redraw. They are redrawn on the render *after* the
+   * action rather than at its end: `showcase.add` draws from the cells it was
+   * rendered with, and the action's closure holds the ones from before it ran.
+   */
+  const redrawQueue = useRef<{ pageNumber: number; subpage: number | null }[]>([]);
+  const [redrawTick, setRedrawTick] = useState(0);
+  const redrawLater = useCallback((screens: readonly { pageNumber: number; subpage: number | null }[]) => {
+    redrawQueue.current.push(...screens);
+    setRedrawTick((n) => n + 1);
+  }, []);
+  useEffect(() => {
+    const touched = redrawQueue.current.splice(0);
+    const due = showcase.entries.filter((entry) =>
+      touched.some((t) => t.pageNumber === entry.page_number && (t.subpage == null || t.subpage === entry.subpage)),
+    );
+    if (due.length === 0) return;
+    void Promise.all(due.map((e) => showcase.add(e.page_number, e.subpage, e.position))).then((results) => {
+      const failed = results.filter((r) => !r.ok).length;
+      if (failed > 0) {
+        setNotice(alert(`${plural(failed, 'front-page picture')} could not be redrawn — use Redraw on the Front page tab.`));
+      }
+    });
+    // Only a new tick redraws; `showcase` changing on its own must not.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [redrawTick]);
+
   const runAction = useCallback(
     async (
       scope: ActionScope,
@@ -313,7 +345,7 @@ export function useManageActions({
         async () => {
           if (request.mode === 'replace') {
             setProgress({ label: 'Publishing', done: 0, total: 1 });
-            return data.publish({
+            const outcome = await data.publish({
               pageNumber: request.pageNumber,
               subpage: request.subpage,
               captureId: request.capture.id,
@@ -322,6 +354,8 @@ export function useManageActions({
               description: data.descriptionOf(request.pageNumber),
               transforms: request.transforms,
             });
+            redrawLater([{ pageNumber: request.pageNumber, subpage: request.subpage }]);
+            return outcome;
           }
 
           if (request.mode === 'screens') {
@@ -422,7 +456,7 @@ export function useManageActions({
           );
         },
       ),
-    [runStructural, data, sequence, setKind, titleFor],
+    [runStructural, data, sequence, setKind, titleFor, redrawLater],
   );
 
   /**
@@ -491,7 +525,10 @@ export function useManageActions({
     (pageNumbers: readonly number[]) => {
       const { removed, screens } = data.countPageNumbers(pageNumbers);
       return runStructural(
-        () => data.stripPageNumbers(pageNumbers),
+        () =>
+          data
+            .stripPageNumbers(pageNumbers)
+            .finally(() => redrawLater(pageNumbers.map((pageNumber) => ({ pageNumber, subpage: null })))),
         (outcome) =>
           outcome.ok
             ? status(
@@ -502,7 +539,7 @@ export function useManageActions({
             : alert(outcome.error),
       );
     },
-    [runStructural, data],
+    [runStructural, data, redrawLater],
   );
 
   const mergePages = useCallback(
@@ -556,6 +593,8 @@ export function useManageActions({
                 },
               }),
             (entry) => `${entry.page_number}/${entry.subpage ?? 1}`,
+          ).finally(() =>
+            redrawLater(records.map((entry) => ({ pageNumber: entry.page_number, subpage: entry.subpage ?? 1 }))),
           ),
         (outcome) =>
           outcome.ok
@@ -567,7 +606,7 @@ export function useManageActions({
             : alert(outcome.error),
       );
     },
-    [runStructural, sequence, data],
+    [runStructural, sequence, data, redrawLater],
   );
 
   const setRole = useCallback(
