@@ -12,6 +12,7 @@ import { useState, type RefObject } from 'react';
 import { Link } from 'react-router-dom';
 
 import type { PublishedEntry } from '../../collab/useArchiveAdmin';
+import { isArchivePage } from '../../domain/access';
 import { PAGE_KINDS, type PageKind } from '../../domain/directory';
 import type { PageActionName } from '../../domain/inFlight';
 import type { CustomMenu } from '../../domain/menu';
@@ -53,6 +54,10 @@ export interface InspectorProps {
   checkFold(source: number): DropVerdict;
   onFold(source: number): void;
   onSaveText(title: string, description: string): void;
+  /** The page's English title while it matches the Portuguese, else `''`. */
+  englishTitle: string;
+  /** Resolves to an error to show, or `null` once saved. */
+  onSaveEnglishTitle(en: string): Promise<string | null>;
   onSetRole(kind: PageKind): void;
   onSetBar(menuId: number | null): void;
   /** Shift the screen shown, or with `everyScreen` all the page's archive screens. */
@@ -90,6 +95,8 @@ export function Inspector({
   checkFold,
   onFold,
   onSaveText,
+  englishTitle,
+  onSaveEnglishTitle,
   onSetRole,
   onSetBar,
   onSetShift,
@@ -114,6 +121,9 @@ export function Inspector({
   // someone else shows up in a field nobody is typing in.
   const [title, setTitle] = useState<string | null>(null);
   const [description, setDescription] = useState<string | null>(null);
+  const [titleEn, setTitleEn] = useState<string | null>(null);
+  // Kept with the page it was for, so opening another page drops it.
+  const [titleEnError, setTitleEnError] = useState<{ pageNumber: number; text: string } | null>(null);
   const [number, setNumber] = useState('');
   const [fold, setFold] = useState('');
   // Which side of which screen a dragged screen would land on.
@@ -201,6 +211,48 @@ export function Inspector({
             }}
           />
         </div>
+
+        {isArchivePage(pageNumber) && (
+          <label className="mg-field">
+            <span className="mg-label">
+              English title{' '}
+              <span className="mg-count">
+                {(titleEn ?? englishTitle).length}/{MAX_TITLE_LENGTH}
+              </span>
+            </span>
+            <input
+              className="mg-input"
+              maxLength={MAX_TITLE_LENGTH}
+              value={titleEn ?? englishTitle}
+              placeholder={row.title.trim() === '' ? 'Give the page a title first' : 'The Yellow Pages in English'}
+              disabled={locked || row.title.trim() === ''}
+              onFocus={() => setTitleEn(englishTitle)}
+              onChange={(event) => setTitleEn(event.target.value)}
+              onBlur={() => {
+                const next = (titleEn ?? englishTitle).trim();
+                setTitleEn(null);
+                if (next === englishTitle.trim()) return;
+                setTitleEnError(null);
+                void onSaveEnglishTitle(next).then(
+                  (error) => error != null && setTitleEnError({ pageNumber, text: error }),
+                );
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') event.currentTarget.blur();
+                if (event.key === 'Escape') {
+                  setTitleEn(englishTitle);
+                  const input = event.currentTarget;
+                  requestAnimationFrame(() => input.blur());
+                }
+              }}
+            />
+            {titleEnError?.pageNumber === pageNumber && (
+              <span className="mg-note mg-note-bad" role="status">
+                {titleEnError.text}
+              </span>
+            )}
+          </label>
+        )}
 
         <label className="mg-field">
           <span className="mg-label">

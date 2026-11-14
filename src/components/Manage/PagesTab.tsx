@@ -839,6 +839,8 @@ export function PagesTab({
           void actions.mergePages(active, [source]);
         }}
         onSaveText={(title, description) => void actions.saveText(active, title, description)}
+        englishTitle={translations.englishTitle(active, row.title)}
+        onSaveEnglishTitle={(en) => translations.saveEnglishTitle(active, en)}
         onSetRole={(kind) => actions.setRole([active], kind)}
         onSetBar={(menuId) => changeTransforms([active], { shiftDown: null, menuId })}
         onSetShift={(shiftDown, everyScreen) =>

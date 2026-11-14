@@ -44,6 +44,10 @@ export interface Translations {
   /** Screens among these pages that have text and no translation yet. */
   missing(pages: readonly { pageNumber: number; screens: number }[]): { pageNumber: number; subpage: number }[];
   translate(targets: readonly { pageNumber: number; subpage: number }[]): Promise<TranslateOutcome>;
+  /** The page's English title while it still matches `title`, else `''`. */
+  englishTitle(pageNumber: number, title: string): string;
+  /** Store it (empty clears it); resolves to an error to show, or `null`. */
+  saveEnglishTitle(pageNumber: number, en: string): Promise<string | null>;
   /** The screen being translated right now, as `"220.2"`, if any. */
   working: string | null;
   /** How far a batch has got: done of total, while one is running. */
@@ -56,6 +60,10 @@ export function useTranslations(
   version = 0,
 ): Translations {
   const [entries, setEntries] = useState<Record<string, SubtitleEntry[]>>({});
+  const [titles, setTitles] = useState<Record<string, { pt: string; en: string }>>({});
+  // Bumped after translating: Claude may have titled the page, and which
+  // screen's title wins is the server's to say, so read them all again.
+  const [reread, setReread] = useState(0);
   const [working, setWorking] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
@@ -63,14 +71,50 @@ export function useTranslations(
     let current = true;
     void fetch('/api/snapshot?subs', { credentials: 'same-origin' })
       .then((response) => (response.ok ? response.json() : null))
-      .then((data: { translations?: Record<string, SubtitleEntry[]> } | null) => {
-        if (current && data?.translations != null) setEntries(data.translations);
-      })
+      .then(
+        (data: {
+          translations?: Record<string, SubtitleEntry[]>;
+          titles?: Record<string, { pt: string; en: string }>;
+        } | null) => {
+          if (!current || data?.translations == null) return;
+          setEntries(data.translations);
+          setTitles(data.titles ?? {});
+        },
+      )
       .catch(() => undefined);
     return () => {
       current = false;
     };
-  }, [version]);
+  }, [version, reread]);
+
+  const englishTitle = useCallback(
+    (pageNumber: number, title: string) => {
+      const stored = titles[pageNumber];
+      return stored != null && stored.pt === title.trim() ? stored.en : '';
+    },
+    [titles],
+  );
+
+  const saveEnglishTitle = useCallback(async (pageNumber: number, en: string): Promise<string | null> => {
+    const response = await fetch(`/api/snapshot?sub-title=${pageNumber}`, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ en }),
+    }).catch(() => null);
+    const body = (await response?.json().catch(() => ({}))) as {
+      title?: { pt: string; en: string } | null;
+      error?: string;
+    };
+    if (response == null || !response.ok) return body?.error ?? 'The English title was not saved.';
+    setTitles((previous) => {
+      const next = { ...previous };
+      if (body.title == null) delete next[pageNumber];
+      else next[pageNumber] = body.title;
+      return next;
+    });
+    return null;
+  }, []);
 
   const screen = useCallback(
     (pageNumber: number, subpage: number): ScreenTranslation | null => {
@@ -161,10 +205,11 @@ export function useTranslations(
       } finally {
         setWorking(null);
         setProgress(null);
+        setReread((n) => n + 1);
       }
     },
     [],
   );
 
-  return { screen, page, english, missing, translate, working, progress };
+  return { screen, page, english, missing, translate, englishTitle, saveEnglishTitle, working, progress };
 }

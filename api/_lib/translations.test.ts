@@ -16,6 +16,10 @@ const cells: Cell[] = Array.from({ length: COLS * ROWS }, () => ({ char: ' ', fg
 [...'Golo'].forEach((char, i) => (cells[3 * COLS + i].char = char));
 
 const writes: unknown[][] = [];
+/** What `live_pages` says page 220 is called, and what `page_translations` holds. */
+let ptTitle = 'Futebol';
+let stored: { page_number: number; subpage: number; runs: unknown[]; title_pt: string | null; title_en: string | null }[] =
+  [];
 /** Each statement of a transaction: its SQL and the values bound to it. */
 const transactions: { text: string; values: unknown[] }[][] = [];
 vi.mock('./db', () => ({
@@ -29,7 +33,10 @@ vi.mock('./db', () => ({
     return [];
   },
   db: () => (strings: TemplateStringsArray, ...values: unknown[]) => {
-    if (strings.join('').includes('select cells')) return Promise.resolve([{ cells }]);
+    const text = strings.join('');
+    if (text.includes('select cells')) return Promise.resolve([{ cells }]);
+    if (text.includes('select title')) return Promise.resolve([{ title: ptTitle }]);
+    if (text.includes('from page_translations')) return Promise.resolve(stored);
     writes.push(values);
     return Promise.resolve([]);
   },
@@ -123,5 +130,48 @@ describe('translations following their screens', () => {
     const res = await move([{ from: '135', to: `135.${MAX_SUBPAGE + 1}` }]);
     expect(res.code).toBe(400);
     expect(transactions).toHaveLength(0);
+  });
+});
+
+describe('a page\'s English title typed in /manage', () => {
+  const save = (en: unknown, page = '220') => send({ method: 'POST', query: { 'sub-title': page }, body: { en } });
+
+  it('goes on screen 1 against the Portuguese saved now, and clears the other screens\' titles', async () => {
+    ptTitle = 'Futebol';
+    transactions.length = 0;
+    const res = await save('  Football ');
+    expect(res.code).toBe(200);
+    expect(res.body).toEqual({ pageNumber: 220, title: { pt: 'Futebol', en: 'Football' } });
+    const [clearOthers, upsert] = transactions[0];
+    expect(clearOthers.text).toContain('subpage <> 1');
+    expect(upsert.values).toEqual([220, 'Futebol', 'Football']);
+    // Only the title: a screen's translated lines are not touched.
+    expect(upsert.text).not.toMatch(/do update set[^$]*runs/);
+  });
+
+  it('empty clears it everywhere, and drops rows that held only the title', async () => {
+    transactions.length = 0;
+    const res = await save('');
+    expect(res.code).toBe(200);
+    expect(res.body).toEqual({ pageNumber: 220, title: null });
+    const [clear, drop] = transactions[0];
+    expect(clear.text).not.toContain('subpage');
+    expect(drop.text).toContain("runs = '[]'::jsonb");
+  });
+
+  it('refuses one for a page with no Portuguese title, or outside the archive', async () => {
+    transactions.length = 0;
+    ptTitle = '';
+    expect((await save('Football')).code).toBe(400);
+    ptTitle = 'Futebol';
+    expect((await save('Football', '700')).code).toBe(400);
+    expect(transactions).toHaveLength(0);
+  });
+
+  it('a row holding only a title is not listed as a translated screen', async () => {
+    stored = [{ page_number: 220, subpage: 1, runs: [], title_pt: 'Futebol', title_en: 'Football' }];
+    const res = await send({ method: 'GET', query: { sub: 'all' }, headers: {} });
+    expect(res.body).toEqual({ translations: {}, titles: { 220: { pt: 'Futebol', en: 'Football' } } });
+    stored = [];
   });
 });

@@ -20,6 +20,8 @@
  *   one screen of a curated page as it is in `live_pages` now, and the page's
  *   title with it, store them, and return them. Only 100–699: the playground changes too often to translate
  *   ahead of time, and its copy here is a backup that may lag.
+ * - `POST ?sub-title=220` (moderator, body `{ en }`) — the page's English title,
+ *   typed in /manage; empty clears it. See `saveTitle`.
  * - `POST ?sub=220.2` (moderator, body `{ runs: [{ row, col, en }] }`) — store
  *   English written or corrected by hand in /manage, replacing what the screen
  *   had. A run left out or left empty stays Portuguese.
@@ -37,6 +39,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { isArchivePage } from '../../src/domain/access';
 import { toInteger } from '../../src/domain/coerce';
 import { pageToArray } from '../../src/domain/pageEncoding';
+import { MAX_TITLE_LENGTH } from '../../src/domain/publication';
 import { MAX_SUBPAGE, MIN_SUBPAGE, pageKey, parsePageKey } from '../../src/domain/subpages';
 import {
   applySubtitles,
@@ -73,6 +76,11 @@ export async function handleTranslations(req: VercelRequest, res: VercelResponse
   if (req.method === 'POST' && queryValue(req, 'subs-move') != null) {
     if (!isAdmin(req)) fail(res, 401, 'Sign in to move translations.');
     else await moveAll(req, res);
+    return true;
+  }
+  if (req.method === 'POST' && queryValue(req, 'sub-title') != null) {
+    if (!isAdmin(req)) fail(res, 401, 'Sign in to edit translations.');
+    else await saveTitle(req, res, queryValue(req, 'sub-title') ?? '');
     return true;
   }
   if (req.method === 'POST' && queryValue(req, 'sub') != null) {
@@ -122,7 +130,14 @@ async function saveByHand(req: VercelRequest, res: VercelResponse, key: string):
     }
 
     if (entries.length === 0) {
-      await db()`delete from page_translations where page_number = ${parsed.pageNumber} and subpage = ${parsed.subpage}`;
+      // No lines left, but a row that carries the page's English title keeps it.
+      const { pageNumber, subpage } = parsed;
+      await transaction((sql) => [
+        sql`update page_translations set runs = '[]'::jsonb, model = 'hand', updated_at = now()
+            where page_number = ${pageNumber} and subpage = ${subpage}`,
+        sql`delete from page_translations
+            where page_number = ${pageNumber} and subpage = ${subpage} and title_en is null`,
+      ]);
     } else {
       await db()`
         insert into page_translations (page_number, subpage, runs, model, updated_at)
@@ -135,6 +150,56 @@ async function saveByHand(req: VercelRequest, res: VercelResponse, key: string):
     json(res, 200, { key: String(pageKey(parsed.pageNumber, parsed.subpage)), runs: entries, lost });
   } catch (error) {
     serverError(res, 'snapshot/sub', error);
+  }
+}
+
+/**
+ * Store a page's English title typed in /manage, or clear it with an empty one.
+ *
+ * It goes on screen 1's row, which `readAll` reads last and so believes, and
+ * the other screens' titles are cleared, so an older one cannot show through
+ * once this one is removed. Screen 1 may have no translated lines: the row is
+ * then made with none, which `readAll` does not count as a translation. Like
+ * Claude's, the title applies only while the Portuguese is what it was saved
+ * against, which is read here from the page as saved now.
+ */
+async function saveTitle(req: VercelRequest, res: VercelResponse, raw: string): Promise<void> {
+  const pageNumber = toInteger(raw);
+  if (pageNumber == null || !isArchivePage(pageNumber)) {
+    fail(res, 400, 'Only curated pages (100–699) are translated.');
+    return;
+  }
+  const { en: rawEn } = bodyObject(req);
+  const en = typeof rawEn === 'string' ? rawEn.trim() : '';
+  if (en.length > MAX_TITLE_LENGTH) {
+    fail(res, 400, `An English title holds at most ${MAX_TITLE_LENGTH} characters.`);
+    return;
+  }
+  try {
+    const rows = await db()`select title from live_pages where page_number = ${pageNumber} and subpage = 1`;
+    const pt: string = typeof rows[0]?.title === 'string' ? rows[0].title.trim() : '';
+    if (en !== '' && pt === '') {
+      fail(res, 400, 'Give the page a title first: the English is a translation of it.');
+      return;
+    }
+    await transaction((sql) =>
+      en === ''
+        ? [
+            sql`update page_translations set title_pt = null, title_en = null where page_number = ${pageNumber}`,
+            sql`delete from page_translations where page_number = ${pageNumber} and runs = '[]'::jsonb`,
+          ]
+        : [
+            sql`update page_translations set title_pt = null, title_en = null
+                where page_number = ${pageNumber} and subpage <> 1`,
+            sql`insert into page_translations (page_number, subpage, runs, model, updated_at, title_pt, title_en)
+                values (${pageNumber}, 1, '[]'::jsonb, 'hand', now(), ${pt}, ${en})
+                on conflict (page_number, subpage)
+                do update set title_pt = excluded.title_pt, title_en = excluded.title_en`,
+          ],
+    );
+    json(res, 200, { pageNumber, title: en === '' ? null : { pt, en } });
+  } catch (error) {
+    serverError(res, 'snapshot/sub-title', error);
   }
 }
 
@@ -235,7 +300,8 @@ async function readAll(res: VercelResponse, cacheControl: string): Promise<void>
     const translations: Record<string, SubtitleEntry[]> = {};
     const titles: Record<string, { pt: string; en: string }> = {};
     for (const row of rows) {
-      translations[String(pageKey(row.page_number, row.subpage))] = row.runs;
+      // A row with no lines only holds the page's English title (`saveTitle`).
+      if (row.runs.length > 0) translations[String(pageKey(row.page_number, row.subpage))] = row.runs;
       if (row.title_pt != null && row.title_en != null) {
         titles[row.page_number] = { pt: row.title_pt, en: row.title_en };
       }
@@ -299,7 +365,12 @@ async function translate(req: VercelRequest, res: VercelResponse): Promise<void>
       )
       on conflict (page_number, subpage)
       do update set runs = excluded.runs, model = excluded.model, updated_at = now(),
-        title_pt = excluded.title_pt, title_en = excluded.title_en
+        -- An English title that still matches the Portuguese stays: it may have
+        -- been typed in /manage, and only that field should replace it.
+        title_pt = case when page_translations.title_en is not null and page_translations.title_pt = ${title}
+          then page_translations.title_pt else excluded.title_pt end,
+        title_en = case when page_translations.title_en is not null and page_translations.title_pt = ${title}
+          then page_translations.title_en else excluded.title_en end
     `;
     const clipped = applySubtitles(page, runs, english).clipped.length;
     const lost = runs.filter((run, i) => !keepsNumbers(run.text, english[i])).length;
