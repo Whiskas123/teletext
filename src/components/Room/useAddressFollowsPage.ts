@@ -23,7 +23,6 @@
 import { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { usePageTitles } from '../../collab/useGuide';
 import { localizePath, readLanguagePath } from '../../domain/routes';
 import { pageMeta, pagePath, routeMeta } from '../../domain/seo';
 import { useCurrentLanguage } from './languageContext';
@@ -32,8 +31,6 @@ export function useAddressFollowsPage(pageNumber: number, subpage: number, kiosk
   const navigate = useNavigate();
   const { pathname, search } = useLocation();
   const language = useCurrentLanguage();
-  const { title } = usePageTitles();
-  const pageTitle = title(pageNumber);
 
   // By the time this cleanup runs the router has moved, so the address is the
   // screen being opened.
@@ -52,6 +49,6 @@ export function useAddressFollowsPage(pageNumber: number, subpage: number, kiosk
   }, [pageNumber, subpage, kiosk, language, pathname, search, navigate]);
 
   useEffect(() => {
-    document.title = pageMeta({ pageNumber, subpage, title: pageTitle }, language).title;
-  }, [pageNumber, subpage, pageTitle, language]);
+    document.title = pageMeta({ pageNumber, subpage }, language).title;
+  }, [pageNumber, subpage, language]);
 }

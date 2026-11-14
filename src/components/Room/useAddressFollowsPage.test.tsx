@@ -7,14 +7,10 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
 import { MemoryRouter, Route, Routes, useLocation, useParams } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { LanguageContext } from './languageContext';
 import { useAddressFollowsPage } from './useAddressFollowsPage';
-
-vi.mock('../../collab/useGuide', () => ({
-  usePageTitles: () => ({ title: (n: number) => (n === 105 ? 'Dias nacionais' : '') }),
-}));
 
 let mounts = 0;
 
@@ -65,7 +61,7 @@ describe('the address follows the page', () => {
     renderAt('/watch/104?exhibit=1');
     fireEvent.click(screen.getByText('next page'));
     expect(where()).toBe('/watch/105?exhibit=1');
-    expect(document.title).toBe('Dias nacionais — página 105 — Tele-textual');
+    expect(document.title).toBe('Tele-textual · 105');
 
     fireEvent.click(screen.getByText('next screen'));
     expect(where()).toBe('/watch/105/2?exhibit=1');
@@ -79,7 +75,7 @@ describe('the address follows the page', () => {
     renderAt('/en/watch/104', 'en');
     fireEvent.click(screen.getAllByText('next page').at(-1)!);
     expect(screen.getAllByLabelText('where').at(-1)!.textContent).toBe('/en/watch/105');
-    expect(document.title).toBe('Dias nacionais — page 105 — Tele-textual');
+    expect(document.title).toBe('Tele-textual · 105');
 
     renderAt('/kiosk/104');
     fireEvent.click(screen.getAllByText('next page').at(-1)!);
@@ -88,10 +84,10 @@ describe('the address follows the page', () => {
 
   it("gives the tab the next screen's title when the viewer closes", () => {
     // As if the visit started at /watch/104: the static HTML named that page.
-    document.title = 'Estação do Oriente — página 104 — Tele-textual';
+    document.title = 'Tele-textual · 104';
     window.history.replaceState(null, '', '/guestbook');
     const { unmount } = renderAt('/watch/104');
     act(() => unmount());
-    expect(document.title).toBe('Guestbook — Tele-textual');
+    expect(document.title).toBe('Guestbook · Tele-textual');
   });
 });

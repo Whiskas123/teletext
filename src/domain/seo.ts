@@ -70,12 +70,6 @@ export const SITE_META: Record<Language, { title: string; description: string }>
   },
 };
 
-/** The words each language uses for the things the titles are made of. */
-const WORDS: Record<Language, { page: string; screen: string; untitled: string }> = {
-  pt: { page: 'página', screen: 'ecrã', untitled: 'Página sem título' },
-  en: { page: 'page', screen: 'screen', untitled: 'Untitled page' },
-};
-
 /**
  * The static routes, and what each one is called.
  *
@@ -106,20 +100,20 @@ export const ROUTE_META: Record<
   Record<Language, { title: string; description?: string }>
 > = {
   '/about': {
-    pt: { title: `Sobre — ${SITE_NAME}` },
-    en: { title: `About — ${SITE_NAME}` },
+    pt: { title: `Sobre · ${SITE_NAME}` },
+    en: { title: `About · ${SITE_NAME}` },
   },
   '/watch': {
-    pt: { title: `Ver teletexto — ${SITE_NAME}` },
-    en: { title: `Watch teletext — ${SITE_NAME}` },
+    pt: { title: `Ver teletexto · ${SITE_NAME}` },
+    en: { title: `Watch teletext · ${SITE_NAME}` },
   },
   '/edit': {
-    pt: { title: `Criar uma página — ${SITE_NAME}` },
-    en: { title: `Make a page — ${SITE_NAME}` },
+    pt: { title: `Criar uma página · ${SITE_NAME}` },
+    en: { title: `Make a page · ${SITE_NAME}` },
   },
   '/guestbook': {
-    pt: { title: `Guestbook — ${SITE_NAME}` },
-    en: { title: `Guestbook — ${SITE_NAME}` },
+    pt: { title: `Guestbook · ${SITE_NAME}` },
+    en: { title: `Guestbook · ${SITE_NAME}` },
   },
 };
 
@@ -170,8 +164,6 @@ export interface PageMetaInput {
   pageNumber: number;
   /** Screen of the carousel; 1, or absent, is the page itself. */
   subpage?: number;
-  /** The page's own title, as set in `/manage`. May be empty. */
-  title?: string;
   /** The page's own description, if it has been given one. */
   description?: string;
   /** Every row of the page as text — {@link pageRows}. */
@@ -188,20 +180,12 @@ export function pagePath(pageNumber: number, subpage = 1): string {
 /**
  * The tags for one archive page.
  *
- * The page's own title leads, because that is the part anyone is searching for
- * — the number is an address, not a name, and a results page of "Página 220",
- * "Página 221" tells a reader nothing. The number still appears, because it is
- * how this archive is navigated and someone may well be looking for it.
+ * The title is just the site and the page number, the way a set showed it: the
+ * same in both languages, and the same on every screen of a carousel. The
+ * page's own name is left to the description and the page itself.
  */
 export function pageMeta(page: PageMetaInput, language: Language): Meta {
-  const words = WORDS[language];
   const subpage = page.subpage ?? 1;
-
-  const name = page.title?.trim() || words.untitled;
-  const address =
-    subpage > 1
-      ? `${words.page} ${page.pageNumber}, ${words.screen} ${subpage}`
-      : `${words.page} ${page.pageNumber}`;
 
   const description =
     page.description?.trim() ||
@@ -209,7 +193,7 @@ export function pageMeta(page: PageMetaInput, language: Language): Meta {
     SITE_META[language].description;
 
   return {
-    title: `${name} — ${address} — ${SITE_NAME}`,
+    title: `${SITE_NAME} · ${page.pageNumber}`,
     description,
     canonical: canonicalUrl(pagePath(page.pageNumber, subpage), language),
   };

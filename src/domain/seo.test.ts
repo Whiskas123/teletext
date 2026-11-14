@@ -73,28 +73,20 @@ describe('describePage', () => {
 describe('pageMeta', () => {
   const rows = ['220 RTP TEXTO', 'METEOROLOGIA', 'Lisboa 18 graus'];
 
-  it('leads with the page title, because that is what is searched for', () => {
-    const meta = pageMeta({ pageNumber: 220, title: 'Meteorologia', rows }, 'pt');
-    expect(meta.title).toBe('Meteorologia — página 220 — Tele-textual');
+  it('is just the site and the page number, in either language', () => {
+    expect(pageMeta({ pageNumber: 220, rows }, 'pt').title).toBe('Tele-textual · 220');
+    expect(pageMeta({ pageNumber: 220, rows }, 'en').title).toBe('Tele-textual · 220');
   });
 
-  it('still names an untitled page rather than showing a bare number', () => {
-    const meta = pageMeta({ pageNumber: 220, rows }, 'pt');
-    expect(meta.title).toBe('Página sem título — página 220 — Tele-textual');
-    expect(pageMeta({ pageNumber: 220, rows }, 'en').title).toBe(
-      'Untitled page — page 220 — Tele-textual',
-    );
-  });
-
-  it('names the screen when the hit is on a later one of a carousel', () => {
-    const meta = pageMeta({ pageNumber: 220, subpage: 3, title: 'Desporto' }, 'pt');
-    expect(meta.title).toBe('Desporto — página 220, ecrã 3 — Tele-textual');
+  it('keeps the screen in the address, not the title', () => {
+    const meta = pageMeta({ pageNumber: 220, subpage: 3 }, 'pt');
+    expect(meta.title).toBe('Tele-textual · 220');
     expect(meta.canonical).toBe('https://teletext.joaobernardo.me/watch/220/3');
   });
 
   it('prefers the page’s own description over the text scraped off it', () => {
     const meta = pageMeta(
-      { pageNumber: 220, title: 'Meteorologia', description: 'O tempo.', rows },
+      { pageNumber: 220, description: 'O tempo.', rows },
       'pt',
     );
     expect(meta.description).toBe('O tempo.');
@@ -163,7 +155,7 @@ describe('headTags', () => {
   // Titles are typed by hand in /manage and descriptions are scraped off
   // archived cells. Both land inside content="…" in a file served to everyone.
   it('escapes a quote in a title instead of ending the attribute', () => {
-    const meta = pageMeta({ pageNumber: 220, title: 'A "grande" noite' }, 'pt');
+    const meta = { ...pageMeta({ pageNumber: 220 }, 'pt'), title: 'A "grande" noite' };
     const html = headTags(meta, 'pt', alternates);
 
     // Every attribute carrying the title has the quote neutralised...
@@ -172,11 +164,11 @@ describe('headTags', () => {
     }
     // ...while `<title>` is text content, where a bare quote is harmless and
     // escaping it would show `&quot;` to the reader.
-    expect(html).toContain('<title>A "grande" noite —');
+    expect(html).toContain('<title>A "grande" noite</title>');
   });
 
   it('escapes angle brackets, so a title cannot open a tag', () => {
-    const meta = pageMeta({ pageNumber: 220, title: '<script>x</script>' }, 'pt');
+    const meta = { ...pageMeta({ pageNumber: 220 }, 'pt'), title: '<script>x</script>' };
     const html = headTags(meta, 'pt', alternates);
 
     expect(html).not.toContain('<script>');
