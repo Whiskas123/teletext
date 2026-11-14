@@ -3,9 +3,10 @@
  * (the Translate button in /manage) and `scripts/translatePage.ts`.
  *
  * One request per page, not per run: sentences wrap across rows, so the model
- * needs the whole page to translate any line of it. The structured-output
- * schema has one required property per run, so a reply that skips one is
- * refused by the API rather than discovered here.
+ * needs the whole page to translate any line of it. The reply is a list of
+ * `{ id, text }`, the same small schema for every page: one required property
+ * per run made the API refuse page 187 (72 runs) as "compiled grammar is too
+ * large". So a reply that skips a run is caught here, by `byId`, not by the API.
  *
  * Needs `ANTHROPIC_API_KEY`. On Vercel that means setting it in the project's
  * environment; it is read here, server side, and never reaches a browser.
@@ -39,6 +40,14 @@ most characters it may hold. Return one English translation per segment id.
 - A segment that is already English, or only a name, comes back unchanged.
 - The segment with id "title" is not on the grid: it is the page's name as the
   directory lists it. Translate it as a short listing name, same case.`;
+
+/** The reply's translations keyed by segment id; throws if any id is missing. */
+export function byId(reply: { translations: { id: string; text: string }[] }, ids: readonly string[]): Record<string, string> {
+  const found = Object.fromEntries(reply.translations.map((t) => [t.id, t.text]));
+  const missing = ids.filter((id) => typeof found[id] !== 'string');
+  if (missing.length > 0) throw new Error(`Reply skipped ${missing.length} segment(s): ${missing.join(', ')}`);
+  return found;
+}
 
 export function isTranslationConfigured(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY);
@@ -82,8 +91,18 @@ export async function translateRuns(
     : segments;
   const schema = {
     type: 'object',
-    properties: Object.fromEntries(titled.map((s) => [s.id, { type: 'string' }])),
-    required: titled.map((s) => s.id),
+    properties: {
+      translations: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: { id: { type: 'string' }, text: { type: 'string' } },
+          required: ['id', 'text'],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ['translations'],
     additionalProperties: false,
   };
 
@@ -104,7 +123,7 @@ export async function translateRuns(
   const text = response.content.find((block) => block.type === 'text');
   if (text?.type !== 'text') throw new Error('No text in the reply');
 
-  const parsed = JSON.parse(text.text) as Record<string, string>;
+  const parsed = byId(JSON.parse(text.text), titled.map((s) => s.id));
   return {
     english: segments.map((s) => parsed[s.id]),
     ...(named ? { title: parsed.title.trim() } : {}),
