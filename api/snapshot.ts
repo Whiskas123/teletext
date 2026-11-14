@@ -38,6 +38,11 @@
  * may send either, and the mirror holds back any batch of deletions that looks
  * like a broken document rather than an edit.
  *
+ * A save of the curated archive also sends `expect`: the fingerprint it
+ * believes each screen it writes or deletes holds now. If one has changed
+ * since — another tab, another moderator — the whole post is refused with 409
+ * and the screens named (`_lib/staleWrites.ts`).
+ *
  * ## Three reads
  *
  * - `GET` — how many pages the backup holds and when it last changed (the
@@ -77,6 +82,7 @@ import { LiveDocumentError, readLiveDocument, type LiveDocumentRead } from './_l
 import { bodyObject, fail, json, methodIs, queryValue, serverError } from './_lib/http';
 import { isAdmin, isVercelCron } from './_lib/auth';
 import { handleTranslations } from './_lib/translations';
+import { staleScreens } from './_lib/staleWrites';
 
 /** Page numbers the playground occupies, below `MIN_PAGE`, are still backed up. */
 const MIN_SNAPSHOT_PAGE = 1;
@@ -346,6 +352,18 @@ async function writeRows(
   });
 }
 
+/** A save's `expect`: "page.screen" to the fingerprint it believes is stored, or null for none. */
+function expectOf(body: Record<string, unknown>): Map<string, string | null> {
+  const raw = body.expect;
+  const out = new Map<string, string | null>();
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!/^\d{3}\.\d{1,2}$/.test(key)) continue;
+    if (value === null || (typeof value === 'string' && value.length <= 64)) out.set(key, value);
+  }
+  return out;
+}
+
 /** Pages per statement in the daily job: a page's cells are ~60 KB of JSON. */
 const DAILY_CHUNK = 25;
 
@@ -541,6 +559,38 @@ export default async function handler(
         note: 'Nothing to store; existing snapshot left untouched.',
       });
       return;
+    }
+
+    // A /manage tab's save names what it believes each screen holds; refuse it
+    // whole if another tab or moderator changed one since (see staleWrites.ts).
+    // Checked, then written, as two steps: two saves landing within the same
+    // few milliseconds could still cross. Known ceiling; a row version checked
+    // inside the write would close it.
+    const expected = expectOf(body);
+    if (expected.size > 0) {
+      const writing = new Map(accepted.map((page) => [`${page.pageNumber}.${page.subpage}`, page.digest]));
+      const deleting = (pageNumber: number, subpage: number) =>
+        removed.includes(pageNumber) || truncate.some((t) => t.pageNumber === pageNumber && subpage > t.count);
+      const pages = [
+        ...new Set([
+          ...[...expected.keys()].map((key) => Number(key.split('.')[0])),
+          ...removed,
+          ...truncate.map((t) => t.pageNumber),
+        ]),
+      ];
+      const stored = await db()`
+        select page_number, subpage, digest from live_pages where page_number = any(${pages}::int[])
+      `;
+      const stale = staleScreens(
+        expected,
+        writing,
+        deleting,
+        stored.map((row) => ({ pageNumber: row.page_number, subpage: row.subpage, digest: row.digest ?? null })),
+      );
+      if (stale.length > 0) {
+        json(res, 409, { error: 'Changed since this copy was read.', stale });
+        return;
+      }
     }
 
     await writeRows(accepted, removed, truncate);

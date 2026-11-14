@@ -23,6 +23,10 @@
  *
  * Only after a *fresh* read (`loadArchiveFresh`), never from the edge's copy,
  * so a moderator cannot save over their own last save with a minute-old page.
+ * And only over what that read saw: a tab keeps the fingerprints it read with
+ * the pages, and the database refuses a save over a screen that has changed
+ * since — another tab, another moderator — rather than let the older copy win
+ * (`guarded` in `createMirror`, `api/_lib/staleWrites.ts`).
  * Writes change the copy here at once and are sent by the same engine that
  * mirrors playhtml to the database (`createMirror`), scoped to archive pages:
  * it waits for edits to settle, sends only the screens whose fingerprint
@@ -38,7 +42,7 @@ import { BOOT_LIVE_PATH, parseBootData, type BootData } from '../domain/bootData
 import { isArchiveKey, pickStore, splitChanges } from '../domain/contentStores';
 import { claimedPages, type LiveChannels } from '../domain/liveMirror';
 import { getBoot, loadBootData, subscribeBoot, usePageDataWithBoot } from './bootData';
-import { QUIET_MS, createMirror, type MirrorStatus } from './liveMirror';
+import { QUIET_MS, createMirror, fetchIndex, type CopyIndex, type MirrorStatus } from './liveMirror';
 
 /** The channels that hold page content, by their playhtml ids. */
 export type ContentChannel =
@@ -132,6 +136,7 @@ function engine(): ReturnType<typeof createMirror> {
   if (mirror != null) return mirror;
   mirror = createMirror({
     scope: isArchivePage,
+    guarded: true,
     report: (patch: Partial<MirrorStatus>) => {
       if (patch.phase === 'saving') report({ phase: 'saving', error: null });
       else if (patch.phase === 'synced') report({ phase: 'ready', error: null });
@@ -157,16 +162,25 @@ export function loadArchiveFresh(): Promise<boolean> {
   if (own != null) return Promise.resolve(true);
   if (freshRequest != null) return freshRequest;
   report({ phase: 'loading', error: null });
-  freshRequest = fetch(`${BOOT_LIVE_PATH}&fresh=1`, { credentials: 'same-origin', cache: 'no-store' })
+  // The fingerprints first, then the pages: a screen saved in between then has
+  // a newer page than fingerprint, and a save over it is refused (reload and
+  // redo) instead of the other way round, an old page passing as current.
+  let baseline: CopyIndex | null = null;
+  freshRequest = fetchIndex()
+    .then((index) => {
+      baseline = index;
+      return fetch(`${BOOT_LIVE_PATH}&fresh=1`, { credentials: 'same-origin', cache: 'no-store' });
+    })
     .then((response) => (response.ok ? response.json() : null))
     .then((json: unknown) => parseBootData(json))
     .catch(() => null)
     .then((data) => {
-      if (data == null) {
+      if (data == null || baseline == null) {
         freshRequest = null;
         report({ phase: 'error', error: 'Could not read the curated pages from the database.' });
         return false;
       }
+      engine().setBaseline(baseline);
       own = archiveOf(data);
       report({ ready: true, phase: 'ready', error: null });
       return true;

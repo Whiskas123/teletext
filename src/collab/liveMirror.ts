@@ -165,9 +165,9 @@ export const LIVE_HOST = new URL(SITE_URL).hostname;
 
 /* --- the mirror ----------------------------------------------------------- */
 
-type CopyIndex = Map<string, string | null>;
+export type CopyIndex = Map<string, string | null>;
 
-async function fetchIndex(): Promise<CopyIndex> {
+export async function fetchIndex(): Promise<CopyIndex> {
   const response = await fetch('/api/snapshot?index=1', {
     credentials: 'same-origin',
     headers: { accept: 'application/json' },
@@ -177,11 +177,23 @@ async function fetchIndex(): Promise<CopyIndex> {
   return new Map(body.rows.map(([page, screen, digest]) => [`${page}.${screen}`, digest]));
 }
 
+/** The database refused a save because screens changed since this copy was read. */
+class StaleCopyError extends Error {}
+
 /**
  * Send a plan: the changed screens in batches that fit a request, then the
  * deletions last, once every write they might race has landed.
+ *
+ * With `baseline` (the archive's), each post also says what it believes the
+ * screens it writes or deletes hold now, so the database can refuse a save
+ * made from a copy that is out of date (`api/_lib/staleWrites.ts`).
  */
-async function sendPlan(plan: MirrorPlan, live: LiveChannels, digests: Map<string, string>) {
+async function sendPlan(
+  plan: MirrorPlan,
+  live: LiveChannels,
+  digests: Map<string, string>,
+  baseline: CopyIndex | null = null,
+) {
   const pages: Record<string, unknown> = {};
   for (const key of plan.upserts) {
     const [page, screen] = key.split('.').map(Number);
@@ -196,9 +208,26 @@ async function sendPlan(plan: MirrorPlan, live: LiveChannels, digests: Map<strin
   };
   const batches = plan.upserts.length > 0 ? batchPages(pages) : [];
   const deletions = { removed: plan.removed, truncate: plan.truncate };
+  // Per post, not for the whole plan: a later post must not vouch for screens
+  // an earlier one has already changed.
+  const deletedKeys =
+    baseline == null
+      ? []
+      : [...baseline.keys()].filter((key) => {
+          const [page, screen] = key.split('.').map(Number);
+          return (
+            plan.removed.includes(page) || plan.truncate.some((t) => t.pageNumber === page && screen > t.count)
+          );
+        });
+  const expectFor = (keys: readonly string[]) =>
+    baseline == null ? {} : { expect: Object.fromEntries(keys.map((key) => [key, baseline.get(key) ?? null])) };
+  const screenKey = (stored: string) => {
+    const [page, screen = '1'] = stored.split('.');
+    return `${page}.${screen}`;
+  };
   const posts =
     batches.length === 0
-      ? [{ ...deletions }]
+      ? [{ ...deletions, ...expectFor(deletedKeys) }]
       : batches.map((batch, index) => ({
           pages: batch,
           ...meta,
@@ -216,6 +245,10 @@ async function sendPlan(plan: MirrorPlan, live: LiveChannels, digests: Map<strin
             }),
           ),
           ...(index === batches.length - 1 ? deletions : {}),
+          ...expectFor([
+            ...Object.keys(batch).map(screenKey),
+            ...(index === batches.length - 1 ? deletedKeys : []),
+          ]),
         }));
 
   for (const body of posts) {
@@ -226,6 +259,14 @@ async function sendPlan(plan: MirrorPlan, live: LiveChannels, digests: Map<strin
       body: JSON.stringify(body),
     });
     if (response.status === 401) throw new Error('Signed out — sign in again to keep the backup current.');
+    if (response.status === 409) {
+      const { stale = [] } = (await response.json().catch(() => ({}))) as { stale?: string[] };
+      const pages = [...new Set(stale.map((key) => key.split('.')[0]))];
+      throw new StaleCopyError(
+        `Not saved: ${pages.length === 1 ? `page ${pages[0]} was` : `pages ${pages.join(', ')} were`} changed ` +
+          'in another tab or by another moderator after this one loaded. Reload, then make the change again.',
+      );
+    }
     if (!response.ok) throw new Error(`The backup refused a save (${response.status}).`);
   }
 }
@@ -240,9 +281,16 @@ export interface MirrorEngineOptions {
   scope: (pageNumber: number) => boolean;
   /** Where its progress goes. The playground mirror's is the shared status. */
   report?: (patch: Partial<MirrorStatus>) => void;
+  /**
+   * The archive's saving: the copy's list is the one read with the pages
+   * (`setBaseline`) and is never read again, and every save says what it
+   * expects to be overwriting. The playground mirror is not guarded: playhtml
+   * is its truth, and every moderator's mirror copies the same document.
+   */
+  guarded?: boolean;
 }
 
-export function createMirror({ scope, report = setStatus }: MirrorEngineOptions) {
+export function createMirror({ scope, report = setStatus, guarded = false }: MirrorEngineOptions) {
   const m = {
     live: { pages: {}, titles: {}, kinds: {}, descriptions: {}, counts: {}, sources: {} } as LiveChannels,
     copy: null as CopyIndex | null,
@@ -251,6 +299,8 @@ export function createMirror({ scope, report = setStatus }: MirrorEngineOptions)
     pendingSince: null as number | null,
     running: false,
     again: false,
+    /** Guarded only: why saving stopped for good, until the page is reloaded. */
+    blocked: null as string | null,
 
     schedule(delay: number) {
       const now = Date.now();
@@ -279,8 +329,19 @@ export function createMirror({ scope, report = setStatus }: MirrorEngineOptions)
       m.live = live;
     },
 
+    /**
+     * The database's list as it was when the pages being edited were read.
+     * Guarded only. Read before the pages, never after, so it is never newer
+     * than them: a screen changed in between is then refused (reload and redo)
+     * rather than overwritten with the older copy.
+     */
+    setBaseline(index: CopyIndex) {
+      m.copy = index;
+    },
+
     /** Stop trusting the copy's list: it is read again before the next send. */
     forget() {
+      if (guarded) return;
       m.copy = null;
       m.pendingSince = null;
     },
@@ -297,6 +358,12 @@ export function createMirror({ scope, report = setStatus }: MirrorEngineOptions)
       m.running = true;
       m.pendingSince = null;
       try {
+        if (guarded) {
+          // Re-reading the list would make every stale screen look like an
+          // edit to send; the only list a guarded save may trust is its own.
+          if (m.blocked != null) throw new StaleCopyError(m.blocked);
+          if (m.copy == null) throw new Error('The curated pages were not read fresh; reload to edit them.');
+        }
         m.copy ??= await fetchIndex();
         const snapshot = m.live;
         const screens = liveScreens(snapshot);
@@ -309,18 +376,24 @@ export function createMirror({ scope, report = setStatus }: MirrorEngineOptions)
 
         report({ phase: 'saving', pending: plan.upserts.length, held: plan.held, error: null });
         const digests = new Map([...screens].map(([key, screen]) => [key, screen.digest]));
-        await sendPlan(plan, snapshot, digests);
+        await sendPlan(plan, snapshot, digests, guarded ? m.copy : null);
         m.copy = applyMirrorPlan(m.copy, plan, screens);
         for (const page of plan.removed) m.confirmed.delete(page);
         report({ phase: 'synced', pending: 0, held: plan.held, lastSynced: Date.now(), error: null });
       } catch (error) {
-        // What landed is unknown, so the copy's list is read again next time
-        // rather than trusted.
-        m.copy = null;
         report({
           phase: 'error',
           error: error instanceof Error ? error.message : 'The backup could not be reached.',
         });
+        if (error instanceof StaleCopyError) {
+          // Retrying would refuse again, and must not succeed: stop until reload.
+          m.blocked = error.message;
+          return;
+        }
+        // What landed is unknown, so the copy's list is read again next time
+        // rather than trusted — except a guarded save's, which keeps the list
+        // it was read with. A retry of screens that did land is accepted.
+        if (!guarded) m.copy = null;
         m.schedule(RETRY_MS);
       } finally {
         m.running = false;

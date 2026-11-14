@@ -1,7 +1,8 @@
 // Feature: the curated archive, edited in the browser and saved to the
 // database. Verifies: nothing is written before a fresh read of the database
 // lands (so a cached copy is never saved over the real one), and a write is
-// sent to the store each page belongs to.
+// sent to the store each page belongs to. And a save made from a copy another
+// tab has since changed is refused and not retried (2026-11-14).
 
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -23,7 +24,11 @@ describe('the archive store', () => {
     vi.resetModules();
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => new Response(JSON.stringify(BOOT), { status: 200 })),
+      vi.fn(async (url: string) =>
+        url.includes('index=1')
+          ? new Response(JSON.stringify({ rows: [] }), { status: 200 })
+          : new Response(JSON.stringify(BOOT), { status: 200 }),
+      ),
     );
   });
 
@@ -52,5 +57,45 @@ describe('the archive store', () => {
     // to playhtml; playground keys from the boot file are not kept in it.
     const { result } = renderHook(() => store.useArchiveChannel('titles'));
     expect(result.current).toEqual({ 100: 'Front' });
+  });
+
+  it('a tab whose copy is out of date is refused, says which page, and stops saving', async () => {
+    vi.useFakeTimers();
+    const posts: Record<string, unknown>[] = [];
+    let indexReads = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url.includes('index=1')) {
+          indexReads += 1;
+          // What this tab saw when it loaded: page 100 as fingerprint "seen".
+          return new Response(JSON.stringify({ rows: [[100, 1, 'seen']] }), { status: 200 });
+        }
+        if (init?.method === 'POST') {
+          posts.push(JSON.parse(String(init.body)));
+          // Another tab has saved page 100 since.
+          return new Response(JSON.stringify({ stale: ['100.1'] }), { status: 409 });
+        }
+        return new Response(JSON.stringify(BOOT), { status: 200 });
+      }),
+    );
+    const store = await import('./archiveStore');
+    await store.loadArchiveFresh();
+    const { result } = renderHook(() => store.useArchiveStatus());
+
+    store.writeEntries('titles', { 100: 'From the old tab' }, vi.fn());
+    await vi.advanceTimersByTimeAsync(4_000);
+
+    expect(posts).toHaveLength(1);
+    expect(posts[0].expect).toEqual({ '100.1': 'seen' });
+    expect(result.current.phase).toBe('error');
+    expect(result.current.error).toMatch(/page 100 was changed in another tab.*Reload/);
+
+    // Nothing is retried or re-read: a fresh list would make the old copy look current.
+    store.writeEntries('titles', { 100: 'Again' }, vi.fn());
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(posts).toHaveLength(1);
+    expect(indexReads).toBe(1);
+    vi.useRealTimers();
   });
 });
