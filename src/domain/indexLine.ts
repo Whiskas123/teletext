@@ -13,8 +13,7 @@
  * tree into places that only wanted four page numbers.
  */
 
-/** A teletext row is 40 columns, split into four equal zones. */
-export const COLS_PER_INDEX = 10;
+import { COLS } from '../types/teletext';
 
 export interface IndexLineItem {
   /** The word as it appears on the picture, and on the key's label. */
@@ -29,7 +28,8 @@ export interface IndexLineItem {
  * Pages that exist here, not the broadcast's sections: the archive was
  * renumbered on import, so a classic TV GUIDE on 200 lands on whatever the dial
  * carries on to. Expo 98 is the archive's most complete self-contained service,
- * with its own index. Each label must fit its ten-column zone.
+ * with its own index. The labels together must leave a gap between each pair
+ * in a 40-column row.
  */
 export const INDEX_LINE: IndexLineItem[] = [
   { label: 'TUTORIAL', fg: 'red', page: 100 },
@@ -46,9 +46,17 @@ export interface IndexLineRange {
   item: IndexLineItem;
 }
 
-/** Each word centred in its own ten-column zone, so the four are evenly spread. */
+/**
+ * Laid out like flexbox's `justify-content: space-between`: the first word
+ * starts at column 0 and the last ends at column 39, flush with the header row
+ * above, and the free columns are shared between the gaps. Gaps can't be
+ * fractional, so each gap is rounded and some come out a column wider than
+ * others.
+ */
+const FREE_COLS = COLS - INDEX_LINE.reduce((sum, item) => sum + item.label.length, 0);
+
 export const INDEX_LINE_RANGES: IndexLineRange[] = INDEX_LINE.map((item, i) => {
-  const zoneStart = i * COLS_PER_INDEX;
-  const start = zoneStart + Math.floor((COLS_PER_INDEX - item.label.length) / 2);
+  const before = INDEX_LINE.slice(0, i).reduce((sum, prev) => sum + prev.label.length, 0);
+  const start = before + Math.round((i * FREE_COLS) / (INDEX_LINE.length - 1));
   return { start, end: start + item.label.length, item };
 });
