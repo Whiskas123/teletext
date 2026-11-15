@@ -130,7 +130,7 @@ export const ABOUT: Record<Language, AboutDoc> = {
         ' que permite navegar por um arquivo de antigas páginas de teletexto da televisão portuguesa. Para além do arquivo, qualquer pessoa pode criar novas páginas, que ficam acessíveis a todos. Assim, o Tele-textual é uma janela para espreitar um pouco do nosso passado coletivo ao mesmo tempo que permite a criação de coisas novas a partir de um conjunto de restrições impostas por uma tecnologia (aparentemente) obsoleta.',
       ],
       [
-        'A experiência coletiva é central a este projeto. A navegação pelas páginas pode ser feita de forma isolada, ou em salas com outras pessoas, em que o grupo decide de forma coletiva que página ver a seguir. Várias pessoas também podem criar e editar páginas ao mesmo tempo, numa tela partilhada.',
+        'A experiência coletiva é central a este projeto. A navegação pelas páginas pode ser feita de forma isolada, ou em salas com outras pessoas, em que o grupo decide de forma coletiva que página ver a seguir. Várias pessoas também podem criar e editar páginas ao mesmo tempo, num ecrã partilhado.',
       ],
     ],
     sections: {
@@ -179,7 +179,7 @@ export const ABOUT: Record<Language, AboutDoc> = {
             'A experiência coletiva é central no Tele-textual. Num mundo em que os ecrãs proliferam e em que o streaming é a principal forma de consumir conteúdos televisivos, reunir várias pessoas em torno de um mesmo ecrã, seja para ver ou para criar novas páginas, é um ato disruptivo.',
           ],
           [
-            'Finalmente, o Tele-textual é uma ferramenta que estimula a criação de forma inovadora. Muitos artistas e pensadores fazem historicamente referência à ideia de restrição como motor criativo. Numa época em que a passagem da ideia à obra acabada é tecnicamente cada vez mais simples e acessível, é fascinante a experiência de tentar criar algo dentro das limitações que uma tecnologia supostamente arcaica impõe.',
+            'Finalmente, o Tele-textual é uma ferramenta que estimula a criação. Numa época em que a passagem da ideia à obra acabada é tecnicamente cada vez mais simples e acessível, é fascinante a experiência de tentar criar algo dentro das limitações que uma tecnologia supostamente arcaica impõe.',
           ],
         ],
       },
@@ -234,10 +234,10 @@ export const ABOUT: Record<Language, AboutDoc> = {
           [
             'Tele-textual is an effort to archive and celebrate a communication technology that was so present in so many people’s lives, yet gradually faded from our habits and memories. The technology itself matters, and so do the ways it was used and what people chose to communicate through it. The archived pages capture the ',
             { text: 'zeitgeist', emphasis: 'em' },
-            ' of the periods in which they were published and are enormously varied. Examples include pages about major events such as Expo 98 and Porto 2001 (European Culture Capital), the Police’s advice for its Safe School programme, which urged children not to show off their CD players, and the ads for SMS services promising polyphonic ringtones or love compatibility tests (the “TV Amor” service) in exchange for a hidden monthly fee.',
+            ' of the periods in which they were published and are enormously varied. Examples include pages about major events such as the Expo 98 Lisbon World Fair and Porto 2001 European Culture Capital, the Police’s advice for its Safe School programme (which urged children not to show off their CD players), and ads for SMS services promising polyphonic ringtones or love compatibility tests in exchange for a hidden monthly fee.',
           ],
           [
-            'Tele-textual is a tribute to the ingenuity of those who, under such severe technological limitations, designed true works of art, which can now be rediscovered at a time when ',
+            'Tele-textual is a tribute to the ingenuity of those who, under such severe technological limitations, designed works of art, which can now be rediscovered at a time when ',
             { text: 'pixel art', emphasis: 'em' },
             ' is enjoying renewed interest.',
           ],
@@ -245,7 +245,7 @@ export const ABOUT: Record<Language, AboutDoc> = {
             'Collective experience is central to Tele-textual. In a world where screens proliferate and streaming is the main way of watching television content, gathering several people around a single screen, whether to watch or to create new pages, is a disruptive act.',
           ],
           [
-            'Finally, Tele-textual is a tool that encourages creativity in an innovative way. Many artists and thinkers have historically pointed to constraint as a creative engine. At a time when getting from an idea to a finished work is technically ever simpler and more accessible, it is fascinating to try to create something within the limitations imposed by a supposedly archaic technology.',
+            'Finally, Tele-textual is a tool that encourages creativity in an innovative way. At a time when getting from an idea to a finished work is technically ever simpler and more accessible, it is fascinating to try to create something within the limitations imposed by a supposedly archaic technology.',
           ],
         ],
       },
