@@ -2704,6 +2704,7 @@ button.yellow-pages-number:hover {
   font-size: 0.78rem;
   letter-spacing: 0.16em;
   line-height: 1;
+  text-transform: uppercase;
   /*
    * One line of lettering, however long the word is.
    *
@@ -3014,7 +3015,8 @@ button.yellow-pages-number:hover {
  * <ul> would be a single grid item that could not break across them.
  */
 /*
- * Headings by weight, not capitals: the Yellow Pages set nothing in caps.
+ * Headings by weight, not capitals: inside the book nothing is set in caps
+ * (only the drawer's side tab is, as a wordmark).
  * Each level down is lighter, and the third smaller and italic, so the
  * hierarchy holds without re-casing anyone's titles.
  */
