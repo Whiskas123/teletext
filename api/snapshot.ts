@@ -50,9 +50,8 @@
  * - `GET ?index` — every row's fingerprint, so the mirror can send only what
  *   changed. Moderator only.
  * - `GET ?boot` — the pages as visitors see them while playhtml is still
- *   loading. Public, compressed, and cached at the edge for a minute, so the
- *   fallback is at most about a minute behind rather than as old as the last
- *   deploy. See `src/domain/bootData.ts`, and `_lib/bootCache.ts` for why it is
+ *   loading. Public, compressed, and cached at the edge for a day (or until
+ *   the next deploy), to spare Neon's transfer allowance. See `src/domain/bootData.ts`, and `_lib/bootCache.ts` for why it is
  *   read from a stored copy rather than from `live_pages`.
  *
  * And the English for curated pages — `GET ?sub`, `GET ?subs`, `POST
@@ -455,15 +454,20 @@ export default async function handler(
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
       res.setHeader('Content-Encoding', 'gzip');
       res.setHeader('Vary', 'Accept-Encoding');
-      // At most a minute old at the edge; a stale copy is served while it
-      // refreshes, since any fallback beats a blank screen. `fresh` skips the
-      // cache: /manage edits the curated pages from this, and must not start
-      // from a copy that predates its own last save.
+      // Held at the edge for a day, because every miss is a 1.4 MB read out of
+      // Neon (5 GB a month on the free plan): at a minute, the half-hourly
+      // uptime check alone missed every time, ~2 GB a month. The curated
+      // pages stopped being edited in November 2026; a save from /manage now
+      // reaches visitors within a day, or at once on the next deploy, which
+      // empties the edge cache. A stale copy is served while it refreshes,
+      // since any fallback beats a blank screen. `fresh` skips the cache:
+      // /manage edits the curated pages from this, and must not start from a
+      // copy that predates its own last save.
       res.setHeader(
         'Cache-Control',
         queryValue(req, 'fresh') != null
           ? 'no-store'
-          : 'public, max-age=0, s-maxage=60, stale-while-revalidate=600',
+          : 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800',
       );
       res.status(200).send(body);
     } catch (error) {

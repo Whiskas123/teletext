@@ -41,3 +41,27 @@ the compute is suspended until the next billing period.
 - **Deploy order matters:** the read query names `boot_cache`, so
   `bun run db:migrate` must land before the code, or `?boot` answers 500 and
   viewers fall back to the build's `/boot/pages.json`.
+
+## 2026-11-15 — 80% again, two weeks into November
+
+- **The curated pages tripled.** `live_pages` went from ~140 to 369 screens on
+  13–15 November: a rebuild of the boot cache now reads 26 MB of cells, and the
+  stored body is 1.4 MB (base64), so even a cache *hit* reads 1.4 MB.
+- **Editing caused the spike.** 62 separate writes on 13–15 November, each
+  invalidating the cache; every following read (and every `/manage` `fresh`
+  read) paid 26 MB. Builds read 26 MB too (`scripts/prerender.ts`), 25 of them
+  in those three days.
+- **The steady cost is the hits.** `s-maxage=60`, `stale-while-revalidate=600`:
+  the half-hourly uptime check on `?boot=1` landed outside the window every
+  time — 48 × 1.4 MB a day, ~2 GB a month on its own, before any visitor.
+- **Tried, dropped:** rebuilding from the stored copy and fetching only the
+  screens whose `updated_at` changed (26 MB → ~1.4 MB per miss). Written and
+  reverted: the editing has finished, so misses will be rare and it only
+  protected against a cost that has stopped.
+- **The fix: hold `?boot` at the edge for a day** (`s-maxage=86400`,
+  `stale-while-revalidate=604800`). One line. Edits stopped, so the minute of
+  freshness bought nothing; a deploy empties the edge cache anyway. The uptime
+  check now mostly reads the edge's copy, so it proves less about the
+  function — `/api/health` still proves the runtime and the database.
+- Left alone: the 26 MB read per build. If deploys stay frequent, read the
+  pages in `prerender.ts` from `boot_cache` instead (1.4 MB).

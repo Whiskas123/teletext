@@ -43,7 +43,7 @@ jobs:
       # 017; `bun run db:restore --at`).
       #
       # Not every half hour: each backup that changes something makes the next
-      # page load rebuild the boot cache, a ~9 MB read out of Neon, whose free
+      # page load rebuild the boot cache, a ~26 MB read out of Neon, whose free
       # plan allows 5 GB a month (see docs/implementation-notes/2026-11-01-neon-transfer.md).
       # Runs on the six-hour schedule, and when started by hand.
       #

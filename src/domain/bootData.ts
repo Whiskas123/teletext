@@ -18,9 +18,8 @@
  * ## Only ever read
  *
  * It is fetched from the database's copy (`BOOT_LIVE_PATH`), which the edge
- * caches for a minute, and from the build's file only if that fails — so it is
- * a picture of the pages at most a minute or so old, rather than as old as the
- * last deploy.
+ * caches for a day (emptied on each deploy), and from the build's file only if
+ * that fails.
  *
  * For the curated archive (100..699) it is no longer a stand-in at all: those
  * pages live in the database, and this is how every screen reads them (see
@@ -41,7 +40,7 @@ export const BOOT_DATA_PATH = '/boot/pages.json';
 
 /**
  * Where the app fetches the pages from first: the database's copy, kept
- * current by the live mirror and cached at the edge for a minute
+ * current by the live mirror and cached at the edge for a day
  * (`api/snapshot.ts`). The build's file is used only if this fails.
  */
 export const BOOT_LIVE_PATH = '/api/snapshot?boot=1';
