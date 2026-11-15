@@ -135,10 +135,15 @@ describe('the addresses', () => {
     }
   });
 
-  it('describes the front page in its own words, in both languages', () => {
-    expect(routeMeta('/', 'pt').description).toBe(SITE_META.pt.description);
-    expect(routeMeta('/', 'en').description).toBe(SITE_META.en.description);
-    expect(SITE_META.pt.description).not.toBe(SITE_META.en.description);
+  // The front page has no description, so a link card shows its title alone
+  // rather than the title repeated underneath as a subtitle.
+  it('leaves the description tags out when there is no description', () => {
+    const alternates = { pt: canonicalUrl('/', 'pt'), en: canonicalUrl('/', 'en') };
+    for (const language of ['pt', 'en'] as const) {
+      const html = headTags(routeMeta('/', language), language, alternates);
+      expect(html).not.toContain('description');
+      expect(html).toContain('og:title');
+    }
   });
 
   it('falls back to the site meta for a route it has no copy for', () => {

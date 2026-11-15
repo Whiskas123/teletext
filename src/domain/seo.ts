@@ -56,17 +56,19 @@ export const LOCALE: Record<Language, string> = {
  * The broadcasters are deliberately not named — see the README under "Being
  * found" for what that costs and why it was chosen. `arquivo vivo` is the
  * phrase for the site in Portuguese; `living archive` carries it in English.
+ *
+ * The description is empty on purpose: it only repeated the title, and a link
+ * card printed it as a subtitle underneath. Empty, {@link headTags} leaves the
+ * description tags out, so the card shows the title alone.
  */
 export const SITE_META: Record<Language, { title: string; description: string }> = {
   pt: {
-    title: `${SITE_NAME}, arquivo vivo de teletexto português`,
-    description:
-      'Um arquivo vivo do teletexto português.',
+    title: `${SITE_NAME}, arquivo vivo do teletexto português`,
+    description: '',
   },
   en: {
     title: `${SITE_NAME}, a living archive of Portuguese teletext`,
-    description:
-      'A living archive of Portuguese teletext.',
+    description: '',
   },
 };
 
@@ -257,10 +259,14 @@ export function headTags(
   const title = escapeText(meta.title);
   const attr = escapeAttribute;
   const other = language === 'pt' ? 'en' : 'pt';
+  // No description, no tag: an empty one still prints as a blank line on some
+  // link cards, and without any a scraper shows the title alone.
+  const described = (tag: string) =>
+    meta.description ? [tag.replace('%', attr(meta.description))] : [];
 
   return [
     `<title>${title}</title>`,
-    `<meta name="description" content="${attr(meta.description)}" />`,
+    ...described(`<meta name="description" content="%" />`),
     `<link rel="canonical" href="${attr(meta.canonical)}" />`,
     ...Object.entries(alternates).map(
       ([lang, href]) =>
@@ -271,7 +277,7 @@ export function headTags(
     `<meta property="og:site_name" content="${SITE_NAME}" />`,
     `<meta property="og:url" content="${attr(meta.canonical)}" />`,
     `<meta property="og:title" content="${attr(meta.title)}" />`,
-    `<meta property="og:description" content="${attr(meta.description)}" />`,
+    ...described(`<meta property="og:description" content="%" />`),
     `<meta property="og:image" content="${OG_IMAGE}" />`,
     `<meta property="og:image:width" content="1200" />`,
     `<meta property="og:image:height" content="630" />`,
@@ -280,7 +286,7 @@ export function headTags(
     `<meta property="og:locale:alternate" content="${LOCALE[other].replace('-', '_')}" />`,
     `<meta name="twitter:card" content="summary_large_image" />`,
     `<meta name="twitter:title" content="${attr(meta.title)}" />`,
-    `<meta name="twitter:description" content="${attr(meta.description)}" />`,
+    ...described(`<meta name="twitter:description" content="%" />`),
     `<meta name="twitter:image" content="${OG_IMAGE}" />`,
   ].join('\n    ');
 }
