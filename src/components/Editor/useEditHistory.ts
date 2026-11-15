@@ -13,10 +13,15 @@
  * stroke writes many cells between two renders, and the page it was handed
  * does not know about any of them.
  *
- * History belongs to one screen of one page. Moving to another clears it —
- * undoing a stroke on a page you are no longer looking at would be an edit
- * nobody could see being made.
+ * History belongs to one screen of one page: undoing a stroke on a page you are
+ * no longer looking at would be an edit nobody could see being made. Moving to
+ * another screen puts this one's history aside and takes up that one's, so
+ * coming back to a page finds its undo where it was left — clearing a page and
+ * then stepping off it used to make the clear permanent.
  */
+
+/** How many screens' histories are kept aside. Past this the oldest goes. */
+const SCREENS_KEPT = 20;
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
@@ -61,10 +66,20 @@ export function useEditHistory(
     setHistory(next);
   }, []);
 
+  const asideRef = useRef(new Map<string, EditHistory>());
+  const shownKeyRef = useRef(screenKey);
+
   useEffect(() => {
+    if (shownKeyRef.current === screenKey) return;
+    const aside = asideRef.current;
+    // Re-inserted so the map's order is how recently each screen was left.
+    aside.delete(shownKeyRef.current);
+    aside.set(shownKeyRef.current, historyRef.current);
+    if (aside.size > SCREENS_KEPT) aside.delete(aside.keys().next().value!);
+    shownKeyRef.current = screenKey;
     openRef.current = null;
     pendingRef.current.clear();
-    replace(EMPTY_HISTORY);
+    replace(aside.get(screenKey) ?? EMPTY_HISTORY);
   }, [screenKey, replace]);
 
   const put = useCallback(

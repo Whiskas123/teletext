@@ -168,6 +168,12 @@ interface TeletextGridProps {
   ) => void;
   /** The pointer left the grid or was lifted: end any stroke in progress. */
   onPointerEnd?: () => void;
+  /**
+   * Drawn over the cells, in the grid's own box: the editor's selection, cell
+   * lines and other people's cursors. Inside the grid so a percentage is a
+   * fraction of forty columns and twenty-four rows whatever size the page is.
+   */
+  overlay?: React.ReactNode;
 }
 
 function SixelBlock({
@@ -548,6 +554,7 @@ export function TeletextGrid({
   onPageNumberClick,
   onPointerCell,
   onPointerEnd,
+  overlay,
 }: TeletextGridProps) {
   const now = useLiveTime();
   useBlinkClock();
@@ -746,6 +753,7 @@ export function TeletextGrid({
               </div>
             );
           })}
+        {overlay != null && <div className="teletext-grid-overlay">{overlay}</div>}
       </div>
     </div>
   );

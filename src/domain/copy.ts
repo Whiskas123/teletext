@@ -209,7 +209,6 @@ export interface Copy {
     sizeCell: string;
     sizePixel: string;
     /** Paint or erase, for a hand with no Alt key. */
-    paint: string;
     erase: string;
     /** Blink: put it on, or take it off. */
     blinkOn: string;
@@ -220,10 +219,47 @@ export interface Copy {
     /** The three tool keys: the caption under the cap, and what the cap does. */
     toolText: string;
     toolTextHint: string;
-    toolDraw: string;
-    toolDrawHint: string;
     toolBlink: string;
     toolBlinkHint: string;
+    /** The fourth tool: a rectangle of the page, to move, copy or recolour. */
+    toolSelect: string;
+    toolSelectHint: string;
+    selectHint: string;
+    copy: string;
+    cut: string;
+    paste: string;
+    deleteSelection: string;
+    /** The drawing keys of the toolbox. */
+    toolBrush: string;
+    toolBrushHint: string;
+    toolEraser: string;
+    toolEraserHint: string;
+    toolFillHint: string;
+    toolLineHint: string;
+    toolBoxHint: string;
+    shapeLine: string;
+    shapeBox: string;
+    shapeFill: string;
+    /** Said under the blink switch: where the marks on the page come from. */
+    blinkMarks: string;
+    /** The cell lines over the page, and the phone's magnifier. */
+    showGrid: string;
+    showGridHint: string;
+    zoom: string;
+    zoomMap: string;
+    /** Copying another page onto this one. */
+    copyFrom: string;
+    copyFromHint: string;
+    copyFromGo: string;
+    copyFromMissing: string;
+    /** The name on this editor's cursor, as the others see it. */
+    yourNameHint: string;
+    /** Everybody editing this same screen right now, this editor included. */
+    peopleHere(n: number): string;
+    /** Marks this editor's own name in that list. */
+    you: string;
+    /** Other people editing this same screen right now. */
+    othersHere(n: number): string;
   };
   /**
    * The guestbook: the book itself, and the form for signing it.
@@ -473,18 +509,46 @@ export const COPY: Record<Language, Copy> = {
       size: 'Tamanho',
       sizeCell: 'Célula',
       sizePixel: 'Pixel',
-      paint: 'Pintar',
       erase: 'Apagar',
       blinkOn: 'Ligar',
       blinkOff: 'Desligar',
       eyedropper: 'Conta-gotas',
-      eyedropperHint: 'Copiar as cores (ou a forma) de uma célula da página',
-      toolText: 'Escrever',
+      eyedropperHint: 'Clica numa célula da página para copiar as cores (ou a forma) dela',
+      toolText: 'Texto',
       toolTextHint: 'Escrever texto na página',
-      toolDraw: 'Desenhar',
-      toolDrawHint: 'Pintar mosaicos, célula a célula ou pixel a pixel',
       toolBlink: 'Piscar',
       toolBlinkHint: 'Pôr a piscar, ou deixar de piscar, o que já está na página',
+      toolSelect: 'Selecionar',
+      toolSelectHint: 'Selecionar uma parte da página para mover, copiar ou mudar de cor',
+      selectHint:
+        'Arrasta na página para selecionar. Depois arrasta a seleção para a mover (com Alt, copia), ou usa as setas.',
+      copy: 'Copiar',
+      cut: 'Cortar',
+      paste: 'Colar',
+      deleteSelection: 'Apagar',
+      toolBrush: 'Pincel',
+      toolBrushHint: 'Pintar mosaicos à mão, célula a célula ou pixel a pixel',
+      toolEraser: 'Borracha',
+      toolEraserHint: 'Apagar o que o traço atravessa',
+      toolFillHint: 'Encher uma zona com um clique',
+      toolLineHint: 'Arrastar para desenhar uma linha reta',
+      toolBoxHint: 'Arrastar para desenhar um retângulo cheio',
+      shapeLine: 'Linha',
+      shapeBox: 'Retângulo',
+      shapeFill: 'Encher',
+      blinkMarks: 'O que está a piscar fica marcado na página enquanto esta ferramenta está escolhida.',
+      showGrid: 'Grelha',
+      showGridHint: 'Mostrar as linhas das células sobre a página',
+      zoom: 'Ampliar a página',
+      zoomMap: 'Mover a vista ampliada',
+      copyFrom: 'Copiar de',
+      copyFromHint: 'Copiar outra página (ou subpágina, como 700.2) para esta',
+      copyFromGo: 'Copiar',
+      copyFromMissing: 'Essa página está vazia ou não existe.',
+      yourNameHint: 'O teu nome, como os outros o veem. Clica para mudar.',
+      peopleHere: (n) => (n === 1 ? '1 pessoa aqui' : `${n} pessoas aqui`),
+      you: 'tu',
+      othersHere: (n) => (n === 1 ? 'Mais 1 pessoa a editar esta página' : `Mais ${n} pessoas a editar esta página`),
     },
     guestbook: {
       title: 'guestbook',
@@ -685,18 +749,46 @@ export const COPY: Record<Language, Copy> = {
       size: 'Size',
       sizeCell: 'Cell',
       sizePixel: 'Pixel',
-      paint: 'Paint',
       erase: 'Erase',
       blinkOn: 'On',
       blinkOff: 'Off',
       eyedropper: 'Eyedropper',
-      eyedropperHint: 'Copy the colours (or the shape) of a cell on the page',
-      toolText: 'Write',
+      eyedropperHint: 'Click a cell on the page to copy its colours (or its shape)',
+      toolText: 'Text',
       toolTextHint: 'Type text on the page',
-      toolDraw: 'Draw',
-      toolDrawHint: 'Paint mosaics, a cell or a pixel at a time',
       toolBlink: 'Blink',
       toolBlinkHint: 'Make what is already on the page blink, or stop blinking',
+      toolSelect: 'Select',
+      toolSelectHint: 'Select part of the page to move, copy or recolour',
+      selectHint:
+        'Drag on the page to select. Drag the selection to move it (hold Alt to copy); the arrow keys nudge it a cell at a time.',
+      copy: 'Copy',
+      cut: 'Cut',
+      paste: 'Paste',
+      deleteSelection: 'Delete',
+      toolBrush: 'Brush',
+      toolBrushHint: 'Paint mosaics by hand, a cell or a pixel at a time',
+      toolEraser: 'Eraser',
+      toolEraserHint: 'Rub out whatever the stroke crosses',
+      toolFillHint: 'Fill an area with one click',
+      toolLineHint: 'Drag to draw a straight line',
+      toolBoxHint: 'Drag to draw a filled rectangle',
+      shapeLine: 'Line',
+      shapeBox: 'Rectangle',
+      shapeFill: 'Fill',
+      blinkMarks: 'Whatever is blinking is marked on the page while this tool is chosen.',
+      showGrid: 'Grid',
+      showGridHint: 'Show the cell lines over the page',
+      zoom: 'Magnify the page',
+      zoomMap: 'Move the magnified view',
+      copyFrom: 'Copy from',
+      copyFromHint: 'Copy another page (or subpage, like 700.2) onto this one',
+      copyFromGo: 'Copy',
+      copyFromMissing: 'That page is empty or does not exist.',
+      yourNameHint: 'Your name, as the others see it. Click to change it.',
+      peopleHere: (n) => (n === 1 ? '1 person here' : `${n} people here`),
+      you: 'you',
+      othersHere: (n) => (n === 1 ? '1 other person editing this page' : `${n} other people editing this page`),
     },
     guestbook: {
       title: 'guestbook',

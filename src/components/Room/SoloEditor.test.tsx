@@ -26,6 +26,10 @@ vi.mock('./useEnglishDraft', () => ({
   useEnglishDraft: () => ({ page: pageSaying('Clima'), editCell: englishEdit, saveError: null }),
 }));
 vi.mock('../../collab/useIsModerator', () => ({ useIsModerator: () => true }));
+vi.mock('../../collab/useEditPresence', () => ({
+  useEditPresence: () => ({ others: [], setCursor: () => {}, name: 'Guest', color: 'red', setName: () => true }),
+}));
+vi.mock('../../collab/usePageReader', () => ({ usePageReader: () => () => null }));
 vi.mock('../../collab/useConnection', () => ({ useConnection: () => ({ status: 'connected' }) }));
 vi.mock('../../collab/useOccupiedPages', () => ({ useOccupiedPages: () => [104] }));
 vi.mock('../../collab/useSubpages', () => ({

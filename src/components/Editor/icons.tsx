@@ -299,3 +299,116 @@ export function IconBrush({ className }: IconProps) {
     </svg>
   );
 }
+
+/** A dashed marquee: the selection tool. */
+export function IconSelect({ className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      width={ICON_SIZE}
+      height={ICON_SIZE}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeDasharray="2.5 2"
+      aria-hidden="true"
+    >
+      <rect x="2.5" y="2.5" width="11" height="11" />
+    </svg>
+  );
+}
+
+/** Ruled lines: the cell grid laid over the page. */
+export function IconGrid({ className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      width={ICON_SIZE}
+      height={ICON_SIZE}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.3"
+      aria-hidden="true"
+    >
+      <path d="M2 6h12M2 10h12M6 2v12M10 2v12" />
+    </svg>
+  );
+}
+
+/** Two sheets: copy another page onto this one. */
+export function IconCopyPage({ className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      width={ICON_SIZE}
+      height={ICON_SIZE}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="5.5" y="5.5" width="8" height="8" />
+      <path d="M10.5 5.5v-3h-8v8h3" />
+    </svg>
+  );
+}
+
+/** A straight stroke, corner to corner: the line tool. */
+export function IconLine({ className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      width={ICON_SIZE}
+      height={ICON_SIZE}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <path d="M3 13 13 3" />
+    </svg>
+  );
+}
+
+/** A filled rectangle: the box tool. */
+export function IconBox({ className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      width={ICON_SIZE}
+      height={ICON_SIZE}
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <rect x="2" y="3.5" width="12" height="9" />
+    </svg>
+  );
+}
+
+/** A tipped paint bucket and the drop leaving it: the fill tool. */
+export function IconBucket({ className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      width={ICON_SIZE}
+      height={ICON_SIZE}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M6.5 2.5 12 8l-4.5 4.5a1.2 1.2 0 0 1-1.7 0L2.5 9.2a1.2 1.2 0 0 1 0-1.7Z" />
+      <path d="M2.6 8.4h9" />
+      <path d="M13.6 10.2c.7 1 1.1 1.7 1.1 2.3a1.1 1.1 0 0 1-2.2 0c0-.6.4-1.3 1.1-2.3Z" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}

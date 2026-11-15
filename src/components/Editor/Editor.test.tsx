@@ -1,7 +1,7 @@
 // Feature: the editor's own controls — undo, redo, clear, and the eraser.
 // Verifies: typed characters undo one at a time and redo again, ⌘/Ctrl+Z works
 // from the grid, clearing the page asks first and is undone as one step, and
-// the eraser is a switch on Draw that clears what a stroke crosses.
+// the eraser is a tool of its own that clears what a stroke crosses.
 
 import { useState } from 'react';
 import { describe, expect, it } from 'vitest';
@@ -11,7 +11,13 @@ import { Editor } from './Editor';
 import { COLS, createEmptyPage, type Cell, type TeletextPage } from '../../types/teletext';
 
 /** The editor over a page held in state, as `useEditPage` would hold it. */
-function Harness({ onPage }: { onPage: (page: TeletextPage) => void }) {
+function Harness({
+  onPage,
+  pageNumber = 700,
+}: {
+  onPage: (page: TeletextPage) => void;
+  pageNumber?: number;
+}) {
   const [page, setPage] = useState<TeletextPage>(() => {
     const initial = createEmptyPage();
     onPage(initial);
@@ -20,7 +26,7 @@ function Harness({ onPage }: { onPage: (page: TeletextPage) => void }) {
   return (
     <Editor
       page={page}
-      pageNumber={700}
+      pageNumber={pageNumber}
       onEditCell={(index: number, cell: Cell) => {
         setPage((prev) => {
           const next = [...prev];
@@ -119,7 +125,7 @@ describe('Editor strokes', () => {
   it('undoes a whole stroke in one step, and only the last stroke', () => {
     let current: TeletextPage = createEmptyPage();
     const { container } = render(<Harness onPage={(page) => (current = page)} />);
-    fireEvent.click(screen.getByRole('radio', { name: 'Desenhar' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Pincel' }));
     const drag = drawable(container);
 
     drag(0, 3);
@@ -137,24 +143,20 @@ describe('Editor strokes', () => {
 });
 
 describe('Editor eraser', () => {
-  it('is a paint / erase switch on Draw, and is put down with the tool', () => {
+  it('is a key of the toolbox, with nothing to load it with', () => {
     setup();
-    expect(screen.queryByRole('radio', { name: 'Apagar' })).toBeNull();
+    fireEvent.click(screen.getByRole('radio', { name: 'Pincel' }));
+    expect(screen.getByText('Cores')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('radio', { name: 'Desenhar' }));
-    expect(screen.getByRole('radio', { name: 'Pintar' })).toBeChecked();
-    fireEvent.click(screen.getByRole('radio', { name: 'Apagar' }));
-    expect(screen.getByRole('radio', { name: 'Apagar' })).toBeChecked();
-
-    fireEvent.click(screen.getByRole('radio', { name: 'Escrever' }));
-    fireEvent.click(screen.getByRole('radio', { name: 'Desenhar' }));
-    expect(screen.getByRole('radio', { name: 'Pintar' })).toBeChecked();
+    fireEvent.click(screen.getByRole('radio', { name: 'Borracha' }));
+    expect(screen.getByRole('radio', { name: 'Borracha' })).toBeChecked();
+    expect(screen.queryByText('Cores')).toBeNull();
   });
 
   it('clears the cells a stroke crosses when it is on', () => {
     let current: TeletextPage = createEmptyPage();
     const { container } = render(<Harness onPage={(page) => (current = page)} />);
-    fireEvent.click(screen.getByRole('radio', { name: 'Desenhar' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Pincel' }));
     const grid = container.querySelector<HTMLElement>('.teletext-grid-drawable')!;
     grid.getBoundingClientRect = () =>
       ({ left: 0, top: 0, width: 400, height: 240, right: 400, bottom: 240, x: 0, y: 0 }) as DOMRect;
@@ -167,8 +169,138 @@ describe('Editor eraser', () => {
     stroke();
     expect(current[COLS].graphics).not.toBeNull();
 
-    fireEvent.click(screen.getByRole('radio', { name: 'Apagar' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Borracha' }));
     stroke();
     expect([0, 1, 2, 3].some((col) => current[COLS + col].graphics != null)).toBe(false);
+  });
+});
+
+describe('Editor bulk editing', () => {
+  /** The grid at 10px a cell, and a drag between two (col, row) cells. */
+  function pointer(container: HTMLElement) {
+    const grid = container.querySelector<HTMLElement>('.teletext-grid-drawable')!;
+    grid.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 400, height: 240, right: 400, bottom: 240, x: 0, y: 0 }) as DOMRect;
+    const at = ([col, row]: [number, number]) => ({
+      clientX: col * 10 + 5,
+      clientY: row * 10 + 5,
+      pointerId: 1,
+    });
+    return (...cells: [number, number][]) => {
+      fireEvent.pointerDown(grid, at(cells[0]));
+      for (const cell of cells.slice(1)) fireEvent.pointerMove(grid, at(cell));
+      fireEvent.pointerUp(grid, at(cells[cells.length - 1]));
+    };
+  }
+  const key = (name: string) => screen.getByRole('button', { name });
+  const tool = (name: string) => fireEvent.click(screen.getByRole('radio', { name }));
+
+  it('pastes text as lines from the cursor, and undoes the paste whole', () => {
+    const { page, input } = setup();
+    fireEvent.paste(input, {
+      clipboardData: { getData: (type: string) => (type === 'text/plain' ? 'ab\ncd' : '') },
+    });
+    expect([COLS, COLS + 1, 2 * COLS, 2 * COLS + 1].map((i) => page()[i].char).join('')).toBe('abcd');
+
+    fireEvent.click(undoKey());
+    expect(page()[COLS].char).toBe(' ');
+    expect(page()[2 * COLS + 1].char).toBe(' ');
+  });
+
+  it('Home and End go to the ends of the line', () => {
+    const { page, input, type } = setup();
+    type('a');
+    type('b');
+    fireEvent.keyDown(input, { key: 'Home' });
+    type('X');
+    expect(page()[COLS].char).toBe('X');
+    fireEvent.keyDown(input, { key: 'End' });
+    type('Y');
+    expect(page()[COLS + 2].char).toBe('Y');
+  });
+
+  it('moves a selection with the arrows, and deletes it', () => {
+    let current: TeletextPage = createEmptyPage();
+    const { container } = render(<Harness onPage={(page) => (current = page)} />);
+    const input = container.querySelector<HTMLInputElement>('.editor-hidden-input')!;
+    act(() => {
+      fireEvent.input(input, { target: { value: 'a' } });
+    });
+    tool('Selecionar');
+    pointer(container)([0, 1]);
+
+    fireEvent.keyDown(input, { key: 'ArrowRight' });
+    expect(current[COLS].char).toBe(' ');
+    expect(current[COLS + 1].char).toBe('a');
+
+    fireEvent.keyDown(input, { key: 'Delete' });
+    expect(current[COLS + 1].char).toBe(' ');
+  });
+
+  it('drags a selection to a new place, and copies and pastes it', () => {
+    let current: TeletextPage = createEmptyPage();
+    const { container } = render(<Harness onPage={(page) => (current = page)} />);
+    const input = container.querySelector<HTMLInputElement>('.editor-hidden-input')!;
+    act(() => {
+      fireEvent.input(input, { target: { value: 'a' } });
+    });
+    tool('Selecionar');
+    const drag = pointer(container);
+    drag([0, 1]);
+    drag([0, 1], [5, 3]);
+    expect(current[COLS].char).toBe(' ');
+    expect(current[3 * COLS + 5].char).toBe('a');
+
+    fireEvent.click(key('Copiar'));
+    drag([9, 9]);
+    fireEvent.click(key('Colar'));
+    expect(current[9 * COLS + 9].char).toBe('a');
+    expect(current[3 * COLS + 5].char).toBe('a');
+  });
+
+  it('drags out a line that follows the pointer and undoes as one step', () => {
+    let current: TeletextPage = createEmptyPage();
+    const { container } = render(<Harness onPage={(page) => (current = page)} />);
+    tool('Linha');
+    const painted = (col: number, row: number) => current[row * COLS + col].graphics != null;
+
+    // Out along the diagonal, then round to the horizontal: only where the
+    // pointer ended up is left painted.
+    pointer(container)([0, 1], [3, 4], [3, 1]);
+    expect([0, 1, 2, 3].every((col) => painted(col, 1))).toBe(true);
+    expect(painted(1, 2) || painted(2, 3) || painted(3, 4)).toBe(false);
+
+    fireEvent.click(undoKey());
+    expect([0, 1, 2, 3].some((col) => painted(col, 1))).toBe(false);
+    expect(undoKey()).toBeDisabled();
+  });
+
+  it('fills an enclosed area with one press', () => {
+    let current: TeletextPage = createEmptyPage();
+    const { container } = render(<Harness onPage={(page) => (current = page)} />);
+    tool('Pincel');
+    const drag = pointer(container);
+    // A wall down column 2, the height of the page.
+    drag([2, 1], [2, 23]);
+    tool('Encher');
+    drag([0, 5]);
+    const painted = (col: number, row: number) => current[row * COLS + col].graphics != null;
+    expect(painted(0, 1) && painted(1, 23)).toBe(true);
+    expect(painted(3, 5)).toBe(false);
+  });
+
+  it("keeps each page's undo for when it is come back to", () => {
+    const view = render(<Harness onPage={() => {}} />);
+    const input = view.container.querySelector<HTMLInputElement>('.editor-hidden-input')!;
+    act(() => {
+      fireEvent.input(input, { target: { value: 'a' } });
+    });
+    expect(undoKey()).toBeEnabled();
+
+    view.rerender(<Harness onPage={() => {}} pageNumber={701} />);
+    expect(undoKey()).toBeDisabled();
+
+    view.rerender(<Harness onPage={() => {}} pageNumber={700} />);
+    expect(undoKey()).toBeEnabled();
   });
 });

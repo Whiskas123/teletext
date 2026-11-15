@@ -39,16 +39,49 @@ import {
   type TextStyleHistoryState,
 } from "../../domain/textStyle";
 import {
+  blockCell,
+  blockText,
+  boxPoints,
+  copyRect,
+  emptyCell,
+  erasedCell,
+  floodPoints,
+  inRect,
+  layoutText,
+  lineEnd,
+  linePoints,
+  lineStart,
+  moveRect,
+  offsetRect,
+  paintPoints,
+  pasteBlock,
+  rectFromCorners,
+  rectIndexes,
+  withSixelPart,
+  wordJump,
+  type CellBlock,
+  type Point,
+  type Rect,
+  type Writes,
+} from "../../domain/editOps";
+import { normalizeCell } from "../../domain/pageOps";
+import {
   IconBlink,
   IconBlock,
+  IconBox,
+  IconBucket,
+  IconCopyPage,
   IconDoubleHeight,
   IconBrush,
   IconEraser,
   IconExport,
+  IconGrid,
+  IconLine,
   IconPage,
   IconPipette,
   IconPixel,
   IconRedo,
+  IconSelect,
   IconTextCursor,
   IconTrash,
   IconUndo,
@@ -64,7 +97,6 @@ import {
   MOTIF_PATTERNS,
   ROWS,
   rowColFromIndex,
-  setSixelBit,
   sixelBit,
   SIXEL_BITS,
   SIXEL_MAX,
@@ -85,6 +117,8 @@ import { useCopy } from "../Room/useCopy";
 import type { Copy } from "../../domain/copy";
 import { TeletextGrid } from "../TeletextGrid/TeletextGrid";
 import { ConfirmKey } from "./ConfirmKey";
+import { CopyFromKey } from "./CopyFromKey";
+import { loadEditorPrefs, saveEditorPrefs } from "./editorPrefs";
 import { useEditHistory } from "./useEditHistory";
 
 /**
@@ -141,35 +175,94 @@ function resolveCursorColor(color: string): string {
  * size of brush when drawing, and whether the eyedropper is up — rather than
  * chosen directly. See `brushMode` in the component.
  */
-type BrushMode = "off" | "block" | "pixel" | "blink" | "picker";
+type BrushMode = "off" | "block" | "pixel" | "blink" | "picker" | "select";
 
 /**
- * The three tool keys.
+ * What the editor is doing underneath: typing, drawing mosaics, setting blink,
+ * or holding a selection. The toolbox (see {@link TOOLBOX}) is what a person
+ * chooses from; each of its keys is one of these, with drawing's switches set.
+ */
+type Tool = "text" | "draw" | "blink" | "select";
+
+/** Drawing freehand, or a shape put down in one drag (or, for a fill, one press). */
+type DrawShape = "free" | "line" | "box" | "fill";
+
+/** The editor's own clipboard format, beside the plain text everything reads. */
+const CELLS_MIME = "application/x-teletext-cells";
+
+/** A block of cells off the clipboard — which is anybody's to have written. */
+function parseBlock(json: string): CellBlock | null {
+  try {
+    const raw = JSON.parse(json) as Partial<CellBlock> | null;
+    const { width, height, cells } = raw ?? {};
+    if (
+      !Number.isInteger(width) || !Number.isInteger(height) ||
+      width! < 1 || width! > COLS || height! < 1 || height! > ROWS ||
+      !Array.isArray(cells) || cells.length !== width! * height!
+    ) {
+      return null;
+    }
+    return { width: width!, height: height!, cells: cells.map(normalizeCell) };
+  } catch {
+    return null;
+  }
+}
+
+/** A rectangle of cells as a box over the grid, in fractions of it. */
+function overlayBox(rect: Rect): React.CSSProperties {
+  const pct = (n: number, of: number) => `${(n / of) * 100}%`;
+  return {
+    left: pct(rect.col, COLS),
+    top: pct(rect.row, ROWS),
+    width: pct(rect.width, COLS),
+    height: pct(rect.height, ROWS),
+  };
+}
+
+/** A key of the toolbox: one thing to do to the page, as in any paint program. */
+type ToolId =
+  | "select"
+  | "text"
+  | "picker"
+  | "brush"
+  | "eraser"
+  | "fill"
+  | "line"
+  | "box"
+  | "blink";
+
+/**
+ * The toolbox, in the order its keys are laid out (three to a row on a desk).
  *
- * There were five, and they were three different kinds of thing in one row:
- * what you are making (text or mosaic), how big a brush (a whole cell or one
- * sixth of one) and an effect (blink) — with the eyedropper, which is not a
- * tool at all but a way of choosing colours, on the end. Now the row is only
- * *what you are doing*; the brush size is a switch inside Draw, and the
- * eyedropper sits beside the colours it fills in.
+ * It used to be four keys with switches nested inside them — Draw held paint
+ * or erase, a size and a shape, and the eyedropper hid beside the colours —
+ * which meant reading a panel to find the eraser. Now every tool is a key with
+ * its picture on it, the way Paint and its descendants have taught everybody,
+ * and the panel under the keys holds only that tool's settings.
  *
  * The words are looked up rather than written here: this table is the order
  * the keys are moulded in, which is not language.
  */
-type Tool = "text" | "draw" | "blink";
-
-const TOOL_KEYS: readonly {
-  tool: Tool;
+const TOOLBOX: readonly {
+  id: ToolId;
   label: keyof Copy["editor"];
   title: keyof Copy["editor"];
   Icon: (props: { className?: string }) => React.ReactElement;
+  /** Alt and this letter takes the tool up; the letter alone, when not typing. */
+  letter: string;
 }[] = [
-  { tool: "text", label: "toolText", title: "toolTextHint", Icon: IconTextCursor },
-  { tool: "draw", label: "toolDraw", title: "toolDrawHint", Icon: IconBlock },
-  { tool: "blink", label: "toolBlink", title: "toolBlinkHint", Icon: IconBlink },
+  { id: "select", label: "toolSelect", title: "toolSelectHint", Icon: IconSelect, letter: "S" },
+  { id: "text", label: "toolText", title: "toolTextHint", Icon: IconTextCursor, letter: "T" },
+  { id: "picker", label: "eyedropper", title: "eyedropperHint", Icon: IconPipette, letter: "I" },
+  { id: "brush", label: "toolBrush", title: "toolBrushHint", Icon: IconBrush, letter: "B" },
+  { id: "eraser", label: "toolEraser", title: "toolEraserHint", Icon: IconEraser, letter: "E" },
+  { id: "fill", label: "shapeFill", title: "toolFillHint", Icon: IconBucket, letter: "F" },
+  { id: "line", label: "shapeLine", title: "toolLineHint", Icon: IconLine, letter: "L" },
+  { id: "box", label: "shapeBox", title: "toolBoxHint", Icon: IconBox, letter: "R" },
+  { id: "blink", label: "toolBlink", title: "toolBlinkHint", Icon: IconBlink, letter: "P" },
 ];
 
-/** Resolve one of {@link TOOL_KEYS}' copy keys to the words themselves. */
+/** Resolve one of {@link TOOLBOX}'s copy keys to the words themselves. */
 function toolWord(copy: Copy, key: keyof Copy["editor"]): string {
   const value = copy.editor[key];
   return typeof value === "string" ? value : "";
@@ -203,11 +296,6 @@ const PAD_SYMBOLS = [
   "+-/:;=?@£",
   "áéíóúàãõçê",
 ] as const;
-
-/** A default empty cell value, matching createEmptyPage()'s cell shape. */
-function emptyCellValue(): Cell {
-  return { char: " ", fg: "white", bg: "black", graphics: null };
-}
 
 /**
  * Preview of a remembered brush: the 2×3 motif for a block brush, a single
@@ -314,6 +402,13 @@ interface EditorProps {
   pageDetails?: ReactNode;
   /** Something that went wrong with the page as a whole, said under the strip. */
   alert?: ReactNode;
+  /** Who is editing this screen: at the foot of the remote, on a desk only. */
+  people?: ReactNode;
+  /**
+   * Another page's content, for copying onto this one; null when there is
+   * nothing there. The copy-from key is only on the panel when this is given.
+   */
+  readPage?: (pageNumber: number, subpage: number) => TeletextPage | null;
 }
 
 export function Editor({
@@ -330,6 +425,8 @@ export function Editor({
   pageKeypad,
   pageDetails,
   alert,
+  people,
+  readPage,
 }: EditorProps) {
   const copy = useCopy();
   const isNarrow = useMediaQuery(EDITOR_NARROW_QUERY);
@@ -357,7 +454,7 @@ export function Editor({
   // Whole-page clear: an empty cell at every position, as one undoable step.
   const clearPage = useCallback(() => {
     transact(() => {
-      for (let i = 0; i < TOTAL_CELLS; i++) writeCell(i, emptyCellValue());
+      for (let i = 0; i < TOTAL_CELLS; i++) writeCell(i, emptyCell());
     });
   }, [transact, writeCell]);
 
@@ -366,6 +463,17 @@ export function Editor({
   /** When on, typed characters render at double the row height (text only — not the block/pixel brushes). */
   const [doubleHeightOn, setDoubleHeightOn] = useState(false);
   const [tool, setTool] = useState<Tool>("text");
+  const [drawShape, setDrawShape] = useState<DrawShape>("free");
+  /** The rectangle the select tool holds, and where a drag would put it. */
+  const [selection, setSelection] = useState<Rect | null>(null);
+  const [ghost, setGhost] = useState<Rect | null>(null);
+  /** The last block copied here: what the panel's Paste key puts down. */
+  const [clip, setClip] = useState<CellBlock | null>(null);
+  /** Read once: what this browser remembered from last time. */
+  const [prefs] = useState(loadEditorPrefs);
+  const [showGrid, setShowGrid] = useState(prefs.showGrid);
+  /** The page at twice the size, on a phone, where a sixth of a cell is 2px. */
+  const [zoomed, setZoomed] = useState(false);
   /** Drawing a whole cell at a time, or one sixth of one. */
   const [drawSize, setDrawSize] = useState<"cell" | "pixel">("cell");
   /** The eyedropper is up: the next cell pressed gives its colours. */
@@ -376,7 +484,9 @@ export function Editor({
       ? "off"
       : tool === "blink"
         ? "blink"
-        : drawSize === "cell"
+        : tool === "select"
+          ? "select"
+          : drawSize === "cell"
           ? "block"
           : "pixel";
   /**
@@ -408,14 +518,22 @@ export function Editor({
   const [pixelColor, setPixelColor] = useState<TeletextColor>("white");
   /** Recently used brushes (index 0 = most recent) and the stepper cursor. */
   const [brushes, setBrushes] = useState<BrushHistoryState>(() => ({
-    history: [],
+    history: prefs.brushes,
     index: 0,
   }));
   /** Recently used text styles, the typing counterpart of the brush strip. */
   const [textStyles, setTextStyles] = useState<TextStyleHistoryState>(() => ({
-    history: [],
+    history: prefs.textStyles,
     index: 0,
   }));
+  useEffect(() => {
+    saveEditorPrefs({ brushes: brushes.history, textStyles: textStyles.history, showGrid });
+  }, [brushes.history, textStyles.history, showGrid]);
+  // A selection is a place on one screen; it does not follow to the next.
+  useEffect(() => {
+    setSelection(null);
+    setGhost(null);
+  }, [pageNumber, subpage]);
   /** Sixel sub-cell (0-5) the pixel brush is currently aimed at. */
   const [hoveredPartIndex, setHoveredPartIndex] = useState<number | null>(null);
   /** Which sixth of the motif preview the palette under it is colouring. */
@@ -431,6 +549,23 @@ export function Editor({
    * drew a dashed line. See `domain/strokeLine.ts`.
    */
   const lastPaintedRef = useRef<number | null>(null);
+  /** Where the brush last touched: a shift-press draws a straight line from it. */
+  const lastPointRef = useRef<Point | null>(null);
+  /**
+   * The shape being dragged out: the page as it was when the drag began, where
+   * it began, and the cells the shape covered at the last sample — which are
+   * put back before it is drawn again to where the pointer now is.
+   */
+  const shapeRef = useRef<{
+    base: TeletextPage;
+    from: Point;
+    box: boolean;
+    erase: boolean;
+    shown: Set<number>;
+  } | null>(null);
+  /** A drag of the select tool: marking out a new rectangle, or moving the one held. */
+  const selectDragRef = useRef<{ move: boolean; start: number; last: number; copy: boolean } | null>(null);
+  const stageRef = useRef<HTMLElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const hiddenInputRef = useRef<HTMLInputElement>(null);
 
@@ -455,10 +590,18 @@ export function Editor({
   const selectTool = useCallback(
     (next: Tool) => {
       if (next !== tool) setEraseOn(false);
+      // Select starts on the cell the cursor was in, and Write takes the
+      // cursor to where the selection was: the two tools point at one place.
+      if (next === "select" && tool !== "select") {
+        setSelection((held) => held ?? rectFromCorners(cursorIndex, cursorIndex));
+      }
+      if (next === "text" && tool === "select" && selection != null) {
+        setCursorIndex(indexAt(selection.col, selection.row));
+      }
       setTool(next);
       setPicking(false);
     },
-    [tool],
+    [tool, cursorIndex, selection, setCursorIndex],
   );
 
   /**
@@ -504,14 +647,7 @@ export function Editor({
 
   const paintCell = useCallback(
     (index: number) => {
-      writeCell(index, {
-        ...page[index],
-        char: " ",
-        fg: "white",
-        bg: "black",
-        graphics: blockPattern,
-        graphicsColors: [...brushColors],
-      });
+      writeCell(index, blockCell(page[index], blockPattern, brushColors));
       setCursorIndex(index);
       rememberBrush({
         kind: "block",
@@ -532,51 +668,16 @@ export function Editor({
   );
 
   /**
-   * Paint (or erase) a single sixth of a cell, leaving the other five alone.
-   *
-   * A cell that was showing text becomes a graphics cell with just this one
-   * sub-block lit; clearing the last lit sub-block returns the cell to a plain
-   * empty cell (`graphics: null`) so it doesn't count as page content.
+   * Paint (or erase) a single sixth of a cell, leaving the other five alone
+   * (see `withSixelPart`).
    */
   const paintSixelPart = useCallback(
     (index: number, part: number, erase: boolean) => {
       const cell = page[index];
-      const base = typeof cell.graphics === "number" ? cell.graphics & 0x3f : 0;
-      const next = setSixelBit(base, part, !erase);
-      // Dragging fires many events over the same sixth; skip writes that would
-      // not change the cell so the collaborative store isn't spammed.
-      const unchanged =
-        next === base &&
-        cell.char === " " &&
-        (erase || cell.graphicsColors?.[part] === pixelColor) &&
-        (next !== 0 || cell.graphics == null);
-      if (unchanged) {
-        setCursorIndex(index);
-        return;
-      }
-      if (next === 0) {
-        writeCell(index, {
-          ...cell,
-          char: " ",
-          fg: "white",
-          bg: "black",
-          graphics: null,
-          graphicsColors: undefined,
-        });
-      } else {
-        const colors = [
-          ...(cell.graphicsColors ?? (["black", "black", "black", "black", "black", "black"] as const)),
-        ] as TeletextColor[];
-        if (!erase) colors[part] = pixelColor;
-        writeCell(index, {
-          ...cell,
-          char: " ",
-          fg: "white",
-          bg: "black",
-          graphics: next,
-          graphicsColors: colors as unknown as SixelColors,
-        });
-      }
+      // Dragging fires many events over the same sixth; a write that would not
+      // change the cell is skipped so the collaborative store isn't spammed.
+      const next = withSixelPart(cell, part, pixelColor, erase);
+      if (next !== cell) writeCell(index, next);
       setCursorIndex(index);
       if (!erase) rememberBrush({ kind: "pixel", color: pixelColor });
     },
@@ -586,10 +687,8 @@ export function Editor({
   /** The block brush's eraser: the cell goes back to an empty one. */
   const eraseCell = useCallback(
     (index: number) => {
-      const cell = page[index];
-      if (cell.graphics != null || cell.char !== " " || cell.bg !== "black") {
-        writeCell(index, emptyCellValue());
-      }
+      const next = erasedCell(page[index]);
+      if (next !== page[index]) writeCell(index, next);
       setCursorIndex(index);
     },
     [page, writeCell, setCursorIndex],
@@ -782,6 +881,113 @@ export function Editor({
     [history],
   );
 
+  const writeAll = useCallback(
+    (writes: Writes) => {
+      for (const [index, cell] of writes) writeCell(index, cell);
+    },
+    [writeCell],
+  );
+
+  /** What the brush in hand does to one cell: the same for a stroke and a shape. */
+  const brushPaint = useCallback(
+    (erase: boolean) =>
+      (cell: Cell, part: number): Cell =>
+        drawSize === "pixel"
+          ? withSixelPart(cell, part, pixelColor, erase)
+          : erase
+            ? erasedCell(cell)
+            : blockCell(cell, blockPattern, brushColors),
+    [drawSize, pixelColor, blockPattern, brushColors],
+  );
+
+  const rememberBrushInHand = useCallback(() => {
+    rememberBrush(
+      drawSize === "pixel"
+        ? { kind: "pixel", color: pixelColor }
+        : {
+            kind: "block",
+            motifIndex: selectedMotifIndex,
+            colors: [...brushColors] as SixelColors,
+            pattern: blockPattern,
+          },
+    );
+  }, [rememberBrush, drawSize, pixelColor, selectedMotifIndex, brushColors, blockPattern]);
+
+  /**
+   * Draw the shape being dragged out as far as `to`.
+   *
+   * Always from the page as it was when the drag began: the cells the last
+   * sample's shape covered go back to what they were, then this one's are
+   * painted. It is all one open step of history, so the cells put back net out
+   * to nothing and undo takes the finished shape away whole.
+   */
+  const drawShapeTo = useCallback(
+    (to: Point) => {
+      const shape = shapeRef.current;
+      if (shape == null) return;
+      const pixel = drawSize === "pixel";
+      const points = (shape.box ? boxPoints : linePoints)(shape.from, to, pixel);
+      const writes = paintPoints(shape.base, points, brushPaint(shape.erase));
+      for (const index of shape.shown) {
+        if (!writes.has(index)) writeCell(index, shape.base[index]);
+      }
+      writeAll(writes);
+      shape.shown = new Set(writes.keys());
+    },
+    [drawSize, brushPaint, writeCell, writeAll],
+  );
+
+  /* ── the selection ──────────────────────────────────────────────────────── */
+
+  /** Move (or copy) what is selected by a number of cells, as one step. */
+  const moveSelection = useCallback(
+    (dCol: number, dRow: number, copy: boolean) => {
+      if (selection == null) return;
+      const to = offsetRect(selection, dCol, dRow);
+      if (to.col === selection.col && to.row === selection.row) return;
+      transact(() => writeAll(moveRect(page, selection, to, copy)));
+      setSelection(to);
+    },
+    [selection, page, transact, writeAll],
+  );
+
+  /** Give every selected cell a new value, as one step. */
+  const editSelection = useCallback(
+    (edit: (cell: Cell) => Cell) => {
+      if (selection == null) return;
+      transact(() => {
+        for (const index of rectIndexes(selection)) writeCell(index, edit(page[index]));
+      });
+    },
+    [selection, page, transact, writeCell],
+  );
+
+  const deleteSelection = useCallback(() => editSelection(emptyCell), [editSelection]);
+
+  const copySelection = useCallback((): CellBlock | null => {
+    if (selection == null) return null;
+    const block = copyRect(page, selection);
+    setClip(block);
+    return block;
+  }, [selection, page]);
+
+  /** Where a paste lands: the selection's corner when selecting, else the cursor. */
+  const pasteAnchor =
+    tool === "select" && selection != null
+      ? indexAt(selection.col, selection.row)
+      : cursorIndex;
+
+  /** Put a copied block down, and hold it selected so it can be moved into place. */
+  const pasteCells = useCallback(
+    (block: CellBlock) => {
+      const { writes, rect } = pasteBlock(block, pasteAnchor);
+      transact(() => writeAll(writes));
+      setSelection(rect);
+      selectTool("select");
+    },
+    [pasteAnchor, transact, writeAll, selectTool],
+  );
+
   /**
    * A pointer touched or moved over a cell.
    *
@@ -811,6 +1017,64 @@ export function Editor({
         // Nothing to drag: picking is a single act, on the way down.
         if (phase === 'down') pickFromCell(index);
         return;
+      }
+
+      if (brushMode === 'select') {
+        if (phase === 'down') {
+          // Pressing on what is held picks it up; anywhere else starts again.
+          const move = selection != null && inRect(selection, index);
+          selectDragRef.current = { move, start: index, last: index, copy: alt };
+          if (!move) setSelection(rectFromCorners(index, index));
+          return;
+        }
+        const drag = selectDragRef.current;
+        if (drag == null) return;
+        drag.last = index;
+        if (!drag.move) {
+          setSelection(rectFromCorners(drag.start, index));
+        } else if (selection != null) {
+          const from = rowColFromIndex(drag.start);
+          const to = rowColFromIndex(index);
+          setGhost(offsetRect(selection, to.col - from.col, to.row - from.row));
+        }
+        return;
+      }
+
+      /*
+       * Shapes. A fill is one press. A line or a box is dragged out from where
+       * the pointer went down — and a shift-press with the freehand brush draws
+       * a straight line from where the last stroke ended, as everywhere else.
+       */
+      if (brushMode === 'block' || brushMode === 'pixel') {
+        const point = { index, part };
+        if (phase === 'down' && drawShape === 'fill') {
+          const pixel = brushMode === 'pixel';
+          transact(() =>
+            writeAll(paintPoints(page, floodPoints(page, point, pixel), brushPaint(erase))),
+          );
+          if (!erase) rememberBrushInHand();
+          return;
+        }
+        const from =
+          drawShape !== 'free' ? point : e.shiftKey ? lastPointRef.current : null;
+        if (phase === 'down' && from != null) {
+          history.begin();
+          isDrawingRef.current = true;
+          shapeRef.current = {
+            base: page,
+            from,
+            box: drawShape === 'box',
+            erase,
+            shown: new Set(),
+          };
+        }
+        if (drawing || phase === 'down') lastPointRef.current = point;
+        if (shapeRef.current != null) {
+          setHoveredCellIndex(index);
+          setHoveredPartIndex(brushMode === 'pixel' ? part : null);
+          drawShapeTo(point);
+          return;
+        }
       }
 
       if (brushMode === 'block') {
@@ -864,6 +1128,15 @@ export function Editor({
       pickFromCell,
       focusHiddenInput,
       setCursorIndex,
+      selection,
+      drawShape,
+      page,
+      history,
+      transact,
+      writeAll,
+      brushPaint,
+      rememberBrushInHand,
+      drawShapeTo,
     ],
   );
 
@@ -879,8 +1152,19 @@ export function Editor({
     lastPaintedRef.current = null;
     setHoveredCellIndex(null);
     setHoveredPartIndex(null);
+    if (shapeRef.current != null && !shapeRef.current.erase) rememberBrushInHand();
+    shapeRef.current = null;
     history.commit();
-  }, [history]);
+    // A selection that was being carried is put down where it was let go.
+    const drag = selectDragRef.current;
+    selectDragRef.current = null;
+    setGhost(null);
+    if (drag?.move) {
+      const from = rowColFromIndex(drag.start);
+      const to = rowColFromIndex(drag.last);
+      moveSelection(to.col - from.col, to.row - from.row, drag.copy);
+    }
+  }, [history, rememberBrushInHand, moveSelection]);
 
   const handleGridMouseLeave = useCallback(() => {
     setHoveredCellIndex(null);
@@ -923,7 +1207,7 @@ export function Editor({
       if (applyDoubleHeight) {
         // The row directly below is now covered by this glyph. Clear it so
         // nothing stale reappears if double height is later turned off there.
-        writeCell(index + COLS, emptyCellValue());
+        writeCell(index + COLS, emptyCell());
       }
       // Remembered on use rather than on choosing a colour: a style is only worth
       // recalling once it has actually been typed with, and recording every
@@ -965,6 +1249,53 @@ export function Editor({
       setCursorIndex(next);
     },
     [cursorIndex, setCellChar, page, setCursorIndex, transact],
+  );
+
+  /** Type a whole text at once, from where a paste lands, as one step. */
+  const pasteText = useCallback(
+    (text: string) => {
+      const placed = layoutText(text, pasteAnchor, doubleHeightOn ? 2 : 1);
+      if (placed.length === 0) return;
+      transact(() => {
+        for (const { index, char } of placed) setCellChar(index, char);
+      });
+      if (tool === "text") {
+        setCursorIndex(Math.min(TOTAL_CELLS - 1, placed[placed.length - 1].index + 1));
+      }
+    },
+    [pasteAnchor, doubleHeightOn, transact, setCellChar, tool, setCursorIndex],
+  );
+
+  /*
+   * The clipboard. The grid's input is what holds focus, so copy, cut and
+   * paste arrive there. A copied selection goes out twice: as plain text for
+   * anything else, and as cells for this editor, in this or another tab.
+   */
+  const handleCopy = useCallback(
+    (e: React.ClipboardEvent, cut: boolean) => {
+      if (tool !== "select") return;
+      const block = copySelection();
+      if (block == null) return;
+      e.preventDefault();
+      e.clipboardData.setData("text/plain", blockText(block));
+      e.clipboardData.setData(CELLS_MIME, JSON.stringify(block));
+      if (cut) deleteSelection();
+    },
+    [tool, copySelection, deleteSelection],
+  );
+
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent) => {
+      e.preventDefault();
+      const text = e.clipboardData.getData("text/plain");
+      const block =
+        parseBlock(e.clipboardData.getData(CELLS_MIME)) ??
+        // A browser that would not carry the cells still carried their text.
+        (clip != null && text === blockText(clip) ? clip : null);
+      if (block != null) pasteCells(block);
+      else if (tool === "text" || tool === "select") pasteText(text);
+    },
+    [clip, pasteCells, pasteText, tool],
   );
 
   /**
@@ -1016,6 +1347,12 @@ export function Editor({
             resolveDoubleHeightCursor(page, Math.min(ROWS * COLS - 1, indexAt(col, row + 1)), COLS),
           );
           return true;
+        case "Home":
+          setCursorIndex(resolveDoubleHeightCursor(page, lineStart(cursorIndex), 1));
+          return true;
+        case "End":
+          setCursorIndex(resolveDoubleHeightCursor(page, lineEnd(page, cursorIndex), 1));
+          return true;
         case "Enter":
           setCursorIndex(
             resolveDoubleHeightCursor(page, Math.min(ROWS * COLS - 1, indexAt(0, row + 1)), COLS),
@@ -1028,11 +1365,87 @@ export function Editor({
     [cursorIndex, page, setCellChar, setCursorIndex, writeCell, transact],
   );
 
+  /** Which key of the toolbox is down, read off what the editor is doing. */
+  const activeTool: ToolId = picking
+    ? "picker"
+    : tool !== "draw"
+      ? tool
+      : drawShape !== "free"
+        ? drawShape
+        : eraseOn
+          ? "eraser"
+          : "brush";
+
+  /** Take up a key of the toolbox. */
+  const pickTool = useCallback(
+    (id: ToolId) => {
+      if (id === "picker") return setPicking(true);
+      if (id === "select" || id === "text" || id === "blink") return selectTool(id);
+      selectTool("draw");
+      setDrawShape(id === "brush" || id === "eraser" ? "free" : id);
+      setEraseOn(id === "eraser");
+    },
+    [selectTool],
+  );
+
+  /**
+   * A key pressed while not typing: a tool's letter, the grid, or Escape.
+   * Letters are free for this whenever they are not page content.
+   */
+  const pressShortcut = useCallback(
+    (key: string) => {
+      const letter = key.toUpperCase();
+      const picked = TOOLBOX.find((k) => k.letter === letter);
+      if (picked != null) return pickTool(picked.id);
+      if (letter === "G") return setShowGrid((on) => !on);
+      // Escape puts down whatever is held: the eyedropper (which has its own
+      // listener), then the selection, then the tool.
+      if (key === "Escape" && !picking) {
+        if (tool === "select" && selection != null) return setSelection(null);
+        selectTool("text");
+      }
+    },
+    [pickTool, selectTool, picking, tool, selection],
+  );
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey) {
-        if (e.key === "c" || e.key === "a") return;
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod || e.altKey) {
+        // Copy, cut, paste and select-all are the browser's, and reach the
+        // clipboard handlers on the input.
+        if (mod && ["c", "x", "v", "a"].includes(e.key.toLowerCase())) return;
         e.preventDefault();
+        // Alt and a letter works even while typing, when the letter alone is
+        // page content. `code`, because Alt changes what the key produces.
+        if (e.altKey && !mod && e.code.startsWith("Key")) {
+          pressShortcut(e.code.slice(3));
+          return;
+        }
+        if (tool === "text" && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+          const dir = e.key === "ArrowLeft" ? -1 : 1;
+          // ⌘ and an arrow is Home and End on a Mac; Ctrl or Alt and an arrow
+          // goes a word at a time everywhere.
+          const target = e.metaKey
+            ? dir === -1
+              ? lineStart(cursorIndex)
+              : lineEnd(page, cursorIndex)
+            : wordJump(page, cursorIndex, dir);
+          setCursorIndex(resolveDoubleHeightCursor(page, target, dir));
+        }
+        return;
+      }
+      if (tool === "select") {
+        e.preventDefault();
+        const nudge = (
+          { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] } as Record<
+            string,
+            [number, number] | undefined
+          >
+        )[e.key];
+        if (nudge != null) moveSelection(nudge[0], nudge[1], false);
+        else if (e.key === "Backspace" || e.key === "Delete") deleteSelection();
+        else pressShortcut(e.key);
         return;
       }
       if (applyControlKey(e.key)) {
@@ -1069,6 +1482,7 @@ export function Editor({
         default:
           if (brushMode !== "off") {
             e.preventDefault();
+            pressShortcut(e.key);
             return;
           }
           if (e.key === "Dead" || e.key.length === 1) {
@@ -1085,6 +1499,10 @@ export function Editor({
       brushMode,
       brushes.history.length,
       stepBrushHistory,
+      tool,
+      pressShortcut,
+      moveSelection,
+      deleteSelection,
     ],
   );
 
@@ -1334,16 +1752,16 @@ export function Editor({
    */
   const toolKeys = (
     <div className="rc-tools" role="radiogroup" aria-label={copy.editor.tools}>
-      {TOOL_KEYS.map(({ tool: key, label, title, Icon }) => (
-        <div className="rc-keycap" key={key}>
+      {TOOLBOX.map(({ id, label, title, Icon, letter }) => (
+        <div className="rc-keycap" key={id}>
           <button
             type="button"
             role="radio"
-            aria-checked={tool === key}
+            aria-checked={activeTool === id}
             aria-label={toolWord(copy, label)}
-            className={`rc-key rc-key-tool${tool === key ? " rc-key-lit" : ""}`}
-            onClick={() => selectTool(key)}
-            title={toolWord(copy, title)}
+            className={`rc-key rc-key-tool${activeTool === id ? " rc-key-lit" : ""}`}
+            onClick={() => pickTool(id)}
+            title={`${toolWord(copy, title)} (Alt+${letter})`}
           >
             <Icon className="rc-key-icon" />
           </button>
@@ -1367,7 +1785,7 @@ export function Editor({
 
   /** The eight teletext colours as a row of caps, one of them down. */
   const palette = (
-    value: TeletextColor,
+    value: TeletextColor | null,
     onPick: (color: TeletextColor) => void,
     describe: (color: TeletextColor) => string,
   ) => (
@@ -1384,27 +1802,6 @@ export function Editor({
         />
       ))}
     </div>
-  );
-
-  /*
-   * The eyedropper, beside the colours it fills in.
-   *
-   * It is a way of choosing colours, not a thing to do to the page, so it
-   * lives with the palettes rather than in the row of tools. Pressed, the next
-   * cell touched hands over what made it — and the panel follows: a character
-   * lands you in Write with its colours, a mosaic in Draw with its shape.
-   */
-  const eyedropper = (
-    <button
-      type="button"
-      className={`rc-key rc-key-small${picking ? " rc-key-lit" : ""}`}
-      onClick={() => setPicking((up) => !up)}
-      aria-pressed={picking}
-      title={copy.editor.eyedropperHint}
-      aria-label={copy.editor.eyedropper}
-    >
-      <IconPipette className="rc-key-icon" />
-    </button>
   );
 
   /** A cluster's engraved heading, with room for a key at the far end. */
@@ -1460,9 +1857,8 @@ export function Editor({
   const textOptions = (
     <>
       <section className="rc-cluster">
-        {/* On a phone the keyboard needs the height a heading would take, so
-            the eyedropper moves down beside the double-height key. */}
-        {!isNarrow && clusterHead(copy.editor.colours, eyedropper)}
+        {/* On a phone the keyboard needs the height a heading would take. */}
+        {!isNarrow && clusterHead(copy.editor.colours)}
         <div className="rc-swatch-row">
           <span className="rc-sublegend">{copy.editor.color}</span>
           {palette(fg, setFg, (c) => `${copy.editor.color}: ${c}`)}
@@ -1490,7 +1886,6 @@ export function Editor({
             }`}
             aria-hidden
           />
-          {isNarrow && eyedropper}
         </div>
       </section>
       {recentCluster(textStyleChips, copy.editor.recentTextStyles)}
@@ -1513,7 +1908,7 @@ export function Editor({
   };
 
   const motifCluster = (
-    <section className={`rc-cluster${eraseOn ? " rc-idle" : ""}`}>
+    <section className="rc-cluster">
       {clusterHead(copy.editor.motif)}
       <div className="preset-motifs">
         {MOTIF_PATTERNS.map((pattern, idx) => {
@@ -1625,23 +2020,6 @@ export function Editor({
 
   const drawOptions = (
     <>
-      {/*
-        * Paint or erase first, then the size of the brush — two separate
-        * questions, asked separately. Erasing is the same switch as on Blink,
-        * in the same place, so the two tools read the same way.
-        */}
-      <section className="rc-cluster">
-        {segmented(
-          copy.editor.toolDraw,
-          eraseOn ? "erase" : "paint",
-          [
-            { value: "paint", label: copy.editor.paint, icon: <IconBrush className="rc-key-icon" /> },
-            { value: "erase", label: copy.editor.erase, icon: <IconEraser className="rc-key-icon" /> },
-          ] as const,
-          (value) => setEraseOn(value === "erase"),
-        )}
-      </section>
-
       <section className="rc-cluster">
         {clusterHead(copy.editor.size)}
         {segmented(
@@ -1658,22 +2036,25 @@ export function Editor({
         )}
       </section>
 
-      {/* What the brush is loaded with. Still shown while erasing, dimmed, so
-          the panel does not jump — and choosing from it goes back to painting. */}
-      {drawSize === "cell" && motifCluster}
+      {/* What the brush is loaded with — which an eraser is not. */}
+      {!eraseOn && (
+        <>
+          {drawSize === "cell" && motifCluster}
 
-      <section className={`rc-cluster${eraseOn ? " rc-idle" : ""}`}>
-        {clusterHead(copy.editor.colours, eyedropper)}
-        {drawSize === "cell"
-          ? cellColours
-          : palette(
-              pixelColor,
-              (color) => paintWith(() => setPixelColor(color))(),
-              (c) => `${copy.editor.colours}: ${c}`,
-            )}
-      </section>
+          <section className="rc-cluster">
+            {clusterHead(copy.editor.colours)}
+            {drawSize === "cell"
+              ? cellColours
+              : palette(
+                  pixelColor,
+                  (color) => paintWith(() => setPixelColor(color))(),
+                  (c) => `${copy.editor.colours}: ${c}`,
+                )}
+          </section>
 
-      {recentCluster(brushChips, copy.editor.recentBrushes)}
+          {recentCluster(brushChips, copy.editor.recentBrushes)}
+        </>
+      )}
     </>
   );
 
@@ -1689,11 +2070,54 @@ export function Editor({
         ] as const,
         (value) => setEraseOn(value === "off"),
       )}
+      {/* A blank cell set to blink shows nothing at all, so the page marks
+          them while this tool is up (see `.show-blink-marks`). */}
+      <p className="rc-hint">{copy.editor.blinkMarks}</p>
     </section>
   );
 
-  const toolOptions =
-    tool === "text" ? textOptions : tool === "draw" ? drawOptions : blinkOptions;
+  /*
+   * SELECT: a rectangle of the page, and what can be done to all of it.
+   *
+   * The clipboard keys are here as well as on the keyboard because a phone has
+   * no ⌘C.
+   */
+  const selectionKey = (label: string, onPress: () => void, enabled = selection != null) => (
+    <button type="button" className="rc-key" onClick={onPress} disabled={!enabled}>
+      <span>{label}</span>
+    </button>
+  );
+  const selectOptions = (
+    <>
+      <section className="rc-cluster">
+        {!isNarrow && <p className="rc-hint">{copy.editor.selectHint}</p>}
+        <div className="rc-segmented rc-segmented-wrap">
+          {selectionKey(copy.editor.copy, copySelection)}
+          {selectionKey(copy.editor.cut, () => {
+            copySelection();
+            deleteSelection();
+          })}
+          {selectionKey(copy.editor.paste, () => clip != null && pasteCells(clip), clip != null)}
+          {selectionKey(copy.editor.deleteSelection, deleteSelection)}
+        </div>
+      </section>
+    </>
+  );
+
+  const toolOptions = picking ? (
+    // The eyedropper has nothing to set: it says what the next press will do.
+    <section className="rc-cluster">
+      <p className="rc-hint">{copy.editor.eyedropperHint}</p>
+    </section>
+  ) : tool === "text" ? (
+    textOptions
+  ) : tool === "draw" ? (
+    drawOptions
+  ) : tool === "blink" ? (
+    blinkOptions
+  ) : (
+    selectOptions
+  );
 
   /* ── the keys that act on the whole page ────────────────────────────────── */
 
@@ -1757,6 +2181,98 @@ export function Editor({
     return wide ? key : capped(key, "PNG");
   };
 
+  /** The cell lines over the page: a switch, lit while they show. */
+  const gridKey = (wide: boolean) => {
+    const key = (
+      <button
+        type="button"
+        className={`rc-key ${wide ? "rc-key-wide" : "rc-key-action"}${showGrid ? " rc-key-lit" : ""}`}
+        onClick={() => setShowGrid((on) => !on)}
+        aria-pressed={showGrid}
+        title={`${copy.editor.showGridHint} (Alt+G)`}
+        aria-label={copy.editor.showGridHint}
+      >
+        <IconGrid className="rc-key-icon" />
+        {wide && <span>{copy.editor.showGrid}</span>}
+      </button>
+    );
+    return wide ? key : capped(key, copy.editor.showGrid);
+  };
+
+  /** Another page laid over this one, as one step undo can take back. */
+  const copyFrom = (fromPage: number, fromSubpage: number): boolean => {
+    const source = readPage?.(fromPage, fromSubpage);
+    if (source == null) return false;
+    transact(() => {
+      for (let i = COLS; i < TOTAL_CELLS; i++) writeCell(i, source[i]);
+    });
+    return true;
+  };
+
+  const copyFromKey = (wide: boolean) => {
+    if (readPage == null) return null;
+    const key = (
+      <CopyFromKey
+        className={`rc-key ${wide ? "rc-key-wide" : "rc-key-action"}`}
+        // A new subpage usually starts as the one before it.
+        suggestion={subpage > 1 ? `${pageNumber}.${subpage - 1}` : ""}
+        onCopy={copyFrom}
+        inline={wide}
+      >
+        <IconCopyPage className="rc-key-icon" />
+        {wide && <span>{copy.editor.copyFrom}</span>}
+      </CopyFromKey>
+    );
+    return wide ? key : capped(key, copy.editor.copyFrom);
+  };
+
+  /* ── the phone's magnifier ──────────────────────────────────────────────── */
+
+  const zoomOn = zoomed && isNarrow;
+  /** The part of the page in view, in fractions of the whole: the map's window. */
+  const [view, setView] = useState({ x: 0, y: 0, w: 1, h: 1 });
+  const readView = useCallback(() => {
+    const stage = stageRef.current;
+    if (stage == null) return;
+    setView({
+      x: stage.scrollLeft / stage.scrollWidth,
+      y: stage.scrollTop / stage.scrollHeight,
+      w: stage.clientWidth / stage.scrollWidth,
+      h: stage.clientHeight / stage.scrollHeight,
+    });
+  }, []);
+  useEffect(() => {
+    if (zoomOn) readView();
+  }, [zoomOn, readView]);
+
+  /** A finger on the map puts the middle of the view under it. */
+  const panTo = (event: React.PointerEvent<HTMLDivElement>) => {
+    const stage = stageRef.current;
+    if (stage == null) return;
+    const map = event.currentTarget.getBoundingClientRect();
+    stage.scrollTo(
+      ((event.clientX - map.left) / map.width) * stage.scrollWidth - stage.clientWidth / 2,
+      ((event.clientY - map.top) / map.height) * stage.scrollHeight - stage.clientHeight / 2,
+    );
+  };
+
+  // Typing magnified: the view follows the cursor, or the third word typed
+  // would be off the edge of it.
+  useEffect(() => {
+    const stage = stageRef.current;
+    const grid = gridRef.current;
+    if (!zoomOn || tool !== "text" || stage == null || grid == null) return;
+    const { col, row } = rowColFromIndex(cursorIndex);
+    const box = grid.getBoundingClientRect();
+    const frame = stage.getBoundingClientRect();
+    const x = box.left - frame.left + ((col + 0.5) / COLS) * box.width;
+    const y = box.top - frame.top + ((row + 0.5) / ROWS) * box.height;
+    const margin = 24;
+    if (x < margin || x > frame.width - margin || y < margin || y > frame.height - margin) {
+      stage.scrollBy(x - frame.width / 2, y - frame.height / 2);
+    }
+  }, [zoomOn, tool, cursorIndex]);
+
   /*
    * Clearing the page asks first — and undo can take it back, too. The cap is
    * an ordinary one with a red picture on it: red is for the answer that does
@@ -1783,8 +2299,42 @@ export function Editor({
 
   /* ── the page ───────────────────────────────────────────────────────────── */
 
+  const overlay = (
+    <>
+      {showGrid && <div className="editor-gridlines" />}
+      {tool === "select" && selection != null && (
+        <div className="editor-selection" style={overlayBox(selection)} />
+      )}
+      {ghost != null && (
+        <div className="editor-selection editor-selection-ghost" style={overlayBox(ghost)} />
+      )}
+      {remoteCursors?.map((rc) => {
+        const color = resolveCursorColor(rc.color);
+        return (
+          <div
+            key={`${rc.name}-${rc.index}`}
+            className="editor-remote-cursor"
+            style={{
+              ...overlayBox({ ...rowColFromIndex(rc.index), width: 1, height: 1 }),
+              outlineColor: color,
+            }}
+          >
+            <span className="editor-remote-cursor-label" style={{ background: color }}>
+              {rc.name}
+            </span>
+          </div>
+        );
+      })}
+    </>
+  );
+
   const stage = (
-    <main className="rc-stage">
+    <div className="rc-stage-wrap">
+    <main
+      className={`rc-stage${zoomOn ? " rc-stage-zoomed" : ""}`}
+      ref={stageRef}
+      onScroll={zoomOn ? readView : undefined}
+    >
       {/*
         * The set the page is drawn on: the same moulded bezel, sunk tube and
         * badge the page is watched in on /watch, so the two screens are one
@@ -1794,8 +2344,8 @@ export function Editor({
       <div className="rc-bezel">
         <div
           ref={gridRef}
-          className={`teletext-screen-wrapper${
-            brushMode === "picker"
+          className={`teletext-screen-wrapper${tool === "blink" ? " show-blink-marks" : ""}${
+            brushMode === "picker" || brushMode === "select"
               ? " picker-cursor"
               : isBrushActive
                 ? " brush-cursor"
@@ -1820,75 +2370,74 @@ export function Editor({
             inputMode={isNarrow ? "none" : undefined}
             onKeyDown={handleKeyDown}
             onInput={handleHiddenInput}
+            onCopy={(e) => handleCopy(e, false)}
+            onCut={(e) => handleCopy(e, true)}
+            onPaste={handlePaste}
           />
           <TeletextGrid
             page={page}
             pageNumber={pageNumber ?? 100}
             subpage={subpage}
             subpageCount={subpageCount}
-            cursorIndex={isBrushActive ? hoveredCellIndex : cursorIndex}
+            cursorIndex={
+              brushMode === "select" ? null : isBrushActive ? hoveredCellIndex : cursorIndex
+            }
             hoverPartIndex={brushMode === "pixel" ? hoveredPartIndex : null}
             cursorDoubleHeight={brushMode === "off" && doubleHeightOn}
             onPointerCell={handlePointerCell}
             onPointerEnd={endStroke}
             readOnly={false}
+            overlay={overlay}
           />
-          {remoteCursors && remoteCursors.length > 0 && (
-            <div
-              className="editor-remote-cursors"
-              aria-hidden
-              style={{
-                position: "absolute",
-                inset: 0,
-                pointerEvents: "none",
-                fontSize: "14px",
-              }}
-            >
-              {remoteCursors.map((rc) => {
-                const { col, row } = rowColFromIndex(rc.index);
-                const color = resolveCursorColor(rc.color);
-                return (
-                  <div
-                    key={`${rc.name}-${rc.index}`}
-                    className="editor-remote-cursor"
-                    style={{
-                      position: "absolute",
-                      left: `calc(14px + ${col} * 1em)`,
-                      top: `calc(14px + ${row} * 1.35em)`,
-                      width: "1em",
-                      height: "1.35em",
-                      outline: `2px solid ${color}`,
-                      outlineOffset: "-2px",
-                      boxSizing: "border-box",
-                    }}
-                  >
-                    <span
-                      className="editor-remote-cursor-label"
-                      style={{
-                        position: "absolute",
-                        top: "-1em",
-                        left: 0,
-                        fontSize: "0.5em",
-                        lineHeight: 1,
-                        background: color,
-                        color: "#000",
-                        padding: "1px 2px",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {rc.name}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </div>
         <span className="rc-nameplate" aria-hidden>
           Teletextron
         </span>
       </div>
     </main>
+      {/*
+        * A sixth of a cell is about two pixels across on a phone. The key
+        * doubles the page; the map beside it says which part is in view and
+        * moves it, since a finger on the page itself is a brush.
+        */}
+      {isNarrow && (
+        <div className="rc-zoom" onMouseDown={keepGridFocus}>
+          <button
+            type="button"
+            className={`rc-key rc-key-small${zoomed ? " rc-key-lit" : ""}`}
+            onClick={() => setZoomed((on) => !on)}
+            aria-pressed={zoomed}
+            title={copy.editor.zoom}
+            aria-label={copy.editor.zoom}
+          >
+            <span className="rc-glyph">2×</span>
+          </button>
+          {zoomOn && (
+            <div
+              className="rc-zoom-map"
+              aria-label={copy.editor.zoomMap}
+              onPointerDown={(event) => {
+                panTo(event);
+                event.currentTarget.setPointerCapture?.(event.pointerId);
+              }}
+              onPointerMove={(event) => {
+                if (event.buttons !== 0) panTo(event);
+              }}
+            >
+              <span
+                className="rc-zoom-view"
+                style={{
+                  left: `${view.x * 100}%`,
+                  top: `${view.y * 100}%`,
+                  width: `${view.w * 100}%`,
+                  height: `${view.h * 100}%`,
+                }}
+              />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 
   /* ── the phone ──────────────────────────────────────────────────────────── */
@@ -1972,6 +2521,10 @@ export function Editor({
                 )}
                 <section className="rc-cluster">
                   <div className="rc-keyrow">
+                    {gridKey(true)}
+                    {copyFromKey(true)}
+                  </div>
+                  <div className="rc-keyrow">
                     {exportKey(true)}
                     {clearKey(true)}
                   </div>
@@ -2006,6 +2559,8 @@ export function Editor({
           aria-label={copy.editor.wholePage}
         >
           {historyKeys}
+          {gridKey(false)}
+          {copyFromKey(false)}
           {exportKey(false)}
         </div>
         {/* Apart from the rest: the one key on the strip that destroys. */}
@@ -2024,6 +2579,7 @@ export function Editor({
             {toolKeys}
           </section>
           {toolOptions}
+          {people}
         </aside>
         {stage}
       </div>

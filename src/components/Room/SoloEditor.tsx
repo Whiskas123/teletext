@@ -32,7 +32,9 @@
  * the strip across the top of a desk, in the page sheet on a phone.
  *
  * The {@link Editor} itself is driven by {@link useEditPage} (injected `page` +
- * an `onEditCell` cell-level writer). Editing is solo — no cursor / presence.
+ * an `onEditCell` cell-level writer). Anybody else with the same screen open
+ * shows as a cursor on the page and a count beside the save lamp (see
+ * {@link useEditPresence}); there is still no chat or vote here.
  *
  * Requirements: 6.1, 6.7, 7.9, 9.3, 9.6.
  */
@@ -43,6 +45,8 @@ import { Link } from './LocalizedLink';
 
 import { useConnection } from '../../collab/useConnection';
 import { useEditPage } from '../../collab/useEditPage';
+import { useEditPresence } from '../../collab/useEditPresence';
+import { usePageReader } from '../../collab/usePageReader';
 import { usePageTitles } from '../../collab/useGuide';
 import { useIsModerator } from '../../collab/useIsModerator';
 import { useOccupiedPages } from '../../collab/useOccupiedPages';
@@ -58,11 +62,13 @@ import {
   MIN_SUBPAGE,
   clampSubpage,
   normalizeSubpage,
+  pageKey,
 } from '../../domain/subpages';
 import { ConfirmKey } from '../Editor/ConfirmKey';
 import { EDITOR_NARROW_QUERY, Editor, type EditorPageSheet } from '../Editor/Editor';
 import { LedWindow } from '../chrome/LedWindow';
 import { useMediaQuery } from '../../utils/useMediaQuery';
+import { TELETEXT_COLOR_HEX } from '../../types/teletext';
 import { useCopy } from './useCopy';
 import { useEnglishDraft } from './useEnglishDraft';
 
@@ -153,6 +159,13 @@ export function SoloEditor() {
   const inEnglish = englishWanted && english.page != null;
   const page = inEnglish && english.page != null ? english.page : portuguese;
   const saveError = inEnglish ? english.saveError : portugueseError;
+
+  // Who else has this screen open, and what "copy from" reads other pages with.
+  const presence = useEditPresence(`${pageKey(pageNumber, subpage)}${inEnglish ? ':en' : ''}`);
+  const readPage = usePageReader();
+  // A draft, so the field can be emptied on the way to a new name; only a
+  // valid name is kept and shown to the others.
+  const [nameDraft, setNameDraft] = useState(presence.name);
 
   // Global TV_Guide title editing for the current page (Req 9.3).
   const { title, setTitle } = usePageTitles();
@@ -583,7 +596,63 @@ export function SoloEditor() {
           {saveError != null ? copy.editor.notSaving : copy.editor.saved}
         </span>
       </span>
+      {/* On a phone the list has nowhere to stand; the count alone says somebody is here. */}
+      {isNarrow && presence.others.length > 0 && (
+        <span
+          className="rc-others"
+          role="status"
+          title={copy.editor.othersHere(presence.others.length)}
+          aria-label={copy.editor.othersHere(presence.others.length)}
+        >
+          +{presence.others.length}
+        </span>
+      )}
     </div>
+  );
+
+  /*
+   * Who is here, at the foot of the remote: how many, their names in the
+   * colours their cursors are drawn in, and this editor's own name first, as a
+   * field — it is the one name in the list that can be changed.
+   */
+  const dot = (color: string) => (
+    <span
+      className="rc-people-dot"
+      style={{ background: (TELETEXT_COLOR_HEX as Record<string, string | undefined>)[color] ?? color }}
+      aria-hidden
+    />
+  );
+  const people = (
+    <section className="rc-cluster rc-people" aria-label={copy.editor.peopleHere(presence.others.length + 1)}>
+      <span className="rc-legend">{copy.editor.peopleHere(presence.others.length + 1)}</span>
+      <ul className="rc-people-list">
+        <li>
+          {dot(presence.color)}
+          <input
+            type="text"
+            className="rc-field"
+            value={nameDraft}
+            onChange={(e) => {
+              setNameDraft(e.target.value);
+              presence.setName(e.target.value.trim());
+            }}
+            onBlur={() => setNameDraft(presence.name)}
+            maxLength={32}
+            autoComplete="off"
+            spellCheck={false}
+            title={copy.editor.yourNameHint}
+            aria-label={copy.editor.yourNameHint}
+          />
+          <span className="rc-sublegend">{copy.editor.you}</span>
+        </li>
+        {presence.others.map((other, i) => (
+          <li key={`${other.name}-${i}`}>
+            {dot(other.color)}
+            <span className="rc-people-name">{other.name}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 
   return (
@@ -596,10 +665,15 @@ export function SoloEditor() {
       subpageCount={subpageCount}
       page={page}
       onEditCell={handleEditCell}
+      onCursorChange={presence.setCursor}
+      remoteCursors={presence.others}
+      // In English only the words change; another page's cells are not words.
+      readPage={inEnglish ? undefined : readPage}
       nameplate={nameplate}
       pageDisplay={pageDisplay}
       pageKeypad={pageKeypad}
       pageDetails={pageDetails}
+      people={people}
       alert={
         saveError != null ? (
           <p className="rc-alert" role="alert">

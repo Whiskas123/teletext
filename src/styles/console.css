@@ -1571,3 +1571,172 @@
     animation: none;
   }
 }
+
+/* ── select, shapes, the grid key and the magnifier ───────────────────────── */
+
+.editor-console .rc-hint {
+  margin: 0;
+  font-size: 0.68rem;
+  line-height: 1.45;
+  color: var(--rc-cap-ink);
+}
+
+/* Four keys in the width of the remote: two rows of two. */
+.editor-console .rc-segmented-wrap {
+  flex-wrap: wrap;
+}
+
+.editor-console .rc-segmented-wrap > .rc-key {
+  flex: 1 1 40%;
+}
+
+/* The page and what floats over its corner; takes the stage's place in the desk. */
+.editor-console .rc-stage-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+
+.editor-console .rc-zoom {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+}
+
+/* The whole page in miniature, with the part in view marked on it. */
+.editor-console .rc-zoom-map {
+  position: relative;
+  width: 4.5rem;
+  aspect-ratio: 40 / 32.4;
+  border: 1px solid #6d6c68;
+  border-radius: 3px;
+  background: rgb(0 0 0 / 78%);
+  touch-action: none;
+  cursor: grab;
+}
+
+.editor-console .rc-zoom-view {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid #ffff00;
+  background: rgb(255 255 0 / 18%);
+  pointer-events: none;
+}
+
+/*
+ * Magnified: the page at twice its size, and the stage a window that scrolls
+ * over it. Started from the corner — centring a child larger than its
+ * container puts the part before the centre out of reach of any scroll.
+ */
+.editor-console.rc-layout-narrow .rc-stage-zoomed {
+  align-items: flex-start;
+  justify-content: flex-start;
+  overflow: auto;
+  scrollbar-width: none;
+}
+
+.editor-console.rc-layout-narrow .rc-stage-zoomed .rc-bezel {
+  flex: none;
+}
+
+.editor-console.rc-layout-narrow .rc-stage-zoomed .teletext-screen {
+  font-size: calc(
+    2 * min(calc((100cqw - 34px) / 40), calc((100cqh - 40px) / 32.4))
+  );
+}
+
+/* How many other people have this screen open, beside the save lamp. */
+.editor-console .rc-others {
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: #ffcc33;
+  color: #111;
+  font: 600 0.65rem/1.4 system-ui, sans-serif;
+}
+
+/*
+ * The toolbox: nine keys. Three to a row on the remote, captioned; one row
+ * along the foot of a phone, where nine captions would be nine smudges and the
+ * pictures have to speak for themselves.
+ */
+.editor-console .rc-remote .rc-tools .rc-cap {
+  letter-spacing: 0.08em;
+}
+
+.editor-console .rc-dock-tools .rc-tools {
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 0.25rem;
+}
+
+.editor-console .rc-dock-tools .rc-cap {
+  display: none;
+}
+
+/* Over the corner of the page, so as little of a key as will still take a thumb. */
+.editor-console .rc-zoom .rc-key-small {
+  width: 2rem;
+  min-height: 1.5rem;
+  padding: 0.15rem;
+  opacity: 0.9;
+}
+
+/*
+ * Who is here, at the foot of the remote. The remote is a column so that this
+ * can be pushed to the bottom of it however short the tool's settings are.
+ */
+.editor-console .rc-remote {
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-console .rc-remote > * {
+  flex: none;
+}
+
+.editor-console .rc-remote > .rc-people {
+  margin-top: auto;
+}
+
+.editor-console .rc-people-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.editor-console .rc-people-list > li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  font-size: 0.78rem;
+  color: var(--rc-cap-ink);
+}
+
+.editor-console .rc-people-dot {
+  flex: none;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+}
+
+.editor-console .rc-people-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-console .rc-people .rc-field {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.3rem 0.5rem;
+}
