@@ -402,7 +402,7 @@ interface EditorProps {
   pageDetails?: ReactNode;
   /** Something that went wrong with the page as a whole, said under the strip. */
   alert?: ReactNode;
-  /** Who is editing this screen: at the foot of the remote, on a desk only. */
+  /** Who is editing this screen: at the foot of the remote on a desk, in the page sheet on a phone. */
   people?: ReactNode;
   /**
    * Another page's content, for copying onto this one; null when there is
@@ -1375,6 +1375,8 @@ export function Editor({
         : eraseOn
           ? "eraser"
           : "brush";
+
+  const toolInHand = TOOLBOX.find((key) => key.id === activeTool) ?? TOOLBOX[0];
 
   /** Take up a key of the toolbox. */
   const pickTool = useCallback(
@@ -2482,7 +2484,15 @@ export function Editor({
             {toolOptions}
           </div>
           {tool === "text" && <div className="rc-dock-keyboard">{textPad}</div>}
-          <nav className="rc-dock-tools">{toolKeys}</nav>
+          <nav className="rc-dock-tools">
+            {/* Nine pictures and no room for nine captions, and a thumb has no
+                hover: the tool in hand is named, with what it does, above them. */}
+            <p className="rc-dock-toolname" aria-live="polite">
+              <strong>{toolWord(copy, toolInHand.label)}</strong>
+              {toolWord(copy, toolInHand.title)}
+            </p>
+            {toolKeys}
+          </nav>
         </div>
 
         {sheetShown && (
@@ -2519,6 +2529,7 @@ export function Editor({
                 {pageDetails != null && (
                   <section className="rc-cluster">{pageDetails}</section>
                 )}
+                {people}
                 <section className="rc-cluster">
                   <div className="rc-keyrow">
                     {gridKey(true)}

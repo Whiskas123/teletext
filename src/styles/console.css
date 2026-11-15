@@ -1679,6 +1679,45 @@
   display: none;
 }
 
+/* The tool in hand, named over the row of pictures: one line, cut if long. */
+.editor-console .rc-dock-toolname {
+  margin: 0 0 0.45rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.68rem;
+  color: var(--rc-cap-ink);
+}
+
+.editor-console .rc-dock-toolname > strong {
+  margin-right: 0.5em;
+  color: #e6e4dc;
+}
+
+/*
+ * On a phone the count of other people is a bubble on the corner of the way
+ * out, so it takes no width from a strip that has none to give — in line, it
+ * pushed the page-sheet key off the edge of the screen.
+ */
+.editor-console .rc-strip-narrow .rc-brand {
+  position: relative;
+}
+
+.editor-console .rc-strip-narrow .rc-others {
+  position: absolute;
+  top: -0.25rem;
+  left: 1.25rem;
+  padding: 0 0.3rem;
+  font-size: 0.55rem;
+  pointer-events: none;
+}
+
+/* A name label is wider than six cells of a phone's page; the cursor alone
+   shows there, and the names are in the page sheet. */
+.editor-console.rc-layout-narrow .editor-remote-cursor-label {
+  display: none;
+}
+
 /* Over the corner of the page, so as little of a key as will still take a thumb. */
 .editor-console .rc-zoom .rc-key-small {
   width: 2rem;

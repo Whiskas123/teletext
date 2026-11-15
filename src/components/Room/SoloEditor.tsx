@@ -596,7 +596,7 @@ export function SoloEditor() {
           {saveError != null ? copy.editor.notSaving : copy.editor.saved}
         </span>
       </span>
-      {/* On a phone the list has nowhere to stand; the count alone says somebody is here. */}
+      {/* On a phone the list is in the page sheet; the count says somebody is here. */}
       {isNarrow && presence.others.length > 0 && (
         <span
           className="rc-others"
