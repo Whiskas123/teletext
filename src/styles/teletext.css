@@ -17,14 +17,27 @@
  * instead, so there is no seam to cover; see `.crt-raster .teletext-screen` in
  * `App.css`.
  */
-.teletext-bg-black { background-color: #000000; }
-.teletext-bg-red { background-color: #ff0000; }
-.teletext-bg-green { background-color: #00ff00; }
-.teletext-bg-yellow { background-color: #ffff00; }
-.teletext-bg-blue { background-color: #0000ff; }
-.teletext-bg-magenta { background-color: #ff00ff; }
-.teletext-bg-cyan { background-color: #00ffff; }
-.teletext-bg-white { background-color: #ffffff; }
+/*
+ * Each colour is also said for a hovered button: the site's `button:hover`
+ * grey outranks a lone class, and a palette swatch is a button whose colour is
+ * its whole content — hovered, it went grey and looked as if it had gone.
+ */
+.teletext-bg-black,
+button.teletext-bg-black:hover { background-color: #000000; }
+.teletext-bg-red,
+button.teletext-bg-red:hover { background-color: #ff0000; }
+.teletext-bg-green,
+button.teletext-bg-green:hover { background-color: #00ff00; }
+.teletext-bg-yellow,
+button.teletext-bg-yellow:hover { background-color: #ffff00; }
+.teletext-bg-blue,
+button.teletext-bg-blue:hover { background-color: #0000ff; }
+.teletext-bg-magenta,
+button.teletext-bg-magenta:hover { background-color: #ff00ff; }
+.teletext-bg-cyan,
+button.teletext-bg-cyan:hover { background-color: #00ffff; }
+.teletext-bg-white,
+button.teletext-bg-white:hover { background-color: #ffffff; }
 
 /* Pixelated teletext font (SAA5050-style); accentuated chars appear squished in same cell */
 .teletext-screen {

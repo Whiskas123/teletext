@@ -496,6 +496,8 @@ export function Editor({
    * paint and never to erase. Alt still works on a desk, as a momentary switch.
    */
   const [eraseOn, setEraseOn] = useState(false);
+  /** Which of the text colours the phone's one-line bar is choosing, if either. */
+  const [textPick, setTextPick] = useState<"fg" | "bg" | null>(null);
   /** Whether the page sheet is up (phone only). */
   const [sheetOpen, setSheetOpen] = useState(false);
   /** Which layer the panel's keyboard is showing, and whether it is in caps. */
@@ -2444,6 +2446,14 @@ export function Editor({
 
   /* ── the phone ──────────────────────────────────────────────────────────── */
 
+  /* Nine pictures and no room for nine captions, and a thumb has no hover: the
+     tool in hand is named at the head of its settings. */
+  const toolName = (
+    <p className="rc-dock-toolname" aria-live="polite">
+      {toolWord(copy, toolInHand.label)}
+    </p>
+  );
+
   if (isNarrow) {
     return (
       <div className="editor-console rc-layout rc-layout-narrow">
@@ -2480,18 +2490,64 @@ export function Editor({
           * the keyboard stay put; only the settings above them scroll.
           */}
         <div className="rc-dock" onMouseDown={keepGridFocus}>
-          <div className="rc-dock-options">
-            {toolOptions}
-          </div>
+          {/*
+            * Typing leaves the settings one line of height above the keyboard,
+            * so they are one line: the tool's name and three keys, and a key
+            * pressed turns the line into the eight colours to choose from. The
+            * two palettes stacked there were a scrolling strip a finger high.
+            * Every other tool has the keyboard's room, and scrolls if it must.
+            */}
+          {tool === "text" && !picking ? (
+            <div className="rc-textbar">
+              {textPick == null ? (
+                <>
+                  {toolName}
+                  {(["fg", "bg"] as const).map((which) => (
+                    <button
+                      key={which}
+                      type="button"
+                      className="rc-key"
+                      onClick={() => setTextPick(which)}
+                    >
+                      <span className={`rc-chip teletext-bg-${which === "fg" ? fg : bg}`} aria-hidden />
+                      <span>{which === "fg" ? copy.editor.color : copy.editor.background}</span>
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className={`rc-key${doubleHeightOn ? " rc-key-lit" : ""}`}
+                    onClick={() => setDoubleHeightOn((v) => !v)}
+                    aria-pressed={doubleHeightOn}
+                    aria-label={copy.editor.doubleHeight}
+                    title={copy.editor.doubleHeightHint}
+                  >
+                    <IconDoubleHeight className="rc-key-icon" />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="rc-sublegend">
+                    {textPick === "fg" ? copy.editor.color : copy.editor.background}
+                  </span>
+                  {palette(
+                    textPick === "fg" ? fg : bg,
+                    (color) => {
+                      (textPick === "fg" ? setFg : setBg)(color);
+                      setTextPick(null);
+                    },
+                    (c) => c,
+                  )}
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="rc-dock-options">
+              {toolName}
+              {toolOptions}
+            </div>
+          )}
           {tool === "text" && <div className="rc-dock-keyboard">{textPad}</div>}
-          <nav className="rc-dock-tools">
-            {/* Nine pictures and no room for nine captions, and a thumb has no
-                hover: the tool in hand is named above them. */}
-            <p className="rc-dock-toolname" aria-live="polite">
-              {toolWord(copy, toolInHand.label)}
-            </p>
-            {toolKeys}
-          </nav>
+          <nav className="rc-dock-tools">{toolKeys}</nav>
         </div>
 
         {sheetShown && (

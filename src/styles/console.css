@@ -1679,9 +1679,9 @@
   display: none;
 }
 
-/* The tool in hand, named over the row of pictures: one line, cut if long. */
+/* The tool in hand, named at the head of its settings: one line, cut if long. */
 .editor-console .rc-dock-toolname {
-  margin: 0 0 0.45rem;
+  margin: 0.45rem 0 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1774,4 +1774,44 @@
   flex: 1 1 auto;
   min-width: 0;
   padding: 0.3rem 0.5rem;
+}
+
+/*
+ * Typing on a phone: the text settings as one line above the keyboard. It
+ * neither shrinks nor scrolls — what is on it is all there is.
+ */
+.editor-console .rc-textbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0 0.1rem;
+}
+
+.editor-console .rc-textbar > .rc-key {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 2.3rem;
+}
+
+.editor-console .rc-textbar > .rc-key:last-child {
+  flex: 0 0 2.6rem;
+}
+
+.editor-console .rc-textbar > .rc-dock-toolname {
+  flex: none;
+  margin: 0 0.4rem 0 0.1rem;
+}
+
+.editor-console .rc-textbar > .rc-palette {
+  flex: 1 1 auto;
+}
+
+/* The colour a key would change, on the key. */
+.editor-console .rc-chip {
+  flex: none;
+  width: 0.95rem;
+  height: 0.95rem;
+  border: 1px solid #8a8983;
+  border-radius: 2px;
 }
