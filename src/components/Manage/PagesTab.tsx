@@ -244,6 +244,16 @@ export function PagesTab({
       ),
     [sections],
   );
+  // While filtering nothing is hidden by a heading, so this is just `order`.
+  const allPages = useMemo(
+    () =>
+      filtering
+        ? order
+        : (['curated', 'playground'] as const).flatMap((group) =>
+            lineupItems(occupied, group).flatMap((item) => (item.type === 'page' ? [item.pageNumber] : [])),
+          ),
+    [filtering, order, occupied],
+  );
 
   // Selection is read through what exists: a page deleted elsewhere drops out
   // of it without a state update of its own.
@@ -751,6 +761,11 @@ export function PagesTab({
   /* --- the details pane ---------------------------------------------------- */
 
   const selectedRows = selectedPages.map(rowOf);
+  const renamePage = (page: number) => {
+    selection.selectOnly(page);
+    query.setOpen(false);
+    requestAnimationFrame(() => titleRef.current?.focus());
+  };
 
   let side: React.ReactNode;
   if (query.open) {
@@ -790,6 +805,7 @@ export function PagesTab({
         onSetShift={(shiftDown) => changeTransforms(selectedPages, { shiftDown, menuId: 'keep' })}
         onMove={() => setMoving(selectedPages)}
         onFillTitles={() => actions.fillTitles(selectedPages)}
+        onShowPage={renamePage}
         untranslated={translations.missing(selectedRows.map(({ pageNumber, screens }) => ({ pageNumber, screens }))).length}
         translating={translations.progress}
         onTranslate={() =>
@@ -1018,11 +1034,7 @@ export function PagesTab({
           onSwap={swap}
           onMoveScreen={moveScreen}
           onDelete={askDelete}
-          onRename={(page) => {
-            selection.selectOnly(page);
-            query.setOpen(false);
-            requestAnimationFrame(() => titleRef.current?.focus());
-          }}
+          onRename={renamePage}
           onAddAt={(from) => openArchive({ mode: 'pages', at: String(from) })}
           onCloseGap={askCloseGap}
           collapseOf={(page) => {
@@ -1040,6 +1052,7 @@ export function PagesTab({
             collapsed.has(page) && !filtering ? [page, ...(spans.get(page) ?? [])] : [page]
           }
           emptyMessage={emptyMessage}
+          allPages={allPages}
         />
 
         {selectedPages.length > 1 && (

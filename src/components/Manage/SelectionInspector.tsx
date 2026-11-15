@@ -25,7 +25,9 @@ export interface SelectionInspectorProps {
   onSetShift(shift: boolean): void;
   onMove(): void;
   onFillTitles(): void;
-  /** Screens among the selection with text and no English yet. */
+  /** Select just this page, with the caret in its title. */
+  onShowPage(pageNumber: number): void;
+  /** Screens among the selection with no English, or English older than their text. */
   untranslated: number;
   /** Done of total while a batch translation runs. */
   translating: { done: number; total: number } | null;
@@ -38,6 +40,8 @@ export interface SelectionInspectorProps {
 }
 
 const MIXED = '__mixed';
+/** Untitled pages named in the warning before it trails off. */
+const UNTITLED_SHOWN = 12;
 
 function common<T>(values: readonly T[]): T | typeof MIXED {
   return values.every((value) => value === values[0]) ? values[0] : MIXED;
@@ -52,6 +56,7 @@ export function SelectionInspector({
   onSetShift,
   onMove,
   onFillTitles,
+  onShowPage,
   untranslated,
   translating,
   onTranslate,
@@ -70,7 +75,7 @@ export function SelectionInspector({
   );
   const shift = common(archive.map((row) => row.shift));
   const handMade = rows.length - archive.length;
-  const untitled = rows.filter((row) => row.title.trim() === '').length;
+  const untitled = rows.filter((row) => row.title.trim() === '').map((row) => row.pageNumber);
   const [outcome, setOutcome] = useState<TranslateOutcome | null>(null);
 
   return (
@@ -86,10 +91,24 @@ export function SelectionInspector({
       </header>
 
       <section className="mg-insp-section">
-        {untitled > 0 && (
+        {untitled.length > 0 && (
           <div className="mg-inline mg-wrap">
             <span className="mg-note mg-note-warn mg-grow">
-              {untitled} of these {untitled === 1 ? 'has' : 'have'} no title.
+              {untitled.length} of these {untitled.length === 1 ? 'has' : 'have'} no title:{' '}
+              {untitled.slice(0, UNTITLED_SHOWN).map((page, i) => (
+                <span key={page}>
+                  {i > 0 && ', '}
+                  <button
+                    type="button"
+                    className="mg-link"
+                    title={`Open page ${page} to give it a title`}
+                    onClick={() => onShowPage(page)}
+                  >
+                    {page}
+                  </button>
+                </span>
+              ))}
+              {untitled.length > UNTITLED_SHOWN && '…'}
             </span>
             <button
               type="button"
@@ -107,13 +126,13 @@ export function SelectionInspector({
             <span className="mg-note mg-grow">
               {translating != null
                 ? `Translating ${translating.done + 1} of ${translating.total}…`
-                : `${untranslated} ${untranslated === 1 ? 'screen has' : 'screens have'} no English.`}
+                : `${untranslated} ${untranslated === 1 ? 'screen needs' : 'screens need'} English: none yet, or edited since.`}
             </span>
             <button
               type="button"
               className="mg-btn mg-btn-small"
               disabled={locked || translating != null}
-              title="Translate each of them with Claude, one after another. Screens that already have English are left alone."
+              title="Translate each of them with Claude, one after another. Screens whose English is up to date are left alone."
               onClick={() => {
                 setOutcome(null);
                 void onTranslate().then(setOutcome);

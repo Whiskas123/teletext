@@ -86,6 +86,11 @@ export interface LineupTableProps {
   /** What dragging this row carries: a collapsed heading brings its section. */
   dragPagesOf(pageNumber: number): number[];
   emptyMessage: string | null;
+  /**
+   * What select-all picks: `order` plus the pages hidden under collapsed
+   * headings — closing a section to tidy the view must not leave it out.
+   */
+  allPages: readonly number[];
 }
 
 const KIND_LABEL: Record<string, string> = {
@@ -119,6 +124,7 @@ export function LineupTable({
   onToggleCollapse,
   dragPagesOf,
   emptyMessage,
+  allPages,
 }: LineupTableProps) {
   const tableRef = useRef<HTMLDivElement>(null);
   const [spot, setSpot] = useState<DropSpot | null>(null);
@@ -257,14 +263,14 @@ export function LineupTable({
       case 'A':
         if (event.metaKey || event.ctrlKey) {
           event.preventDefault();
-          selection.selectAll(order);
+          selection.selectAll(allPages);
         }
         return;
     }
   };
 
-  const allSelected = order.length > 0 && order.every((page) => selected.has(page));
-  const someSelected = order.some((page) => selected.has(page));
+  const allSelected = allPages.length > 0 && allPages.every((page) => selected.has(page));
+  const someSelected = allPages.some((page) => selected.has(page));
   const hint = verdict != null && spot != null ? verdict : null;
 
   return (
@@ -298,16 +304,16 @@ export function LineupTable({
     >
       <div className="mg-row mg-row-head" role="row">
         <span role="columnheader" className="mg-col-check">
-          <label className="mg-check-hit" title={allSelected ? 'Clear the selection (Esc)' : 'Select every page shown (⌘A)'}>
+          <label className="mg-check-hit" title={allSelected ? 'Clear the selection (Esc)' : 'Select every page, collapsed ones too (⌘A)'}>
             <input
               ref={(input) => {
                 if (input != null) input.indeterminate = someSelected && !allSelected;
               }}
               type="checkbox"
               checked={allSelected}
-              disabled={order.length === 0}
-              aria-label={allSelected ? 'Clear the selection' : 'Select every page shown'}
-              onChange={() => (allSelected ? selection.clear() : selection.selectAll(order))}
+              disabled={allPages.length === 0}
+              aria-label={allSelected ? 'Clear the selection' : 'Select every page'}
+              onChange={() => (allSelected ? selection.clear() : selection.selectAll(allPages))}
             />
           </label>
         </span>

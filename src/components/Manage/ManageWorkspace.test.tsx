@@ -452,11 +452,23 @@ describe('working through the archive', () => {
     await user.click(row(200));
     await user.keyboard('{/Shift}');
     const pane = screen.getByRole('complementary', { name: '3 pages selected' });
-    expect(within(pane).getByText('1 of these has no title.')).toBeInTheDocument();
+    expect(within(pane).getByText(/1 of these has no title/)).toBeInTheDocument();
     await user.click(within(pane).getByRole('button', { name: 'Fill in from page text' }));
     await waitFor(() => expect(titleAt(150)).toMatch(/^lorem ipsum/));
     expect(titleAt(100)).toBe('Index');
     expect(screen.getByText('1 page given a title from its own text.')).toBeInTheDocument();
+  });
+
+  it('names the untitled page, one click from its title field', async () => {
+    const { user } = renderWorkspace();
+    await user.click(row(100));
+    await user.keyboard('{Shift>}');
+    await user.click(row(200));
+    await user.keyboard('{/Shift}');
+    const pane = screen.getByRole('complementary', { name: '3 pages selected' });
+    await user.click(within(pane).getByRole('button', { name: '150' }));
+    await waitFor(() => expect(row(150)).toHaveAttribute('aria-selected', 'true'));
+    expect(screen.queryByRole('complementary', { name: '3 pages selected' })).toBeNull();
   });
 });
 
@@ -475,6 +487,27 @@ describe('English written by hand', () => {
     await waitFor(() =>
       expect(within(english).getByRole('link', { name: 'Edit English' })).toHaveAttribute('href', '/edit/201/1?lang=en'),
     );
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('translating a selection', () => {
+  it('counts a screen edited since its translation as needing English again', async () => {
+    // Made from words 201 no longer says, so none of it matches the page now.
+    const runs = [{ row: 2, col: 1, pt: '201 An older story', en: '201 An older tale' }];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ translations: { 201: runs } }))),
+    );
+    const { user } = renderWorkspace();
+    await user.click(row(201));
+    await user.keyboard('{Meta>}');
+    await user.click(row(710));
+    await user.keyboard('{/Meta}');
+    // 710 is a visitor page, with nothing to translate: the one is 201.
+    const pane = screen.getByRole('complementary', { name: '2 pages selected' });
+    await waitFor(() => expect(within(pane).getByRole('button', { name: 'Translate it' })).toBeInTheDocument());
+    expect(within(pane).getByText('1 screen needs English: none yet, or edited since.')).toBeInTheDocument();
     vi.unstubAllGlobals();
   });
 });
@@ -520,6 +553,13 @@ describe('collapsing sections', () => {
     await user.click(row(200));
     fireEvent.keyDown(row(200), { key: 'ArrowRight' });
     expect(shown()).toContain(201);
+  });
+
+  it('selects the pages under a collapsed heading too when selecting all', async () => {
+    const { user } = renderWorkspace();
+    await user.click(screen.getByRole('button', { name: 'Hide the 3 pages under 200' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Select every page' }));
+    expect(screen.getByRole('complementary', { name: '8 pages selected' })).toBeInTheDocument();
   });
 
   it('drags a collapsed heading as its whole section, and keeps it collapsed', async () => {

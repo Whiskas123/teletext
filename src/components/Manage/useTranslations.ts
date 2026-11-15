@@ -41,7 +41,7 @@ export interface Translations {
   page(pageNumber: number, screens: number): PageTranslation | null;
   /** The screen as the EN key would show it, or `null` with no English for it. */
   english(pageNumber: number, subpage: number): TeletextPage | null;
-  /** Screens among these pages that have text and no translation yet. */
+  /** Screens among these pages with text and no English, or English made before an edit. */
   missing(pages: readonly { pageNumber: number; screens: number }[]): { pageNumber: number; subpage: number }[];
   translate(targets: readonly { pageNumber: number; subpage: number }[]): Promise<TranslateOutcome>;
   /** The page's English title while it still matches `title`, else `''`. */
@@ -155,7 +155,10 @@ export function useTranslations(
     (pages: readonly { pageNumber: number; screens: number }[]) =>
       pages.flatMap(({ pageNumber, screens }) =>
         Array.from({ length: screens }, (_, i) => ({ pageNumber, subpage: i + 1 })).filter(
-          ({ subpage }) => screen(pageNumber, subpage)?.status === 'none',
+          ({ subpage }) => {
+            const status = screen(pageNumber, subpage)?.status;
+            return status === 'none' || status === 'partial';
+          },
         ),
       ),
     [screen],
