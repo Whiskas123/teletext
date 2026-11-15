@@ -1686,11 +1686,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.68rem;
-  color: var(--rc-cap-ink);
-}
-
-.editor-console .rc-dock-toolname > strong {
-  margin-right: 0.5em;
+  font-weight: 700;
   color: #e6e4dc;
 }
 

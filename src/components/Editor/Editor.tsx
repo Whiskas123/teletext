@@ -2486,10 +2486,9 @@ export function Editor({
           {tool === "text" && <div className="rc-dock-keyboard">{textPad}</div>}
           <nav className="rc-dock-tools">
             {/* Nine pictures and no room for nine captions, and a thumb has no
-                hover: the tool in hand is named, with what it does, above them. */}
+                hover: the tool in hand is named above them. */}
             <p className="rc-dock-toolname" aria-live="polite">
-              <strong>{toolWord(copy, toolInHand.label)}</strong>
-              {toolWord(copy, toolInHand.title)}
+              {toolWord(copy, toolInHand.label)}
             </p>
             {toolKeys}
           </nav>
