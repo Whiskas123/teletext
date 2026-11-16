@@ -106,9 +106,13 @@ export interface ShowcaseBootEntry {
   subpage: number;
   position: number;
   title: string;
+  title_en?: string;
+  has_en?: boolean;
   updated_at: string;
   /** The static picture, written for exactly this version of the page. */
   src: string;
+  /** The English picture, when one was drawn. */
+  src_en?: string;
 }
 
 /**
@@ -129,8 +133,9 @@ export function showcasePicturePath(
   subpage: number,
   version: string,
   extension = 'png',
+  english = false,
 ): string {
-  return `/${SHOWCASE_DIR}/${pageNumber}-${subpage}-${version.replace(/\D/g, '')}.${extension}`;
+  return `/${SHOWCASE_DIR}/${pageNumber}-${subpage}-${version.replace(/\D/g, '')}${english ? '-en' : ''}.${extension}`;
 }
 
 /**

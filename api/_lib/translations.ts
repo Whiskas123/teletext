@@ -269,7 +269,7 @@ async function moveAll(req: VercelRequest, res: VercelResponse): Promise<void> {
       `,
       sql`
         create temp table moving_showcase on commit drop as
-        select p.tp as page_number, p.ts as subpage, s.position, s.image, s.image_type, s.title, s.updated_at
+        select p.tp as page_number, p.ts as subpage, s.position, s.image, s.image_en, s.image_type, s.title, s.title_en, s.updated_at
         from unnest(${fromPages}::int[], ${fromSubs}::int[], ${toPages}::int[], ${toSubs}::int[]) as p(fp, fs, tp, ts)
         join showcase_pages s on s.page_number = p.fp and s.subpage = p.fs
         where p.tp is not null
@@ -280,8 +280,8 @@ async function moveAll(req: VercelRequest, res: VercelResponse): Promise<void> {
         where (s.page_number = p.fp and s.subpage = p.fs) or (s.page_number = p.tp and s.subpage = p.ts)
       `,
       sql`
-        insert into showcase_pages (page_number, subpage, position, image, image_type, title, updated_at)
-        select page_number, subpage, position, image, image_type, title, updated_at from moving_showcase
+        insert into showcase_pages (page_number, subpage, position, image, image_en, image_type, title, title_en, updated_at)
+        select page_number, subpage, position, image, image_en, image_type, title, title_en, updated_at from moving_showcase
       `,
     ]);
     json(res, 200, { moved: fromPages.length });

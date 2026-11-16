@@ -25,6 +25,7 @@ import {
   type ShowcaseBootEntry,
 } from '../domain/showcase';
 import { pageKey, type SubpageCounts, SUBPAGE_COUNTS_CHANNEL } from '../domain/subpages';
+import { translatePage, type SubtitleEntry } from '../domain/subtitles';
 import { blobToBase64, renderPageBlob } from '../utils/pageCanvas';
 import { PAGES_CHANNEL } from './useEditPage';
 import { usePageTitles } from './useGuide';
@@ -36,6 +37,10 @@ export interface ShowcaseEntry {
   subpage: number;
   position: number;
   title: string;
+  /** The English caption, or `''` when the page had none when drawn. */
+  title_en?: string;
+  /** Whether an English picture was drawn; `lang=en` serves it. */
+  has_en?: boolean;
   updated_at: string;
 }
 
@@ -52,8 +57,9 @@ export function showcaseImageUrl(
   pageNumber: number,
   subpage: number,
   version?: string,
+  english = false,
 ): string {
-  const base = `/api/showcase?format=image&page=${pageNumber}&subpage=${subpage}`;
+  const base = `/api/showcase?format=image&page=${pageNumber}&subpage=${subpage}${english ? '&lang=en' : ''}`;
   return version == null ? base : `${base}&v=${encodeURIComponent(version)}`;
 }
 
@@ -91,7 +97,7 @@ const BOOT = readBoot();
 const BOOT_PICTURES = new Map(
   BOOT.map((entry) => [
     showcaseVersionKey(entry.page_number, entry.subpage, entry.updated_at),
-    entry.src,
+    entry,
   ]),
 );
 
@@ -110,12 +116,39 @@ export function showcasePictureUrl(
   pageNumber: number,
   subpage: number,
   version?: string,
+  english = false,
 ): string {
   const baked =
     version == null
       ? undefined
       : BOOT_PICTURES.get(showcaseVersionKey(pageNumber, subpage, version));
-  return baked ?? showcaseImageUrl(pageNumber, subpage, version);
+  // A build from before English pictures existed has no `src_en`: fall to the
+  // endpoint, which knows.
+  const src = english ? baked?.src_en : baked?.src;
+  return src ?? showcaseImageUrl(pageNumber, subpage, version, english);
+}
+
+/**
+ * A screen's stored English and its page's English title, read fresh: a
+ * moderator who just pressed Translate must get the new English drawn. `null`
+ * when there is none, or it could not be read — the Portuguese is still drawn.
+ */
+async function readEnglish(
+  pageNumber: number,
+  subpage: number,
+): Promise<{ runs: SubtitleEntry[]; title?: { pt: string; en: string } } | null> {
+  try {
+    const response = await fetch('/api/snapshot?subs', { credentials: 'same-origin' });
+    if (!response.ok) return null;
+    const data = (await response.json()) as {
+      translations?: Record<string, SubtitleEntry[]>;
+      titles?: Record<string, { pt: string; en: string }>;
+    };
+    const runs = data.translations?.[String(pageKey(pageNumber, subpage))];
+    return runs == null ? null : { runs, title: data.titles?.[pageNumber] };
+  } catch {
+    return null;
+  }
 }
 
 export interface ShowcaseApi {
@@ -229,20 +262,31 @@ export function useShowcase({ fresh = false }: ShowcaseOptions = {}): ShowcaseAp
       const page = normalizePage(stored);
 
       const subpageCount = Math.max(1, Number(counts?.[pageNumber] ?? 1));
-      const blob = await renderPageBlob(page, {
-        pageNumber,
-        subpage,
-        subpageCount,
-        // The fastext strip is identical on every page; a row of them along the
-        // front page would be a repeated smear.
-        showIndexLine: false,
-        // And so is the header row — page number, counter, and a clock frozen
-        // at the moment this was drawn.
-        skipHeaderRow: true,
-      });
+      const draw = (cells: typeof page) =>
+        renderPageBlob(cells, {
+          pageNumber,
+          subpage,
+          subpageCount,
+          // The fastext strip is identical on every page; a row of them along
+          // the front page would be a repeated smear.
+          showIndexLine: false,
+          // And so is the header row — page number, counter, and a clock
+          // frozen at the moment this was drawn.
+          skipHeaderRow: true,
+        });
+      const blob = await draw(page);
       if (blob == null) {
         return { ok: false, error: 'This browser could not draw the page.' };
       }
+
+      // The English picture, for `/en`: the page as the EN key shows it, from
+      // the translation stored now. None when nothing of it applies, and then
+      // the English front page shows the Portuguese, as the EN key would.
+      const english = await readEnglish(pageNumber, subpage);
+      const translated = english == null ? null : translatePage(page, english.runs);
+      const blobEn = translated == null ? null : await draw(translated);
+      const ptTitle = title(pageNumber).trim();
+      const titleEn = english?.title != null && english.title.pt === ptTitle ? english.title.en : '';
 
       try {
         const response = await fetch('/api/showcase', {
@@ -254,8 +298,10 @@ export function useShowcase({ fresh = false }: ShowcaseOptions = {}): ShowcaseAp
             subpage,
             position,
             title: title(pageNumber),
+            titleEn,
             imageType: blob.type || 'image/png',
             image: await blobToBase64(blob),
+            imageEn: blobEn == null ? null : await blobToBase64(blobEn),
           }),
         });
         if (!response.ok) {

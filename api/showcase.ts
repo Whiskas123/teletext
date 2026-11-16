@@ -4,7 +4,8 @@
  * - `GET` (public) lists the strip in order. Every visitor reads this, so it is
  *   deliberately open, and it carries no image bytes — just what is on the
  *   strip and in what order.
- * - `GET ?page=&subpage=&format=image` (public) returns one picture.
+ * - `GET ?page=&subpage=&format=image` (public) returns one picture; with
+ *   `&lang=en`, the English one (the Portuguese where none was drawn).
  * - `PUT` (admin) puts a page on the strip, with the picture the browser drew.
  * - `DELETE` (admin) takes one off.
  *
@@ -52,6 +53,20 @@ function toBuffer(raw: unknown): Buffer {
     : Buffer.from(String(raw).replace(/^\\x/, ''), 'hex');
 }
 
+/** A picture as the browser sent it, decoded and bounded. */
+function decodeImage(
+  raw: unknown,
+): { ok: true; bytes: Buffer } | { ok: false; status: number; error: string } {
+  const base64 = (typeof raw === 'string' ? raw : '').replace(/^data:[^,]*,/, '');
+  if (base64.length === 0) return { ok: false, status: 400, error: 'No picture was sent for that page.' };
+  const bytes = Buffer.from(base64, 'base64');
+  if (bytes.length === 0) return { ok: false, status: 400, error: 'That picture could not be decoded.' };
+  if (bytes.length > MAX_IMAGE_BYTES) {
+    return { ok: false, status: 413, error: 'That picture is larger than a teletext page should ever be.' };
+  }
+  return { ok: true, bytes };
+}
+
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse,
@@ -69,8 +84,11 @@ export default async function handler(
           return;
         }
 
+        const english = queryValue(req, 'lang') === 'en';
         const rows = await db()`
-          select image, image_type, updated_at from showcase_pages
+          select case when ${english} then coalesce(image_en, image) else image end as image,
+                 image_type, updated_at
+          from showcase_pages
           where page_number = ${pageNumber} and subpage = ${subpage}
         `;
         const stored = rows[0];
@@ -97,7 +115,8 @@ export default async function handler(
       // The strip itself. No bytes: the browser asks for the pictures it needs
       // by URL, which lets them cache separately from the list.
       const rows = await db()`
-        select page_number, subpage, position, title, updated_at
+        select page_number, subpage, position, title, title_en,
+               image_en is not null as has_en, updated_at
         from showcase_pages
         order by position, page_number, subpage
       `;
@@ -168,28 +187,29 @@ export default async function handler(
       return;
     }
 
-    // The picture arrives base64-encoded in JSON: it is a few kilobytes, and a
+    // The pictures arrive base64-encoded in JSON: a few kilobytes each, and a
     // multipart upload for that would be more machinery than it saves.
-    const encoded = typeof body.image === 'string' ? body.image : '';
-    const base64 = encoded.replace(/^data:[^,]*,/, '');
-    if (base64.length === 0) {
-      fail(res, 400, 'No picture was sent for that page.');
+    const image = decodeImage(body.image);
+    if (!image.ok) {
+      fail(res, image.status, image.error);
       return;
     }
-
-    const image = Buffer.from(base64, 'base64');
-    if (image.length === 0) {
-      fail(res, 400, 'That picture could not be decoded.');
+    // The English one is optional: a screen with no translation has none.
+    const imageEn = body.imageEn == null ? null : decodeImage(body.imageEn);
+    if (imageEn != null && !imageEn.ok) {
+      fail(res, imageEn.status, `English picture: ${imageEn.error}`);
       return;
     }
-    if (image.length > MAX_IMAGE_BYTES) {
-      fail(res, 413, 'That picture is larger than a teletext page should ever be.');
+    const titleEn = validateTitle(typeof body.titleEn === 'string' ? body.titleEn : '');
+    if (!titleEn.ok) {
+      fail(res, 400, 'English title must be 60 characters or fewer.');
       return;
     }
 
     // Served back as the picture's `Content-Type` to every visitor, so only
     // what the browser actually draws: anything else could make the stored
-    // bytes a page on this origin.
+    // bytes a page on this origin. Both pictures come out of the same canvas,
+    // so they share it.
     const imageType = body.imageType ?? 'image/png';
     if (typeof imageType !== 'string' || !IMAGE_TYPES.has(imageType)) {
       fail(res, 415, 'The picture must be a PNG or WebP.');
@@ -198,15 +218,17 @@ export default async function handler(
 
     await db()`
       insert into showcase_pages
-        (page_number, subpage, position, image, image_type, title, updated_at)
+        (page_number, subpage, position, image, image_en, image_type, title, title_en, updated_at)
       values
-        (${pageNumber}, ${subpage}, ${position}, ${image}, ${imageType},
-         ${title.value}, now())
+        (${pageNumber}, ${subpage}, ${position}, ${image.bytes}, ${imageEn?.bytes ?? null},
+         ${imageType}, ${title.value}, ${titleEn.value}, now())
       on conflict (page_number, subpage) do update
         set position   = excluded.position,
             image      = excluded.image,
+            image_en   = excluded.image_en,
             image_type = excluded.image_type,
             title      = excluded.title,
+            title_en   = excluded.title_en,
             updated_at = excluded.updated_at
     `;
 

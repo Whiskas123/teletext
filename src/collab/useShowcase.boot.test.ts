@@ -79,6 +79,23 @@ describe('showcasePictureUrl', () => {
     expect(showcasePictureUrl(101, 1, BAKED.updated_at)).toContain('/api/showcase');
   });
 
+  it('uses the English file the build wrote, for /en', async () => {
+    const src_en = '/showcase/101-1-20260816152848638-en.png';
+    const { showcasePictureUrl } = await loadWith([{ ...BAKED, src_en }]);
+
+    expect(showcasePictureUrl(101, 1, BAKED.updated_at, true)).toBe(src_en);
+    expect(showcasePictureUrl(101, 1, BAKED.updated_at, false)).toBe(BAKED.src);
+  });
+
+  it('asks the endpoint in English, not the Portuguese file, when the build has no English one', async () => {
+    // A build from before English pictures: the endpoint may have one now.
+    const { showcasePictureUrl } = await loadWith([BAKED]);
+
+    const url = showcasePictureUrl(101, 1, BAKED.updated_at, true);
+    expect(url).toContain('/api/showcase?format=image');
+    expect(url).toContain('lang=en');
+  });
+
   it('asks the endpoint when the block is not readable', async () => {
     const { showcasePictureUrl } = await loadWith('{ not json');
 

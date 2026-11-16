@@ -35,6 +35,7 @@ import {
 } from '../../collab/useShowcase';
 import { SHOWCASE_SECONDS_PER_SCREEN, shuffleBySeed } from '../../domain/showcase';
 import { PAGE_W, pageHeight } from '../../utils/pageCanvas';
+import { useCurrentLanguage } from './languageContext';
 
 export interface FrontpageShowcaseProps {
   /** Chosen: opens this page in the viewer. */
@@ -74,6 +75,9 @@ function usePrefersReducedMotion(): boolean {
 
 export function FrontpageShowcase({ onSelect, label, pageWord }: FrontpageShowcaseProps) {
   const { entries: chosen } = useShowcase();
+  // In English, each page's English picture and title where it has them, and
+  // the Portuguese where it has not — the same rule as the EN key.
+  const english = useCurrentLanguage() === 'en';
   const reducedMotion = usePrefersReducedMotion();
 
   // One order per visit. The seed is drawn once, so a re-render — or a dropped
@@ -88,6 +92,7 @@ export function FrontpageShowcase({ onSelect, label, pageWord }: FrontpageShowca
 
   const caption = (entry: ShowcaseEntry) =>
     `${entry.page_number}${entry.subpage > 1 ? `-${entry.subpage}` : ''}`;
+  const titleOf = (entry: ShowcaseEntry) => (english && entry.title_en) || entry.title;
 
   return (
     <div
@@ -119,7 +124,7 @@ export function FrontpageShowcase({ onSelect, label, pageWord }: FrontpageShowca
               aria-hidden={copy === 1 ? true : undefined}
               tabIndex={copy === 1 ? -1 : undefined}
               aria-label={`${pageWord} ${caption(entry)}${
-                entry.title ? `, ${entry.title}` : ''
+                titleOf(entry) ? `, ${titleOf(entry)}` : ''
               }`}
             >
               <img
@@ -128,6 +133,7 @@ export function FrontpageShowcase({ onSelect, label, pageWord }: FrontpageShowca
                   entry.page_number,
                   entry.subpage,
                   entry.updated_at,
+                  english && entry.has_en === true,
                 )}
                 alt=""
                 // The strip's own size, so the row is its full height before a
@@ -161,7 +167,7 @@ export function FrontpageShowcase({ onSelect, label, pageWord }: FrontpageShowca
                   accessible name, so a screen reader would hear them twice. */}
               <span className="frontpage-strip-caption" aria-hidden="true">
                 <span className="frontpage-strip-caption-number">{caption(entry)}</span>
-                {entry.title}
+                {titleOf(entry)}
               </span>
             </button>
           )),

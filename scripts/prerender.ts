@@ -234,7 +234,7 @@ async function writeShowcase(): Promise<ShowcaseBootEntry[]> {
   if (!isConfigured()) return [];
 
   const rows = await db()`
-    select page_number, subpage, position, title, image, image_type, updated_at
+    select page_number, subpage, position, title, title_en, image, image_en, image_type, updated_at
     from showcase_pages
     order by position, page_number, subpage
   `;
@@ -262,15 +262,20 @@ async function writeShowcase(): Promise<ShowcaseBootEntry[]> {
   let stored = 0;
   let written = 0;
 
-  for (const row of rows) {
+  /** Write one stored picture under `dist/`, smaller if sharp can; its path, or null. */
+  const writePicture = async (
+    raw: unknown,
+    row: Record<string, unknown>,
+    updatedAt: string,
+    english: boolean,
+  ): Promise<string | null> => {
     // Neon returns `bytea` as a `\x…` hex string over the HTTP driver, the same
     // way `api/showcase.ts` receives it.
-    const raw: unknown = row.image;
-    if (raw == null) continue;
+    if (raw == null) return null;
     const original = Buffer.isBuffer(raw)
       ? raw
       : Buffer.from(String(raw).replace(/^\\x/, ''), 'hex');
-    if (original.length === 0) continue;
+    if (original.length === 0) return null;
 
     // Re-encoding is an optimisation, never a reason to lose a picture: a page
     // sharp chokes on is written as it was rather than dropped off the strip.
@@ -281,36 +286,47 @@ async function writeShowcase(): Promise<ShowcaseBootEntry[]> {
         if (smaller.length > 0 && smaller.length < original.length) bytes = smaller;
       } catch (error) {
         console.warn(
-          `  ! page ${row.page_number}-${row.subpage}: could not re-encode ` +
+          `  ! page ${row.page_number}-${row.subpage}${english ? ' (en)' : ''}: could not re-encode ` +
             `(${error instanceof Error ? error.message : String(error)}) — ` +
             'written as stored.',
         );
       }
     }
 
-    const updatedAt = new Date(row.updated_at).toISOString();
     const src = showcasePicturePath(
       Number(row.page_number),
       Number(row.subpage),
       updatedAt,
       // Whatever it is now, it is a PNG if it went through sharp.
       bytes === original && String(row.image_type ?? '').includes('gif') ? 'gif' : 'png',
+      english,
     );
 
     const file = join(dist, src);
     await mkdir(dirname(file), { recursive: true });
     await writeFile(file, bytes);
+    stored += original.length;
+    written += bytes.length;
+    return src;
+  };
+
+  for (const row of rows) {
+    const updatedAt = new Date(row.updated_at).toISOString();
+    const src = await writePicture(row.image, row, updatedAt, false);
+    if (src == null) continue;
+    const srcEn = await writePicture(row.image_en, row, updatedAt, true);
 
     entries.push({
       page_number: Number(row.page_number),
       subpage: Number(row.subpage),
       position: Number(row.position),
       title: row.title ?? '',
+      title_en: row.title_en ?? '',
+      has_en: srcEn != null,
       updated_at: updatedAt,
       src,
+      ...(srcEn == null ? {} : { src_en: srcEn }),
     });
-    stored += original.length;
-    written += bytes.length;
   }
 
   console.log(
@@ -334,11 +350,16 @@ async function writeShowcase(): Promise<ShowcaseBootEntry[]> {
  * Only the two landing addresses get it. Everywhere else it would be twenty
  * fetches for a strip that page does not have.
  */
-function showcaseHead(entries: readonly ShowcaseBootEntry[]): string {
+function showcaseHead(entries: readonly ShowcaseBootEntry[], language: Language): string {
   if (entries.length === 0) return '';
 
+  // The pictures this language's front page will show: preloading the other
+  // set would be a dozen downloads the page never uses.
   const links = entries
-    .map((entry) => `<link rel="preload" as="image" href="${entry.src}" />`)
+    .map((entry) => {
+      const href = language === 'en' ? (entry.src_en ?? entry.src) : entry.src;
+      return `<link rel="preload" as="image" href="${href}" />`;
+    })
     .join('\n    ');
 
   // `<` escaped, so a title holding `</script>` cannot end the block early.
@@ -491,7 +512,7 @@ async function main(): Promise<void> {
         .replace(
           '</head>',
           HIDE_FALLBACK_IF_JS +
-            `${target.path === '/' ? showcaseHead(showcase) : ''}` +
+            `${target.path === '/' ? showcaseHead(showcase, language) : ''}` +
             `${pages.length > 0 && isWatchPath(target.path) ? bootDataHead() : ''}\n  </head>`,
         )
         // The note at the top of `index.html` explains the file to whoever
