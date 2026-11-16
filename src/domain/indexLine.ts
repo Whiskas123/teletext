@@ -34,7 +34,7 @@ export interface IndexLineItem {
 export const INDEX_LINE: IndexLineItem[] = [
   { label: 'TUTORIAL', fg: 'red', page: 100 },
   { label: 'INDEX', fg: 'green', page: 101 },
-  { label: 'EXPO 98', fg: 'yellow', page: 102 },
+  { label: 'EXPO 98', fg: 'yellow', page: 134 },
   { label: 'PLAYGROUND', fg: 'cyan', page: 700 },
 ];
 
