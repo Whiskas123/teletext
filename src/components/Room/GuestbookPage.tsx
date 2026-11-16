@@ -247,32 +247,6 @@ export function GuestbookPage() {
                   ))}
                 </fieldset>
 
-                {/* An eraser has no colour. */}
-                {tool !== 'eraser' && (
-                  <Swatches
-                    label={copy.guestbook.color}
-                    value={fg}
-                    onChange={setFg}
-                    name="guestbook-fg"
-                  />
-                )}
-                {/*
-                  * Only the text tool has a background.
-                  *
-                  * A pixel is one sixth of a cell in one colour; the other five
-                  * sixths are the cell's own background, so offering a
-                  * background picker beside the brush would be offering a
-                  * control that repaints the parts you did not click.
-                  */}
-                {tool === 'text' && (
-                  <Swatches
-                    label={copy.guestbook.background}
-                    value={bg}
-                    onChange={setBg}
-                    name="guestbook-bg"
-                  />
-                )}
-
                 <div className="guestbook-toolset guestbook-back">
                   <button
                     type="button"
@@ -290,6 +264,35 @@ export function GuestbookPage() {
                 </div>
               </div>
 
+              {/* What the tool draws in, on a row of its own: the two rows of
+                  swatches used to wrap around the tools wherever they fell. */}
+              {tool !== 'eraser' && (
+                <div className="guestbook-tools">
+                  <Swatches
+                    label={copy.guestbook.color}
+                    value={fg}
+                    onChange={setFg}
+                    name="guestbook-fg"
+                  />
+                {/*
+                  * Only the text tool has a background.
+                  *
+                  * A pixel is one sixth of a cell in one colour; the other five
+                  * sixths are the cell's own background, so offering a
+                  * background picker beside the brush would be offering a
+                  * control that repaints the parts you did not click.
+                  */}
+                {tool === 'text' && (
+                  <Swatches
+                    label={copy.guestbook.background}
+                    value={bg}
+                    onChange={setBg}
+                    name="guestbook-bg"
+                  />
+                )}
+                </div>
+              )}
+
               <SnippetGrid
                 cells={cells}
                 cursorIndex={cursorIndex}
@@ -300,14 +303,6 @@ export function GuestbookPage() {
                 fg={fg}
                 bg={bg}
                 label={copy.guestbook.yourSnippet}
-                hint={
-                  tool === 'text'
-                    ? copy.guestbook.textHint
-                    : tool === 'pixel'
-                      ? copy.guestbook.pixelHint
-                      : copy.guestbook.eraserHint
-                }
-                hintId="guestbook-snippet-hint"
               />
 
               <div className="guestbook-actions">

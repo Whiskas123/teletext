@@ -304,14 +304,6 @@ export interface Copy {
     yourName: string;
     namePlaceholder: string;
     yourSnippet: string;
-    /**
-     * Said under the grid, per tool. Two strings rather than one that describes
-     * both: the hint is read while using one of them, and half of a combined
-     * hint would always be about the tool that is not selected.
-     */
-    textHint: string;
-    pixelHint: string;
-    eraserHint: string;
     tool: string;
     toolText: string;
     toolPixel: string;
@@ -569,9 +561,6 @@ export const COPY: Record<Language, Copy> = {
       yourName: 'O teu nome',
       namePlaceholder: '',
       yourSnippet: 'A tua página',
-      textHint: 'Toca ou clica numa célula e escreve.',
-      pixelHint: 'Arrasta para pintar.',
-      eraserHint: 'Arrasta para apagar.',
       tool: 'Ferramenta',
       toolText: 'Texto',
       toolPixel: 'Pincel',
@@ -811,9 +800,6 @@ export const COPY: Record<Language, Copy> = {
       yourName: 'Your name',
       namePlaceholder: '',
       yourSnippet: 'Your page',
-      textHint: 'Tap or click a cell and type. The arrow keys move the cursor.',
-      pixelHint: 'Drag to paint.',
-      eraserHint: 'Drag to rub out.',
       tool: 'Tool',
       toolText: 'Text',
       toolPixel: 'Brush',

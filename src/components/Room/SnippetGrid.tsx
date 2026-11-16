@@ -63,9 +63,6 @@ export interface SnippetGridProps {
   bg: TeletextColor;
   /** Names the grid for anyone who cannot see it. */
   label: string;
-  /** Said under the grid, and tied to it as its description. */
-  hint: string;
-  hintId: string;
 }
 
 /** The empty cell, in the one shape the rest of the app agrees on. */
@@ -161,8 +158,6 @@ export function SnippetGrid({
   fg,
   bg,
   label,
-  hint,
-  hintId,
 }: SnippetGridProps) {
   const gridRef = useRef<HTMLDivElement>(null);
   /**
@@ -363,7 +358,6 @@ export function SnippetGrid({
         tabIndex={0}
         role="group"
         aria-label={label}
-        aria-describedby={hintId}
         onFocus={() => {
           if (tool === 'text') inputRef.current?.focus({ preventScroll: true });
         }}
@@ -408,9 +402,6 @@ export function SnippetGrid({
           );
         })}
       </div>
-      <p className="snippet-hint" id={hintId}>
-        {hint}
-      </p>
     </div>
   );
 }

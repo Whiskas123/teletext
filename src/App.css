@@ -4348,10 +4348,6 @@ button.yellow-pages-number:hover {
   margin-bottom: 1rem;
 }
 
-/* Undo and clear, at the far end of the row from what they take back. */
-.guestbook-back {
-  margin-left: auto;
-}
 
 .guestbook-toolset,
 .guestbook-swatches {
@@ -4638,7 +4634,11 @@ button.yellow-pages-number:hover {
  */
 @supports (container-type: inline-size) {
   .snippet-grid {
-    font-size: min(2.4cqw, 20px);
+    /* Forty columns, exactly the panel wide: capped short of it, the grid
+       stopped where no other row of the form did. */
+    box-sizing: border-box;
+    width: 100%;
+    font-size: calc(100cqw / 40);
   }
 }
 
@@ -4674,14 +4674,6 @@ button.yellow-pages-number:hover {
   min-height: 0;
 }
 
-.snippet-hint {
-  margin: 0.5rem 0 0;
-  max-width: 44rem;
-  font-family: monospace;
-  font-size: 0.72rem;
-  line-height: 1.6;
-  color: #888;
-}
 
 @media (max-width: 720px) {
   .guestbook {
