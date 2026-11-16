@@ -311,9 +311,12 @@ export interface Copy {
      */
     textHint: string;
     pixelHint: string;
+    eraserHint: string;
     tool: string;
     toolText: string;
     toolPixel: string;
+    toolEraser: string;
+    undo: string;
     color: string;
     /** Only the text tool has one — see the note in `GuestbookPage`. */
     background: string;
@@ -566,12 +569,14 @@ export const COPY: Record<Language, Copy> = {
       yourName: 'O teu nome',
       namePlaceholder: '',
       yourSnippet: 'A tua página',
-      textHint: 'Clica numa célula e escreve com o teclado.',
-      pixelHint:
-        'Arrasta para pintar.',
+      textHint: 'Toca ou clica numa célula e escreve.',
+      pixelHint: 'Arrasta para pintar.',
+      eraserHint: 'Arrasta para apagar.',
       tool: 'Ferramenta',
       toolText: 'Texto',
-      toolPixel: 'Pixel',
+      toolPixel: 'Pincel',
+      toolEraser: 'Borracha',
+      undo: 'Desfazer',
       color: 'Cor',
       background: 'Fundo',
       clear: 'Limpar',
@@ -806,11 +811,14 @@ export const COPY: Record<Language, Copy> = {
       yourName: 'Your name',
       namePlaceholder: '',
       yourSnippet: 'Your page',
-      textHint: 'Click a cell and type. The arrow keys move the cursor.',
+      textHint: 'Tap or click a cell and type. The arrow keys move the cursor.',
       pixelHint: 'Drag to paint.',
+      eraserHint: 'Drag to rub out.',
       tool: 'Tool',
       toolText: 'Text',
-      toolPixel: 'Pixel',
+      toolPixel: 'Brush',
+      toolEraser: 'Eraser',
+      undo: 'Undo',
       color: 'Colour',
       background: 'Background',
       clear: 'Clear',

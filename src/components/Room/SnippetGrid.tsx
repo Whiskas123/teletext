@@ -1,7 +1,9 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 import {
   COLS,
+  SIXEL_COLS,
+  SIXEL_ROWS,
   setSixelBit,
   sixelBit,
   sixelPartAt,
@@ -37,14 +39,15 @@ import { SNIPPET_ROWS } from '../../domain/guestbook';
  */
 
 /**
- * What a click or a drag does.
+ * What a click or a drag does: type, paint a sixth of a cell, or rub out.
  *
- * Two tools, and only two. The page editor also has a *block* brush that stamps
- * a whole 2x3 motif with a colour per part, which is powerful and, on a grid
- * this small, mostly a way to produce a pattern you did not mean. One pixel at
- * a time is the whole of the drawing here.
+ * The page editor also has a *block* brush that stamps a whole 2x3 motif with
+ * a colour per part, which is powerful and, on a grid this small, mostly a way
+ * to produce a pattern you did not mean. One pixel at a time is the whole of
+ * the drawing here. The eraser is a tool of its own because a phone has no Alt
+ * key to hold, which was the only way to erase before.
  */
-export type SnippetTool = 'text' | 'pixel';
+export type SnippetTool = 'text' | 'pixel' | 'eraser';
 
 export interface SnippetGridProps {
   cells: TeletextPage;
@@ -53,6 +56,8 @@ export interface SnippetGridProps {
   onCursorChange(index: number): void;
   /** Replace one cell. The caller owns the snippet. */
   onCellChange(index: number, cell: Cell): void;
+  /** A stroke or a keystroke is about to change the snippet: the moment to keep for undo. */
+  onEditStart?(): void;
   tool: SnippetTool;
   fg: TeletextColor;
   bg: TeletextColor;
@@ -68,11 +73,90 @@ function blankCell(): Cell {
   return { char: ' ', fg: 'white', bg: 'black', graphics: null };
 }
 
+/**
+ * What the hidden input holds between keystrokes: one space.
+ *
+ * A phone's keyboard does not send a usable `keydown` for Backspace on an empty
+ * field, so the field is never empty: a keystroke that leaves it empty was a
+ * Backspace, and anything longer than the sentinel is what was typed.
+ */
+const SENTINEL = ' ';
+
+/**
+ * A cell with one sixth painted or rubbed out.
+ *
+ * The cell's own background is carried through untouched. Writing the
+ * background picker's colour here was a real bug: an unlit sixth renders in
+ * the cell's background, so painting a single pixel repainted the other five
+ * as well and one click produced a solid block of colour.
+ */
+function paintPart(cell: Cell, part: number, fg: TeletextColor, erase: boolean): Cell {
+  // The eraser over a letter, or a coloured space, takes the whole cell: there
+  // is no sixth of a character to remove.
+  if (erase && typeof cell.graphics !== 'number') return blankCell();
+
+  const pattern = typeof cell.graphics === 'number' ? cell.graphics : 0;
+  const next = setSixelBit(pattern, part, !erase);
+
+  // Six colours, one per sixth, so a cell can hold more than one. Starting
+  // from the cell's own colours keeps the five the pointer did not touch.
+  const colors: TeletextColor[] = [0, 1, 2, 3, 4, 5].map(
+    (i) => (cell.graphicsColors?.[i] ?? fg) as TeletextColor,
+  );
+  if (!erase) colors[part] = fg;
+
+  // Clearing the last sixth returns the cell to text, rather than leaving an
+  // all-off mosaic that looks blank but is not — `isBlankSnippet` counts any
+  // graphics cell as ink, so an invisible one would let an empty signature
+  // through.
+  if (next === 0) return { char: ' ', fg: cell.fg, bg: cell.bg, graphics: null };
+
+  return {
+    char: cell.char,
+    fg: cell.fg,
+    bg: cell.bg,
+    graphics: next,
+    graphicsColors: colors as unknown as Cell['graphicsColors'],
+  };
+}
+
+/** A place on the grid in sixths: 80 across, 24 down. */
+type Pixel = [x: number, y: number];
+
+/**
+ * Every pixel from `from` to `to`, leaving out `from` (Bresenham).
+ *
+ * A drag is sampled: a quick hand crosses several pixels between two pointer
+ * reports, and painting only the reported ones drew a dotted line.
+ */
+function pixelsBetween([x, y]: Pixel, [x1, y1]: Pixel): Pixel[] {
+  const dx = Math.abs(x1 - x);
+  const dy = Math.abs(y1 - y);
+  const sx = x < x1 ? 1 : -1;
+  const sy = y < y1 ? 1 : -1;
+  let error = dx - dy;
+  const pixels: Pixel[] = [];
+  for (let guard = 0; guard < dx + dy && (x !== x1 || y !== y1); guard += 1) {
+    const doubled = error * 2;
+    if (doubled > -dy) {
+      error -= dy;
+      x += sx;
+    }
+    if (doubled < dx) {
+      error += dx;
+      y += sy;
+    }
+    pixels.push([x, y]);
+  }
+  return pixels;
+}
+
 export function SnippetGrid({
   cells,
   cursorIndex,
   onCursorChange,
   onCellChange,
+  onEditStart,
   tool,
   fg,
   bg,
@@ -81,20 +165,37 @@ export function SnippetGrid({
   hintId,
 }: SnippetGridProps) {
   const gridRef = useRef<HTMLDivElement>(null);
-  // Whether a drag is in progress, so moving across the grid with the button
-  // up does not paint. A ref rather than state: it changes on every pointer
-  // event and nothing renders differently for it.
-  const paintingRef = useRef(false);
+  /**
+   * What typing goes through.
+   *
+   * The grid used to take `keydown` itself, as a focusable `div`. A phone only
+   * raises its keyboard for a real text field, so on a phone the grid could
+   * not be typed on at all — and on a desk a dead key (`´` then `e`) arrives
+   * as a composition, not a `keydown`, so accents could not be typed either.
+   * A real input, out of sight, has both.
+   */
+  const inputRef = useRef<HTMLInputElement>(null);
+  // The last pixel a stroke painted, or null when no stroke is in progress. A
+  // ref rather than state: it changes on every pointer event and nothing
+  // renders differently for it.
+  const strokeRef = useRef<Pixel | null>(null);
+  /** Cells written since the last render, which `cells` does not show yet. */
+  const pendingRef = useRef(new Map<number, Cell>());
+  useEffect(() => {
+    pendingRef.current.clear();
+  }, [cells]);
+
+  const total = COLS * SNIPPET_ROWS;
 
   /**
-   * Which cell, and which sixth of it, the pointer is over.
+   * Which pixel the pointer is over.
    *
    * Computed from the grid's own rectangle rather than from per-cell handlers.
    * A touch drag never fires `mouseenter` on the cells it passes over — the
    * browser gives every event to whatever the finger first landed on — so
    * geometry is the only thing that works on a phone, and it costs no handlers.
    */
-  const cellAt = useCallback((event: React.PointerEvent) => {
+  const pixelAt = useCallback((event: React.PointerEvent): Pixel | null => {
     const rect = gridRef.current?.getBoundingClientRect();
     if (rect == null || rect.width === 0 || rect.height === 0) return null;
 
@@ -106,89 +207,98 @@ export function SnippetGrid({
     const row = Math.floor(y / cellH);
     if (col < 0 || col >= COLS || row < 0 || row >= SNIPPET_ROWS) return null;
 
-    return {
-      index: row * COLS + col,
-      part: sixelPartAt(x - col * cellW, y - row * cellH, cellW, cellH),
-    };
+    const part = sixelPartAt(x - col * cellW, y - row * cellH, cellW, cellH);
+    return [col * SIXEL_COLS + (part % SIXEL_COLS), row * SIXEL_ROWS + Math.floor(part / SIXEL_COLS)];
   }, []);
 
-  /**
-   * Paint one sixth of a cell, or place the caret, depending on the tool.
-   *
-   * The cell's own background is carried through untouched. Writing the
-   * background picker's colour here was a real bug: an unlit sixth renders in
-   * the cell's background, so painting a single pixel repainted the other five
-   * as well and one click produced a solid block of colour. The pixel tool
-   * changes exactly the sixth under the pointer, which is why the background
-   * picker is not offered while it is selected.
-   */
-  const apply = useCallback(
-    (index: number, part: number, erase: boolean) => {
-      onCursorChange(index);
-      if (tool === 'text') return;
-
-      const cell = cells[index] ?? blankCell();
-      const pattern = typeof cell.graphics === 'number' ? cell.graphics : 0;
-      const next = setSixelBit(pattern, part, !erase);
-
-      // Six colours, one per sixth, so a cell can hold more than one. Starting
-      // from the cell's own colours keeps the five the pointer did not touch.
-      const colors: TeletextColor[] = [0, 1, 2, 3, 4, 5].map((i) => {
-        const existing = cell.graphicsColors?.[i];
-        return (existing ?? fg) as TeletextColor;
-      });
-      colors[part] = fg;
-
-      // Clearing the last sixth returns the cell to text, rather than leaving
-      // an all-off mosaic that looks blank but is not — `isBlankSnippet` counts
-      // any graphics cell as ink, so an invisible one would let an empty
-      // signature through.
-      if (next === 0) {
-        onCellChange(index, { char: ' ', fg: cell.fg, bg: cell.bg, graphics: null });
-        return;
+  /** Paint, or rub out, a run of pixels. Several may be sixths of one cell. */
+  const paint = useCallback(
+    (pixels: Pixel[], erase: boolean) => {
+      const pending = pendingRef.current;
+      for (const [x, y] of pixels) {
+        const index = Math.floor(y / SIXEL_ROWS) * COLS + Math.floor(x / SIXEL_COLS);
+        const part = (y % SIXEL_ROWS) * SIXEL_COLS + (x % SIXEL_COLS);
+        const cell = pending.get(index) ?? cells[index] ?? blankCell();
+        const next = paintPart(cell, part, fg, erase);
+        pending.set(index, next);
+        onCellChange(index, next);
       }
-
-      onCellChange(index, {
-        char: cell.char,
-        fg: cell.fg,
-        bg: cell.bg,
-        graphics: next,
-        graphicsColors: colors as unknown as Cell['graphicsColors'],
-      });
     },
-    [cells, fg, tool, onCellChange, onCursorChange],
+    [cells, fg, onCellChange],
   );
 
   const handlePointerDown = useCallback(
     (event: React.PointerEvent) => {
-      const hit = cellAt(event);
-      if (hit == null) return;
-      gridRef.current?.focus();
-      paintingRef.current = true;
+      const pixel = pixelAt(event);
+      if (pixel == null) return;
+      onCursorChange(Math.floor(pixel[1] / SIXEL_ROWS) * COLS + Math.floor(pixel[0] / SIXEL_COLS));
+      if (tool === 'text') {
+        // Raises the keyboard on a phone; only for typing, so that drawing
+        // does not have one sliding up over it.
+        inputRef.current?.focus({ preventScroll: true });
+        return;
+      }
+      onEditStart?.();
+      strokeRef.current = pixel;
       // Alt is the eraser, the same chord the page editor's brushes use.
-      apply(hit.index, hit.part, event.altKey);
+      paint([pixel], tool === 'eraser' || event.altKey);
     },
-    [apply, cellAt],
+    [pixelAt, onCursorChange, tool, onEditStart, paint],
   );
 
   const handlePointerMove = useCallback(
     (event: React.PointerEvent) => {
-      if (!paintingRef.current) return;
-      const hit = cellAt(event);
-      if (hit == null) return;
-      apply(hit.index, hit.part, event.altKey);
+      const from = strokeRef.current;
+      if (from == null) return;
+      const pixel = pixelAt(event);
+      if (pixel == null) return;
+      paint(pixelsBetween(from, pixel), tool === 'eraser' || event.altKey);
+      strokeRef.current = pixel;
     },
-    [apply, cellAt],
+    [pixelAt, paint, tool],
   );
 
   const endStroke = useCallback(() => {
-    paintingRef.current = false;
+    strokeRef.current = null;
   }, []);
 
-  /** Typing, and moving about. */
+  /** Backspace: step back and clear, as in a text field. */
+  const backspace = useCallback(() => {
+    onEditStart?.();
+    onCellChange(cursorIndex, blankCell());
+    onCursorChange(Math.max(0, cursorIndex - 1));
+  }, [cursorIndex, onCellChange, onCursorChange, onEditStart]);
+
+  /**
+   * Whatever the input has been given since it was last emptied.
+   *
+   * Called for every `input` event outside a composition, and when a
+   * composition ends — browsers disagree about which of those comes last, and
+   * whichever does finds the text; the other finds only the sentinel.
+   */
+  const commitInput = useCallback(() => {
+    const input = inputRef.current;
+    if (input == null || input.value === SENTINEL) return;
+    const value = input.value;
+    input.value = SENTINEL;
+    if (value === '') return backspace();
+
+    const typed = value.replace(SENTINEL, '').normalize('NFC');
+    let at = cursorIndex;
+    let started = false;
+    for (const { segment } of new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(typed)) {
+      if (segment < ' ') continue;
+      if (!started) onEditStart?.();
+      started = true;
+      onCellChange(at, { char: segment, fg, bg, graphics: null });
+      at = Math.min(total - 1, at + 1);
+    }
+    onCursorChange(at);
+  }, [backspace, cursorIndex, fg, bg, total, onCellChange, onCursorChange, onEditStart]);
+
+  /** Moving about, and the keys that are not characters. */
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
-      const total = COLS * SNIPPET_ROWS;
       const move = (to: number) => {
         event.preventDefault();
         onCursorChange(Math.max(0, Math.min(total - 1, to)));
@@ -210,45 +320,53 @@ export function SnippetGrid({
         case 'Enter':
           return move((Math.floor(cursorIndex / COLS) + 1) * COLS);
         case 'Backspace':
-        case 'Delete': {
           event.preventDefault();
-          onCellChange(cursorIndex, blankCell());
-          // Backspace steps back and deletes, as it does in a text field;
-          // Delete clears in place, as it does in a text field.
-          if (event.key === 'Backspace') {
-            onCursorChange(Math.max(0, cursorIndex - 1));
-          }
-          return;
-        }
+          return backspace();
+        case 'Delete':
+          // Clears in place, as it does in a text field.
+          event.preventDefault();
+          onEditStart?.();
+          return onCellChange(cursorIndex, blankCell());
         default:
+          // A character: it arrives through the input, composed.
           break;
       }
-
-      // One printable character. Anything longer is a named key ('Shift',
-      // 'F5'), and a modifier chord belongs to the browser.
-      if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) {
-        return;
-      }
-      event.preventDefault();
-      onCellChange(cursorIndex, { char: event.key, fg, bg, graphics: null });
-      onCursorChange(Math.min(total - 1, cursorIndex + 1));
     },
-    [cursorIndex, fg, bg, onCellChange, onCursorChange],
+    [cursorIndex, total, backspace, onCellChange, onCursorChange, onEditStart],
   );
 
   return (
-    <>
+    <div className="snippet-wrap">
+      <input
+        ref={inputRef}
+        type="text"
+        className="snippet-input"
+        defaultValue={SENTINEL}
+        aria-hidden="true"
+        tabIndex={-1}
+        autoCapitalize="off"
+        autoCorrect="off"
+        autoComplete="off"
+        spellCheck={false}
+        onKeyDown={handleKeyDown}
+        onInput={(event) => {
+          if (!(event.nativeEvent as InputEvent).isComposing) commitInput();
+        }}
+        onCompositionEnd={commitInput}
+      />
       <div
         ref={gridRef}
         className="snippet-grid"
-        // Focusable so the whole grid takes typing, with the caret as the
-        // insertion point. A textbox role would promise a value that can be
-        // read and replaced, which a mosaic cannot honour.
+        // Focusable, so Tab reaches it; focus is passed straight to the input,
+        // which is what the keys go to. A textbox role would promise a value
+        // that can be read and replaced, which a mosaic cannot honour.
         tabIndex={0}
         role="group"
         aria-label={label}
         aria-describedby={hintId}
-        onKeyDown={handleKeyDown}
+        onFocus={() => {
+          if (tool === 'text') inputRef.current?.focus({ preventScroll: true });
+        }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={endStroke}
@@ -256,7 +374,8 @@ export function SnippetGrid({
         onPointerLeave={endStroke}
       >
         {cells.map((cell, index) => {
-          const isCursor = index === cursorIndex;
+          // The caret is where typing lands; a brush has no use for one.
+          const isCursor = tool === 'text' && index === cursorIndex;
           const graphics =
             typeof cell.graphics === 'number' && cell.graphics >= 0 ? cell.graphics : null;
           return (
@@ -292,7 +411,7 @@ export function SnippetGrid({
       <p className="snippet-hint" id={hintId}>
         {hint}
       </p>
-    </>
+    </div>
   );
 }
 

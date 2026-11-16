@@ -6,7 +6,7 @@
 // moderator can take a signature out.
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -182,7 +182,7 @@ describe('the guestbook', () => {
     expect(screen.getByRole('group', { name: 'Cor' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Fundo' })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Pixel' }));
+    await user.click(screen.getByRole('button', { name: 'Pincel' }));
 
     // A pixel is one sixth of a cell in one colour; the other five are the
     // cell's own background, so a background picker here would repaint the
@@ -285,6 +285,57 @@ describe('the guestbook', () => {
 
     await user.click(screen.getByRole('button', { name: 'Assinar' }));
     expect(screen.getByRole('status')).toHaveTextContent(/escreve um nome/i);
+  });
+
+  it('undoes the last keystroke', async () => {
+    const user = userEvent.setup();
+    renderGuestbook();
+    await openForm(user);
+    expect(screen.getByRole('button', { name: 'Desfazer' })).toBeDisabled();
+
+    await typeOnGrid(user, 'OI');
+    await user.click(screen.getByRole('button', { name: 'Desfazer' }));
+    await user.type(screen.getByRole('textbox'), 'Ana');
+    await user.click(screen.getByRole('button', { name: 'Assinar' }));
+
+    const [, cells] = signMock.mock.calls[0];
+    expect(cells[0].char).toBe('O');
+    expect(cells[1].char).toBe(' ');
+  });
+
+  it('paints with the brush and rubs out with the eraser, which has no colour', async () => {
+    const user = userEvent.setup();
+    const { container } = renderGuestbook();
+    await openForm(user);
+    // jsdom has no layout; the grid finds the pixel under a pointer from its box.
+    const grid = container.querySelector<HTMLElement>('.snippet-grid')!;
+    grid.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 400, height: 80, right: 400, bottom: 80, x: 0, y: 0 }) as DOMRect;
+    // A fast drag along the top of the first three cells: two samples only.
+    const drag = () => {
+      fireEvent.pointerDown(grid, { clientX: 2, clientY: 2 });
+      fireEvent.pointerMove(grid, { clientX: 28, clientY: 2 });
+      fireEvent.pointerUp(grid);
+    };
+    const sign = async () => {
+      await user.click(screen.getByRole('button', { name: 'Assinar' }));
+      return signMock.mock.calls[signMock.mock.calls.length - 1][1];
+    };
+
+    await user.click(screen.getByRole('button', { name: 'Pincel' }));
+    drag();
+    await user.click(screen.getByRole('button', { name: 'Borracha' }));
+    expect(screen.queryByRole('group', { name: 'Cor' })).not.toBeInTheDocument();
+    fireEvent.pointerDown(grid, { clientX: 2, clientY: 2 });
+    fireEvent.pointerUp(grid);
+
+    const cells = await sign();
+    // The cell between the two samples was painted too, and both of its top
+    // sixths: a stroke is a line, not the dots the pointer reported.
+    expect(cells[1].graphics).toBe(cells[2].graphics);
+    expect(cells[1].graphics).not.toBeNull();
+    // One sixth of the first cell rubbed out, the other left.
+    expect(cells[0].graphics).not.toBe(cells[1].graphics);
   });
 
   it('clears the page on request', async () => {

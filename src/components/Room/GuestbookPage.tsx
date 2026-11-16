@@ -15,6 +15,13 @@ import {
   type TeletextColor,
   type TeletextPage,
 } from '../../types/teletext';
+import {
+  IconBrush,
+  IconEraser,
+  IconTextCursor,
+  IconTrash,
+  IconUndo,
+} from '../Editor/icons';
 import { TeletextThumbnail } from '../TeletextGrid/TeletextThumbnail';
 import { SnippetGrid, type SnippetTool } from './SnippetGrid';
 import { useCopy } from './useCopy';
@@ -34,15 +41,20 @@ import { useCurrentLanguage } from './languageContext';
  * Reading it. The signatures are the work, so they hold the middle of the page
  * on their own and the form is not there until it is asked for — a screen that
  * opens on an empty form beside an empty grid says "fill this in" when what it
- * should say is "look at these". Signing splits the page: the form takes a
- * column on the left and the book moves right, staying on screen while it is
- * being added to. Narrow, there are no columns to take, so the form simply
- * follows the button that opened it and the book carries on below.
+ * should say is "look at these". Asked for, the form takes the width of the
+ * page above the book, directly under the button that opened it.
  *
- * That is why the form comes *first* in the document: one order serves both
- * layouts. Wide, it is the left column; narrow, it is what appears under the
- * button you just pressed. Nothing needs `order`, which moves the picture
- * without moving the reading.
+ * It used to take a column beside the book, which kept the book on screen and
+ * left the grid a third of the page wide: forty columns in three hundred
+ * pixels, a pixel of the drawing three across. The drawing is the signature,
+ * so the grid gets the room and the book waits below.
+ *
+ * ## The form
+ *
+ * A name, a row of tools and the grid. The tools are the page editor's, cut
+ * down to what eight rows need — text, a brush, an eraser — with the same
+ * pictures on them, and undo beside them, because a guestbook that punishes a
+ * slip of the finger is one people give up on.
  *
  * ## Why this screen has no language switch
  *
@@ -66,6 +78,8 @@ export function GuestbookPage() {
   const [fg, setFg] = useState<TeletextColor>('white');
   const [bg, setBg] = useState<TeletextColor>('black');
   const [notice, setNotice] = useState<string | null>(null);
+  /** The snippet as it was before each stroke or keystroke, newest last. */
+  const [past, setPast] = useState<TeletextPage[]>([]);
 
   const nameRef = useRef<HTMLInputElement>(null);
 
@@ -94,11 +108,26 @@ export function GuestbookPage() {
     setNotice(null);
   }, []);
 
+  /** Keep the snippet as it is now, for undo: called before anything changes it. */
+  const handleEditStart = useCallback(() => {
+    setPast((kept) => [...kept.slice(-99), cells]);
+  }, [cells]);
+
+  const handleUndo = useCallback(() => {
+    const before = past[past.length - 1];
+    if (before == null) return;
+    setCells(before);
+    setPast(past.slice(0, -1));
+    setNotice(null);
+  }, [past]);
+
   const handleClear = useCallback(() => {
+    // Undo takes a clear back too: it is the easiest key here to press by mistake.
+    handleEditStart();
     setCells(createEmptySnippet());
     setCursorIndex(0);
     setNotice(null);
-  }, []);
+  }, [handleEditStart]);
 
   const handleSign = useCallback(async () => {
     const result = await sign(name, cells);
@@ -106,6 +135,7 @@ export function GuestbookPage() {
       // The snippet goes, the name stays: signing twice is allowed, and
       // retyping your own name to do it would be a small insult.
       setCells(createEmptySnippet());
+      setPast([]);
       setCursorIndex(0);
       setNotice(copy.guestbook.signed);
       return;
@@ -189,15 +219,21 @@ export function GuestbookPage() {
                 />
               </label>
 
+              {/*
+                * One row: what the pointer does, what it does it in, and the
+                * two ways back. A tool carries its picture and its name; with
+                * three of them there is room for both.
+                */}
               <div className="guestbook-tools">
                 <fieldset className="guestbook-toolset">
                   <legend className="guestbook-label">{copy.guestbook.tool}</legend>
                   {(
                     [
-                      ['text', copy.guestbook.toolText],
-                      ['pixel', copy.guestbook.toolPixel],
+                      ['text', copy.guestbook.toolText, IconTextCursor],
+                      ['pixel', copy.guestbook.toolPixel, IconBrush],
+                      ['eraser', copy.guestbook.toolEraser, IconEraser],
                     ] as const
-                  ).map(([value, label]) => (
+                  ).map(([value, label, Icon]) => (
                     <button
                       key={value}
                       type="button"
@@ -205,23 +241,27 @@ export function GuestbookPage() {
                       aria-pressed={tool === value}
                       onClick={() => setTool(value)}
                     >
+                      <Icon />
                       {label}
                     </button>
                   ))}
                 </fieldset>
 
-                <Swatches
-                  label={copy.guestbook.color}
-                  value={fg}
-                  onChange={setFg}
-                  name="guestbook-fg"
-                />
+                {/* An eraser has no colour. */}
+                {tool !== 'eraser' && (
+                  <Swatches
+                    label={copy.guestbook.color}
+                    value={fg}
+                    onChange={setFg}
+                    name="guestbook-fg"
+                  />
+                )}
                 {/*
                   * Only the text tool has a background.
                   *
                   * A pixel is one sixth of a cell in one colour; the other five
                   * sixths are the cell's own background, so offering a
-                  * background picker beside the pixel tool would be offering a
+                  * background picker beside the brush would be offering a
                   * control that repaints the parts you did not click.
                   */}
                 {tool === 'text' && (
@@ -232,6 +272,22 @@ export function GuestbookPage() {
                     name="guestbook-bg"
                   />
                 )}
+
+                <div className="guestbook-toolset guestbook-back">
+                  <button
+                    type="button"
+                    className="guestbook-tool"
+                    onClick={handleUndo}
+                    disabled={past.length === 0}
+                  >
+                    <IconUndo />
+                    {copy.guestbook.undo}
+                  </button>
+                  <button type="button" className="guestbook-tool" onClick={handleClear}>
+                    <IconTrash />
+                    {copy.guestbook.clear}
+                  </button>
+                </div>
               </div>
 
               <SnippetGrid
@@ -239,20 +295,22 @@ export function GuestbookPage() {
                 cursorIndex={cursorIndex}
                 onCursorChange={setCursorIndex}
                 onCellChange={handleCellChange}
+                onEditStart={handleEditStart}
                 tool={tool}
                 fg={fg}
                 bg={bg}
                 label={copy.guestbook.yourSnippet}
                 hint={
-                  tool === 'text' ? copy.guestbook.textHint : copy.guestbook.pixelHint
+                  tool === 'text'
+                    ? copy.guestbook.textHint
+                    : tool === 'pixel'
+                      ? copy.guestbook.pixelHint
+                      : copy.guestbook.eraserHint
                 }
                 hintId="guestbook-snippet-hint"
               />
 
               <div className="guestbook-actions">
-                <button type="button" className="guestbook-clear" onClick={handleClear}>
-                  {copy.guestbook.clear}
-                </button>
                 <button type="button" className="guestbook-submit" onClick={() => void handleSign()}>
                   {copy.guestbook.submit}
                 </button>
