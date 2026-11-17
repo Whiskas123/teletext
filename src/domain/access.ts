@@ -39,15 +39,13 @@ export function isArchivePage(pageNumber: number): boolean {
  * A moderator may edit any valid page. Everyone else may edit only playground
  * pages ({@link PLAYGROUND_MIN_PAGE}..{@link MAX_PAGE}) — archive pages are
  * read-only for them, regardless of whether `pageNumber` itself is in range
- * (an out-of-range number is simply not editable by anyone). A playground page
- * a moderator has `frozen` (`collab/useFrozenPages.ts`) is read-only for them
- * too.
+ * (an out-of-range number is simply not editable by anyone).
  */
-export function canEditPage(pageNumber: number, isModerator: boolean, frozen = false): boolean {
+export function canEditPage(pageNumber: number, isModerator: boolean): boolean {
   if (!Number.isInteger(pageNumber) || pageNumber < MIN_PAGE || pageNumber > MAX_PAGE) {
     return false;
   }
-  return isModerator || (!isArchivePage(pageNumber) && !frozen);
+  return isModerator || !isArchivePage(pageNumber);
 }
 
 /**

@@ -55,7 +55,6 @@ import { useSubpages } from '../../collab/useSubpages';
 import {
   canEditPage,
   firstFreePlaygroundPage,
-  isArchivePage,
   PLAYGROUND_MIN_PAGE,
 } from '../../domain/access';
 import { MAX_PAGE, MIN_PAGE } from '../../domain/pageOps';
@@ -141,23 +140,6 @@ export function SoloEditor() {
     if (free != null) setPageNumber((current) => (current === PLAYGROUND_MIN_PAGE ? free : current));
   }, [status, occupiedPages]);
 
-  // A page frozen in /manage is read-only for everyone but the moderator, like
-  // the archive. Dialling refuses it and stepping skips it below; this catches
-  // the rest — a link to it, or a freeze arriving while it is open — by moving
-  // to the first free page and saying why. The reason is handed to the
-  // page-change reset below, which would otherwise clear it. Known corner: with
-  // the whole playground taken there is nowhere to go, and it stays put.
-  const { isFrozen } = useFrozenPages();
-  const frozenHere = !isModerator && isFrozen(pageNumber);
-  const frozenNoticeRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!frozenHere) return;
-    const free = firstFreePlaygroundPage(occupiedPages);
-    if (free == null) return;
-    frozenNoticeRef.current = copy.editor.frozenPage(pageNumber);
-    setPageNumber(free);
-  }, [frozenHere, occupiedPages, pageNumber, copy]);
-
   // Which screen of the page's carousel is being edited. Held as a request and
   // clamped on read, so a page losing a subpage under a second editor moves
   // this one to the last real screen instead of onto nothing.
@@ -167,6 +149,15 @@ export function SoloEditor() {
   );
   const subpageCount = countOf(pageNumber);
   const subpage = clampSubpage(requestedSubpage, subpageCount);
+
+  // Screens frozen in /manage are read-only for everyone but the moderator.
+  // The page stays open for new ones: + still adds a screen to draw on. Its
+  // title is the page's, so it is locked while any screen is frozen, and the
+  // last screen cannot be taken away while it is frozen.
+  const { isFrozen, hasFrozen } = useFrozenPages();
+  const screenFrozen = !isModerator && isFrozen(pageNumber, subpage);
+  const titleFrozen = !isModerator && hasFrozen(pageNumber, subpageCount);
+  const lastFrozen = !isModerator && isFrozen(pageNumber, subpageCount);
 
   // Solo editing of the global page: injected page + cell-level writes.
   const { page: portuguese, editCell, saveError: portugueseError } = useEditPage(pageNumber, subpage);
@@ -199,8 +190,7 @@ export function SoloEditor() {
   useEffect(() => {
     setTitleDraft(title(pageNumber));
     setTitleError(null);
-    setPageError(frozenNoticeRef.current);
-    frozenNoticeRef.current = null;
+    setPageError(null);
     // A new page starts at the top of its carousel: staying on screen 3 because
     // that is where the last page was left would open a screen the operator
     // never asked for, on a page that may not even have one.
@@ -264,7 +254,7 @@ export function SoloEditor() {
       }
       writeDial('');
       const target = Number(next);
-      if (canEditPage(target, isModerator, isFrozen(target))) {
+      if (canEditPage(target, isModerator)) {
         setPageNumber(target);
         setPageError(null);
         return true;
@@ -274,15 +264,13 @@ export function SoloEditor() {
       // three digits can convey on their own.
       setDialError(true);
       setPageError(
-        target < MIN_PAGE || target > MAX_PAGE
-          ? copy.editor.pagesNumbered(MIN_PAGE, MAX_PAGE)
-          : isArchivePage(target)
-            ? copy.editor.reservedPages(MIN_PAGE, PLAYGROUND_MIN_PAGE - 1)
-            : copy.editor.frozenPage(target),
+        target >= MIN_PAGE && target <= MAX_PAGE && !isModerator
+          ? copy.editor.reservedPages(MIN_PAGE, PLAYGROUND_MIN_PAGE - 1)
+          : copy.editor.pagesNumbered(MIN_PAGE, MAX_PAGE),
       );
       return false;
     },
-    [isModerator, isFrozen, writeDial, copy],
+    [isModerator, writeDial, copy],
   );
 
   // Stepping is not dialling: ▲ goes to the next page this member may edit,
@@ -294,13 +282,12 @@ export function SoloEditor() {
       writeDial('');
       setPageError(null);
       setPageNumber((current) => {
-        let next = current + delta;
-        while (!isModerator && isFrozen(next)) next += delta;
+        const next = current + delta;
         if (next < lowestEditable || next > MAX_PAGE) return current;
         return next;
       });
     },
-    [lowestEditable, isModerator, isFrozen, writeDial],
+    [lowestEditable, writeDial],
   );
 
   /**
@@ -368,11 +355,12 @@ export function SoloEditor() {
 
   const handleEditCell = useCallback(
     (index: number, cell: Parameters<typeof editCell>[1]) => {
+      if (screenFrozen) return;
       placedRef.current = true;
       if (inEnglish) english.editCell(index, cell);
       else editCell(index, cell);
     },
-    [editCell, inEnglish, english],
+    [editCell, inEnglish, english, screenFrozen],
   );
 
   const handleAddSubpage = useCallback(() => {
@@ -539,7 +527,7 @@ export function SoloEditor() {
         >
           +
         </button>
-        {subpageCount > 1 && (
+        {subpageCount > 1 && !lastFrozen && (
           <ConfirmKey
             className="rc-key rc-key-sub"
             title={copy.editor.removeSubpageHint(subpageCount)}
@@ -566,6 +554,7 @@ export function SoloEditor() {
           type="text"
           className="rc-field"
           value={titleDraft}
+          readOnly={titleFrozen}
           onChange={(e) => handleTitleChange(e.target.value)}
           placeholder={copy.editor.untitled}
           maxLength={TITLE_MAX_LENGTH * 2}
@@ -698,7 +687,11 @@ export function SoloEditor() {
       pageDetails={pageDetails}
       people={people}
       alert={
-        saveError != null ? (
+        screenFrozen ? (
+          <p className="rc-alert" role="status">
+            {copy.editor.frozenScreen(pageNumber, subpage)}
+          </p>
+        ) : saveError != null ? (
           <p className="rc-alert" role="alert">
             {copy.editor.notSaved(saveError)}
           </p>

@@ -188,8 +188,8 @@ export interface Copy {
     /** A curated page's title, refused because the archive is still loading. */
     titleNotSaved: string;
     reservedPages(min: number, max: number): string;
-    /** A playground page a moderator froze in /manage. */
-    frozenPage(page: number): string;
+    /** A playground screen a moderator froze in /manage. */
+    frozenScreen(page: number, screen: number): string;
     pagesNumbered(min: number, max: number): string;
     recent: string;
     recentBrushes: string;
@@ -486,7 +486,8 @@ export const COPY: Record<Language, Copy> = {
       titleTooLong: (max) => `O título tem de ter ${max} caracteres ou menos.`,
       titleNotSaved: 'Ainda não ficou guardado: as páginas ainda estão a carregar.',
       reservedPages: (min, max) => `As páginas ${min}–${max} estão reservadas.`,
-      frozenPage: (page) => `A página ${page} está congelada e já não pode ser alterada.`,
+      frozenScreen: (page, screen) =>
+        `O ecrã ${page}/${screen} está congelado e já não pode ser alterado. Carrega em + para juntar um ecrã novo.`,
       pagesNumbered: (min, max) => `As páginas vão de ${min} a ${max}.`,
       recent: 'Recentes',
       recentBrushes: 'Pincéis recentes',
@@ -726,7 +727,8 @@ export const COPY: Record<Language, Copy> = {
       titleTooLong: (max) => `Title must be ${max} characters or fewer.`,
       titleNotSaved: 'Not saved yet: the pages are still loading.',
       reservedPages: (min, max) => `Pages ${min}–${max} are reserved.`,
-      frozenPage: (page) => `Page ${page} is frozen and can no longer be changed.`,
+      frozenScreen: (page, screen) =>
+        `Screen ${page}/${screen} is frozen and can no longer be changed. Press + to add a new screen.`,
       pagesNumbered: (min, max) => `Pages are numbered ${min}–${max}.`,
       recent: 'Recent',
       recentBrushes: 'Recent brushes',

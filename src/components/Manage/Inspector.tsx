@@ -72,8 +72,9 @@ export interface InspectorProps {
   onStripNumbers(): void;
   onDelete(): void;
   onClose(): void;
-  /** Freeze or unfreeze a playground page; absent while the playground is not connected. */
-  onSetFrozen?(frozen: boolean): void;
+  isFrozen(pageNumber: number, subpage: number): boolean;
+  /** Freeze or unfreeze a playground screen; absent while the playground is not connected. */
+  onSetFrozen?(screen: number, frozen: boolean): void;
 }
 
 export function Inspector({
@@ -110,6 +111,7 @@ export function Inspector({
   onStripNumbers,
   onDelete,
   onClose,
+  isFrozen,
   onSetFrozen,
 }: InspectorProps) {
   const { pageNumber } = row;
@@ -119,6 +121,7 @@ export function Inspector({
   const screen = Math.min(requestedScreen, row.screens);
   const record = records.find((entry) => (entry.subpage ?? 1) === screen) ?? null;
   const showcased = isShowcased(pageNumber, screen);
+  const frozen = isFrozen(pageNumber, screen);
 
   // Drafts exist only while a field is being edited, so a change made by
   // someone else shows up in a field nobody is typing in.
@@ -159,24 +162,6 @@ export function Inspector({
           <Link className="mg-btn mg-btn-small mg-btn-ghost" to={`/watch/${pageNumber}/${screen}`} target="_blank">
             View ↗
           </Link>
-          {!isArchivePage(pageNumber) && (
-            <button
-              type="button"
-              className={`mg-btn mg-btn-small${row.frozen ? ' mg-btn-on' : ''}`}
-              aria-pressed={row.frozen}
-              disabled={onSetFrozen == null}
-              title={
-                onSetFrozen == null
-                  ? 'The playground is not connected'
-                  : row.frozen
-                    ? 'Let visitors edit this page again'
-                    : 'Stop visitors from changing this page'
-              }
-              onClick={() => onSetFrozen?.(!row.frozen)}
-            >
-              {row.frozen ? '❄ Frozen' : '❄ Freeze'}
-            </button>
-          )}
           <button type="button" className="mg-icon-btn" aria-label="Close details" onClick={onClose}>
             ×
           </button>
@@ -434,6 +419,7 @@ export function Inspector({
               <span className="mg-screen-label">
                 {n}
                 {isShowcased(pageNumber, n) && <span className="mg-star"> ★</span>}
+                {isFrozen(pageNumber, n) && <span className="mg-star" title="Frozen"> ❄</span>}
                 {records.find((entry) => (entry.subpage ?? 1) === n)?.shift_down === false && (
                   <span className="mg-muted" title="Not shifted down">
                     {' '}
@@ -477,6 +463,24 @@ export function Inspector({
           >
             {showcased ? '★ On the front page' : '☆ Add to front page'}
           </button>
+          {!isArchivePage(pageNumber) && (
+            <button
+              type="button"
+              className={`mg-btn mg-btn-small${frozen ? ' mg-btn-on' : ''}`}
+              aria-pressed={frozen}
+              disabled={onSetFrozen == null}
+              title={
+                onSetFrozen == null
+                  ? 'The playground is not connected'
+                  : frozen
+                    ? `Let visitors edit screen ${screen} again`
+                    : `Stop visitors from changing screen ${screen}; they can still add new screens`
+              }
+              onClick={() => onSetFrozen?.(screen, !frozen)}
+            >
+              {frozen ? `❄ Screen ${screen} frozen` : `❄ Freeze screen ${screen}`}
+            </button>
+          )}
           <button
             type="button"
             className="mg-btn mg-btn-small mg-btn-ghost"

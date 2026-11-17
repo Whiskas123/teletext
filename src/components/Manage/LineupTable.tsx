@@ -697,7 +697,7 @@ function PageRowView({
               ★
             </span>
           ) : row.frozen ? (
-            <span className="mg-star" role="img" aria-label="Frozen" title="Frozen: visitors can't change it">
+            <span className="mg-star" role="img" aria-label="Frozen" title="Has frozen screens: visitors can't change them">
               ❄
             </span>
           ) : null}

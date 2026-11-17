@@ -40,3 +40,29 @@
   button toggles and the row gets its ❄.
 - Not exercised against the live room: freezing from localhost writes to the
   production document.
+
+## 2026-11-17 — per screen, not per page
+
+- **The user wanted screens frozen, not whole pages.** Visitors should still be
+  able to add new screens to a page whose screens are frozen. The whole-page
+  version had shipped about an hour earlier (`a48e0ec`).
+- **New channel, `frozen-screens`, keyed like `pages` (`"745"`, `"745.2"`).**
+  It's a new channel rather than reusing `frozen-pages` so that a page frozen
+  under the old meaning doesn't quietly turn into a frozen screen 1. Anything
+  frozen in that hour has to be frozen again.
+- **Editor:** on a frozen screen, cell writes are dropped in `handleEditCell`
+  (every cell write goes through it) and a notice says to press + for a new
+  screen. The page itself is no longer refused or skipped. The title belongs to
+  the page, so it's read-only while any screen is frozen. − is hidden while the
+  last screen is frozen.
+- **/manage:** the button moved to the screen actions, next to "Add to front
+  page". The screen tiles show ❄, and the lineup row shows ❄ if any screen is
+  frozen.
+- **Known corner:** reordering or removing screens in /manage doesn't move the
+  freeze with the content, because the flag belongs to the screen's number.
+- **Found in passing, not fixed:** `/edit/N/2` opens screen 1, because the
+  page-change reset in `SoloEditor` also runs when the editor first loads. So
+  /manage's "Edit content" link for a later screen lands on screen 1.
+- **Checks:** `SoloEditor.frozen.test.tsx` (a frozen screen refuses edits and
+  says so; the next screen still takes them), and the button clicked through
+  in `manage-preview.html`.

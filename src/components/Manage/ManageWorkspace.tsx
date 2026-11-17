@@ -31,9 +31,9 @@ export interface ManageDeps {
   showcase: ShowcaseApi;
   kindOf(pageNumber: number): PageKind;
   setKind(pageNumber: number, kind: PageKind): void;
-  /** Playground pages frozen against visitors' edits (`useFrozenPages`). */
-  isFrozen(pageNumber: number): boolean;
-  setFrozen(pageNumber: number, frozen: boolean): void;
+  /** Playground screens frozen against visitors' edits (`useFrozenPages`). */
+  isFrozen(pageNumber: number, subpage: number): boolean;
+  setFrozen(pageNumber: number, subpage: number, frozen: boolean): void;
   /** The live mirror keeping the database's copy of the pages current. */
   mirror: MirrorApi;
   /**
