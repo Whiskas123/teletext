@@ -43,6 +43,8 @@ export interface PageRow {
   hasContent: boolean;
   /** Whether any archive screen was edited by hand since it was published. */
   edited: boolean;
+  /** A playground page frozen against visitors' edits (`useFrozenPages`). */
+  frozen: boolean;
 }
 
 export interface RowSources {
@@ -54,6 +56,7 @@ export interface RowSources {
   hasContent(pageNumber: number): boolean;
   /** Whether any archive screen of the page was edited since publishing. */
   isEdited?(pageNumber: number): boolean;
+  isFrozen?(pageNumber: number): boolean;
 }
 
 /** A screen as the list names it: `183` for a page's first screen, `183/9` for the rest. */
@@ -176,6 +179,7 @@ export function buildRow(
     showcased,
     hasContent: sources.hasContent(pageNumber),
     edited: sources.isEdited?.(pageNumber) ?? false,
+    frozen: sources.isFrozen?.(pageNumber) ?? false,
   };
 }
 

@@ -14,6 +14,7 @@ import { useArchiveAdmin } from '../../collab/useArchiveAdmin';
 import { useArchiveStatus } from '../../collab/archiveStore';
 import { useConnection } from '../../collab/useConnection';
 import { useAdminStatus } from '../../collab/useIsModerator';
+import { useFrozenPages } from '../../collab/useFrozenPages';
 import { usePageKinds } from '../../collab/usePageKinds';
 import { useShowcase } from '../../collab/useShowcase';
 import { useMirrorStatus } from '../../collab/liveMirror';
@@ -75,6 +76,7 @@ function ConnectedWorkspace() {
   const showcase = useShowcase({ fresh: true });
   const mirror = useMirrorStatus();
   const { kindOf, setKind } = usePageKinds();
+  const { isFrozen, setFrozen } = useFrozenPages();
 
   return (
     <ManageWorkspace
@@ -85,6 +87,8 @@ function ConnectedWorkspace() {
         showcase,
         kindOf,
         setKind,
+        isFrozen,
+        setFrozen,
         mirror,
         archive,
         live: connection.status === 'connected',

@@ -201,6 +201,7 @@ export function useFakeManageDeps(
   filters: CaptureFilters = {},
 ): ManageDeps & { captures: CaptureSummary[] } {
   const [state, setState] = useState<State>(() => initialState(seed));
+  const [frozen, setFrozenPages] = useState<ReadonlySet<number>>(() => new Set());
   const latency = seed.latency ?? 0;
   const wait = useCallback(
     () => (latency > 0 ? new Promise<void>((resolve) => setTimeout(resolve, latency)) : Promise.resolve()),
@@ -638,6 +639,14 @@ export function useFakeManageDeps(
         const draft = clone(current);
         draft.kinds.set(page, kind);
         return draft;
+      }),
+    isFrozen: (page) => frozen.has(page),
+    setFrozen: (page, on) =>
+      setFrozenPages((current) => {
+        const next = new Set(current);
+        if (on) next.add(page);
+        else next.delete(page);
+        return next;
       }),
     mirror,
     archive: { ready: true, phase: 'ready', error: null },

@@ -72,6 +72,8 @@ export interface InspectorProps {
   onStripNumbers(): void;
   onDelete(): void;
   onClose(): void;
+  /** Freeze or unfreeze a playground page; absent while the playground is not connected. */
+  onSetFrozen?(frozen: boolean): void;
 }
 
 export function Inspector({
@@ -108,6 +110,7 @@ export function Inspector({
   onStripNumbers,
   onDelete,
   onClose,
+  onSetFrozen,
 }: InspectorProps) {
   const { pageNumber } = row;
   const disabled = locked || busy != null;
@@ -156,6 +159,24 @@ export function Inspector({
           <Link className="mg-btn mg-btn-small mg-btn-ghost" to={`/watch/${pageNumber}/${screen}`} target="_blank">
             View ↗
           </Link>
+          {!isArchivePage(pageNumber) && (
+            <button
+              type="button"
+              className={`mg-btn mg-btn-small${row.frozen ? ' mg-btn-on' : ''}`}
+              aria-pressed={row.frozen}
+              disabled={onSetFrozen == null}
+              title={
+                onSetFrozen == null
+                  ? 'The playground is not connected'
+                  : row.frozen
+                    ? 'Let visitors edit this page again'
+                    : 'Stop visitors from changing this page'
+              }
+              onClick={() => onSetFrozen?.(!row.frozen)}
+            >
+              {row.frozen ? '❄ Frozen' : '❄ Freeze'}
+            </button>
+          )}
           <button type="button" className="mg-icon-btn" aria-label="Close details" onClick={onClose}>
             ×
           </button>

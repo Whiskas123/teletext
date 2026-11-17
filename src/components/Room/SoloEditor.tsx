@@ -46,6 +46,7 @@ import { Link } from './LocalizedLink';
 import { useConnection } from '../../collab/useConnection';
 import { useEditPage } from '../../collab/useEditPage';
 import { useEditPresence } from '../../collab/useEditPresence';
+import { useFrozenPages } from '../../collab/useFrozenPages';
 import { usePageReader } from '../../collab/usePageReader';
 import { usePageTitles } from '../../collab/useGuide';
 import { useIsModerator } from '../../collab/useIsModerator';
@@ -54,6 +55,7 @@ import { useSubpages } from '../../collab/useSubpages';
 import {
   canEditPage,
   firstFreePlaygroundPage,
+  isArchivePage,
   PLAYGROUND_MIN_PAGE,
 } from '../../domain/access';
 import { MAX_PAGE, MIN_PAGE } from '../../domain/pageOps';
@@ -139,6 +141,23 @@ export function SoloEditor() {
     if (free != null) setPageNumber((current) => (current === PLAYGROUND_MIN_PAGE ? free : current));
   }, [status, occupiedPages]);
 
+  // A page frozen in /manage is read-only for everyone but the moderator, like
+  // the archive. Dialling refuses it and stepping skips it below; this catches
+  // the rest — a link to it, or a freeze arriving while it is open — by moving
+  // to the first free page and saying why. The reason is handed to the
+  // page-change reset below, which would otherwise clear it. Known corner: with
+  // the whole playground taken there is nowhere to go, and it stays put.
+  const { isFrozen } = useFrozenPages();
+  const frozenHere = !isModerator && isFrozen(pageNumber);
+  const frozenNoticeRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!frozenHere) return;
+    const free = firstFreePlaygroundPage(occupiedPages);
+    if (free == null) return;
+    frozenNoticeRef.current = copy.editor.frozenPage(pageNumber);
+    setPageNumber(free);
+  }, [frozenHere, occupiedPages, pageNumber, copy]);
+
   // Which screen of the page's carousel is being edited. Held as a request and
   // clamped on read, so a page losing a subpage under a second editor moves
   // this one to the last real screen instead of onto nothing.
@@ -180,7 +199,8 @@ export function SoloEditor() {
   useEffect(() => {
     setTitleDraft(title(pageNumber));
     setTitleError(null);
-    setPageError(null);
+    setPageError(frozenNoticeRef.current);
+    frozenNoticeRef.current = null;
     // A new page starts at the top of its carousel: staying on screen 3 because
     // that is where the last page was left would open a screen the operator
     // never asked for, on a page that may not even have one.
@@ -244,7 +264,7 @@ export function SoloEditor() {
       }
       writeDial('');
       const target = Number(next);
-      if (canEditPage(target, isModerator)) {
+      if (canEditPage(target, isModerator, isFrozen(target))) {
         setPageNumber(target);
         setPageError(null);
         return true;
@@ -254,13 +274,15 @@ export function SoloEditor() {
       // three digits can convey on their own.
       setDialError(true);
       setPageError(
-        target >= MIN_PAGE && target <= MAX_PAGE && !isModerator
-          ? copy.editor.reservedPages(MIN_PAGE, PLAYGROUND_MIN_PAGE - 1)
-          : copy.editor.pagesNumbered(MIN_PAGE, MAX_PAGE),
+        target < MIN_PAGE || target > MAX_PAGE
+          ? copy.editor.pagesNumbered(MIN_PAGE, MAX_PAGE)
+          : isArchivePage(target)
+            ? copy.editor.reservedPages(MIN_PAGE, PLAYGROUND_MIN_PAGE - 1)
+            : copy.editor.frozenPage(target),
       );
       return false;
     },
-    [isModerator, writeDial, copy],
+    [isModerator, isFrozen, writeDial, copy],
   );
 
   // Stepping is not dialling: ▲ goes to the next page this member may edit,
@@ -272,12 +294,13 @@ export function SoloEditor() {
       writeDial('');
       setPageError(null);
       setPageNumber((current) => {
-        const next = current + delta;
+        let next = current + delta;
+        while (!isModerator && isFrozen(next)) next += delta;
         if (next < lowestEditable || next > MAX_PAGE) return current;
         return next;
       });
     },
-    [lowestEditable, writeDial],
+    [lowestEditable, isModerator, isFrozen, writeDial],
   );
 
   /**

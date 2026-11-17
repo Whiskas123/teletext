@@ -10,7 +10,7 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 
 import { MAX_PAGE } from './pageOps';
-import { PLAYGROUND_MIN_PAGE, firstFreePlaygroundPage } from './access';
+import { PLAYGROUND_MIN_PAGE, canEditPage, firstFreePlaygroundPage } from './access';
 
 const arbOccupied = fc.uniqueArray(
   fc.integer({ min: PLAYGROUND_MIN_PAGE, max: MAX_PAGE }),
@@ -65,6 +65,18 @@ describe('firstFreePlaygroundPage', () => {
     fc.assert(
       fc.property(fc.array(fc.integer()), (occupied) => {
         expect(() => firstFreePlaygroundPage(occupied)).not.toThrow();
+      }),
+    );
+  });
+});
+
+describe('canEditPage with a frozen page', () => {
+  it('is read-only for visitors and still editable by the moderator', () => {
+    fc.assert(
+      fc.property(fc.integer({ min: PLAYGROUND_MIN_PAGE, max: MAX_PAGE }), (page) => {
+        expect(canEditPage(page, false, true)).toBe(false);
+        expect(canEditPage(page, true, true)).toBe(true);
+        expect(canEditPage(page, false, false)).toBe(true);
       }),
     );
   });

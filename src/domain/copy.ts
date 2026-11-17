@@ -188,6 +188,8 @@ export interface Copy {
     /** A curated page's title, refused because the archive is still loading. */
     titleNotSaved: string;
     reservedPages(min: number, max: number): string;
+    /** A playground page a moderator froze in /manage. */
+    frozenPage(page: number): string;
     pagesNumbered(min: number, max: number): string;
     recent: string;
     recentBrushes: string;
@@ -484,6 +486,7 @@ export const COPY: Record<Language, Copy> = {
       titleTooLong: (max) => `O título tem de ter ${max} caracteres ou menos.`,
       titleNotSaved: 'Ainda não ficou guardado: as páginas ainda estão a carregar.',
       reservedPages: (min, max) => `As páginas ${min}–${max} estão reservadas.`,
+      frozenPage: (page) => `A página ${page} está congelada e já não pode ser alterada.`,
       pagesNumbered: (min, max) => `As páginas vão de ${min} a ${max}.`,
       recent: 'Recentes',
       recentBrushes: 'Pincéis recentes',
@@ -723,6 +726,7 @@ export const COPY: Record<Language, Copy> = {
       titleTooLong: (max) => `Title must be ${max} characters or fewer.`,
       titleNotSaved: 'Not saved yet: the pages are still loading.',
       reservedPages: (min, max) => `Pages ${min}–${max} are reserved.`,
+      frozenPage: (page) => `Page ${page} is frozen and can no longer be changed.`,
       pagesNumbered: (min, max) => `Pages are numbered ${min}–${max}.`,
       recent: 'Recent',
       recentBrushes: 'Recent brushes',

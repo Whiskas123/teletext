@@ -68,6 +68,9 @@ export interface PagesTabProps {
   actions: ManageActionsApi;
   kindOf(pageNumber: number): PageKind;
   isShowcased(pageNumber: number, subpage: number): boolean;
+  isFrozen(pageNumber: number): boolean;
+  /** Null while the playground is not connected, so a freeze would be dropped. */
+  setFrozen: ((pageNumber: number, frozen: boolean) => void) | null;
   query: ArchiveQuery;
   /** Whether the curated archive has been read fresh; until then the list is unknown. */
   ready: boolean;
@@ -89,6 +92,8 @@ export function PagesTab({
   actions,
   kindOf,
   isShowcased,
+  isFrozen,
+  setFrozen,
   query,
   ready,
   loadError,
@@ -126,6 +131,7 @@ export function PagesTab({
           kindOf,
           subpageCountOfPage: data.subpageCountOfPage,
           isShowcased,
+          isFrozen,
           isEdited: (page) => {
             const count = data.subpageCountOfPage(page);
             for (let screen = 1; screen <= count; screen += 1) {
@@ -144,7 +150,7 @@ export function PagesTab({
       );
     }
     return map;
-  }, [occupied, records, data, kindOf, isShowcased]);
+  }, [occupied, records, data, kindOf, isShowcased, isFrozen]);
 
   const rowOf = (pageNumber: number): PageRow =>
     rows.get(pageNumber) ??
@@ -896,6 +902,7 @@ export function PagesTab({
         onStripNumbers={() => askStripNumbers([active])}
         onDelete={() => askDelete([active])}
         onClose={selection.clear}
+        onSetFrozen={setFrozen == null ? undefined : (frozen) => setFrozen(active, frozen)}
       />
     );
   } else {

@@ -31,6 +31,9 @@ export interface ManageDeps {
   showcase: ShowcaseApi;
   kindOf(pageNumber: number): PageKind;
   setKind(pageNumber: number, kind: PageKind): void;
+  /** Playground pages frozen against visitors' edits (`useFrozenPages`). */
+  isFrozen(pageNumber: number): boolean;
+  setFrozen(pageNumber: number, frozen: boolean): void;
   /** The live mirror keeping the database's copy of the pages current. */
   mirror: MirrorApi;
   /**
@@ -60,7 +63,7 @@ const TAB_NAMES: Record<TabKey, string> = {
 const NAV_KEYS: readonly string[] = ['ArrowRight', 'ArrowLeft', 'Home', 'End'];
 
 export function ManageWorkspace({ deps, tab, query }: ManageWorkspaceProps) {
-  const { data, showcase, kindOf, setKind, mirror, archive, live, unreachable } = deps;
+  const { data, showcase, kindOf, setKind, isFrozen, setFrozen, mirror, archive, live, unreachable } = deps;
   const ready = archive.ready;
   const actions = useManageActions({ data, showcase, setKind });
   const [confirming, setConfirming] = useState<ConfirmSpec | null>(null);
@@ -192,6 +195,8 @@ export function ManageWorkspace({ deps, tab, query }: ManageWorkspaceProps) {
             actions={actions}
             kindOf={kindOf}
             isShowcased={showcase.has}
+            isFrozen={isFrozen}
+            setFrozen={live ? setFrozen : null}
             query={query}
             ready={ready}
             loadError={ready ? null : archive.error}
