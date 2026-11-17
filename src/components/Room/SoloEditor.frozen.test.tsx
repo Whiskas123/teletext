@@ -83,4 +83,14 @@ describe('a frozen screen in the editor', () => {
     fireEvent.click(screen.getByText('type K'));
     expect(editCell).toHaveBeenCalled();
   });
+
+  // A link to a screen opens that screen, not screen 1 (the page-change reset
+  // used to run on mount too). Here screen 1 is the frozen one.
+  it('opens on the screen the link names', () => {
+    renderAt('/edit/745/2');
+    expect(screen.getByRole('tab', { name: 'Subpágina 2' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('status')).toBeNull();
+    fireEvent.click(screen.getByText('type K'));
+    expect(editCell).toHaveBeenCalled();
+  });
 });

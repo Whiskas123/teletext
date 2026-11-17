@@ -66,3 +66,11 @@
 - **Checks:** `SoloEditor.frozen.test.tsx` (a frozen screen refuses edits and
   says so; the next screen still takes them), and the button clicked through
   in `manage-preview.html`.
+
+## 2026-11-17 — `/edit/N/2` opens screen 2
+
+- Fixed the bug noted above. `SoloEditor` remembers the page it last showed in
+  a ref and resets to screen 1 only when the page really changes, not when the
+  editor first loads.
+- Check: `SoloEditor.frozen.test.tsx` opens `/edit/745/2` and expects screen 2.
+  It fails without the fix.

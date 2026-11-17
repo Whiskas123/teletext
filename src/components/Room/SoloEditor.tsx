@@ -187,14 +187,18 @@ export function SoloEditor() {
   const [titleDraft, setTitleDraft] = useState<string>(() => title(pageNumber));
 
   // When the edited page changes, resync the title draft to that page.
+  const shownPageRef = useRef(pageNumber);
   useEffect(() => {
     setTitleDraft(title(pageNumber));
     setTitleError(null);
     setPageError(null);
     // A new page starts at the top of its carousel: staying on screen 3 because
     // that is where the last page was left would open a screen the operator
-    // never asked for, on a page that may not even have one.
-    setRequestedSubpage(MIN_SUBPAGE);
+    // never asked for, on a page that may not even have one. Only on a change:
+    // this also runs on mount, and the screen in the link (`/edit/745/3`,
+    // /manage's "Edit content") is one the operator did ask for.
+    if (shownPageRef.current !== pageNumber) setRequestedSubpage(MIN_SUBPAGE);
+    shownPageRef.current = pageNumber;
     // `title` is intentionally not a dependency: we only reseed on page change,
     // not on every store update, so typing is never clobbered mid-edit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
