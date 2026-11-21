@@ -57,18 +57,22 @@ export const LOCALE: Record<Language, string> = {
  * found" for what that costs and why it was chosen. `arquivo vivo` is the
  * phrase for the site in Portuguese; `living archive` carries it in English.
  *
- * The description is empty on purpose: it only repeated the title, and a link
- * card printed it as a subtitle underneath. Empty, {@link headTags} leaves the
- * description tags out, so the card shows the title alone.
+ * The description says what the title does not — what is here and what you
+ * can do with it. It was once a copy of the title, which a link card printed
+ * as a redundant subtitle; then empty, which left Google to build the snippet
+ * itself out of the front-page strip's captions ("134Expo 98 109Poesia SMS…").
+ * Keep it saying something the title doesn't.
  */
 export const SITE_META: Record<Language, { title: string; description: string }> = {
   pt: {
     title: `${SITE_NAME}, arquivo vivo do teletexto português`,
-    description: '',
+    description:
+      'Navega por um arquivo de antigas páginas de teletexto da televisão portuguesa e cria novas páginas, que ficam acessíveis a todos.',
   },
   en: {
     title: `${SITE_NAME}, a living archive of Portuguese teletext`,
-    description: '',
+    description:
+      'Browse an archive of old teletext pages from Portuguese television, and create new pages that become accessible to everyone.',
   },
 };
 

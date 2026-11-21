@@ -135,15 +135,25 @@ describe('the addresses', () => {
     }
   });
 
-  // The front page has no description, so a link card shows its title alone
-  // rather than the title repeated underneath as a subtitle.
-  it('leaves the description tags out when there is no description', () => {
+  // Without one, Google wrote its own snippet out of the strip's captions.
+  it('gives the front page a description of its own, under Google’s limit', () => {
     const alternates = { pt: canonicalUrl('/', 'pt'), en: canonicalUrl('/', 'en') };
     for (const language of ['pt', 'en'] as const) {
+      const { title, description } = SITE_META[language];
+      expect(description).not.toBe('');
+      expect(description).not.toBe(title);
+      expect(description.length).toBeLessThanOrEqual(DESCRIPTION_MAX);
       const html = headTags(routeMeta('/', language), language, alternates);
-      expect(html).not.toContain('description');
-      expect(html).toContain('og:title');
+      expect(html).toContain('<meta name="description"');
+      expect(html).toContain('og:description');
     }
+  });
+
+  it('leaves the description tags out when there is no description', () => {
+    const meta = { ...routeMeta('/', 'pt'), description: '' };
+    const html = headTags(meta, 'pt', { pt: meta.canonical, en: canonicalUrl('/', 'en') });
+    expect(html).not.toContain('description');
+    expect(html).toContain('og:title');
   });
 
   it('falls back to the site meta for a route it has no copy for', () => {

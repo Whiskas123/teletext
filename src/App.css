@@ -885,7 +885,8 @@ button.frontpage-watch-kind:focus-visible {
 .frontpage-strip-caption-number {
   color: #0ff;
   font-weight: 700;
-  margin-right: 0.5em;
+  /* No margin: a real space follows in the markup, so the text reads
+     "106 Sol e Lua" to a crawler, not "106Sol e Lua". */
 }
 
 

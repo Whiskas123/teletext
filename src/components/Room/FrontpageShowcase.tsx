@@ -166,7 +166,7 @@ export function FrontpageShowcase({ onSelect, label, pageWord }: FrontpageShowca
               {/* Decoration: the same words are already the button's own
                   accessible name, so a screen reader would hear them twice. */}
               <span className="frontpage-strip-caption" aria-hidden="true">
-                <span className="frontpage-strip-caption-number">{caption(entry)}</span>
+                <span className="frontpage-strip-caption-number">{caption(entry)}</span>{' '}
                 {titleOf(entry)}
               </span>
             </button>
